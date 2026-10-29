@@ -1,0 +1,6 @@
+id = "01M63HPCWV340FPWKSE6RZ6PWN"
+title = "Struct documents round-trip with quoted names"
+statement = "Writing a record out as a TOML document and reading it back gives the same record, even when a field or variant name contains characters that must be quoted in a key."
+scope = ["crates/toml/src/ser/document/*.rs"]
+severity = "high"
+rationale = "Field and variant names are written raw into table headers (crates/toml/src/ser/document/map.rs:128,134 and mod.rs:205,262) while map keys are encoded (map.rs:46-51); the attr_key test in crates/toml/tests/serde/general.rs:2186 snapshots output that fails to parse, while the same test in crates/toml_edit/tests/serde/general.rs:2050 round-trips."

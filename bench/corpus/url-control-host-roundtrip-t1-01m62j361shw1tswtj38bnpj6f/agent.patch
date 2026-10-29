@@ -1,0 +1,291 @@
+diff --git a/idna/Cargo.toml b/idna/Cargo.toml
+index fa6abf2..186a9db 100644
+--- a/idna/Cargo.toml
++++ b/idna/Cargo.toml
+@@ -29,11 +29,15 @@ name = "unit"
+ [[test]]
+ name = "unitbis"
+ 
++[[test]]
++name = "props"
++
+ [dev-dependencies]
+ assert_matches = "1.3"
+ bencher = "0.1"
+ tester = "0.9"
+ serde_json = "1.0"
++proptest = "1"
+ 
+ [dependencies]
+ utf8_iter = "1.0.4"
+diff --git a/idna/tests/props.rs b/idna/tests/props.rs
+new file mode 100644
+index 0000000..a835308
+--- /dev/null
++++ b/idna/tests/props.rs
+@@ -0,0 +1,31 @@
++use idna::punycode::{decode_to_string, encode_str};
++use proptest::prelude::*;
++
++fn label() -> impl Strategy<Value = String> {
++    prop_oneof![
++        any::<String>(),
++        prop::collection::vec(
++            prop_oneof![
++                prop::char::range('a', 'z'),
++                prop::char::range('A', 'Z'),
++                Just('-'),
++                prop::char::range('\u{80}', '\u{3ff}'),
++                prop::char::range('\u{4e00}', '\u{4e40}'),
++                prop::char::range('\u{1f600}', '\u{1f640}'),
++            ],
++            0..30
++        )
++        .prop_map(|v| v.into_iter().collect()),
++    ]
++}
++
++proptest! {
++    // proob:01M62J362WD0ZH2EJ6VQN07DW7
++    #[test]
++    fn punycode_round_trips(input in label()) {
++        if let Some(encoded) = encode_str(&input) {
++            let decoded = decode_to_string(&encoded);
++            prop_assert_eq!(decoded.as_deref(), Some(input.as_str()), "label {:?} encoded to {:?}", input, encoded);
++        }
++    }
++}
+diff --git a/percent_encoding/Cargo.toml b/percent_encoding/Cargo.toml
+index 562ba5f..2550853 100644
+--- a/percent_encoding/Cargo.toml
++++ b/percent_encoding/Cargo.toml
+@@ -14,5 +14,8 @@ default = ["std"]
+ std = ["alloc"]
+ alloc = []
+ 
++[dev-dependencies]
++proptest = "1"
++
+ [package.metadata.docs.rs]
+ rustdoc-args = ["--generate-link-to-definition"]
+diff --git a/percent_encoding/tests/props.rs b/percent_encoding/tests/props.rs
+new file mode 100644
+index 0000000..fffa044
+--- /dev/null
++++ b/percent_encoding/tests/props.rs
+@@ -0,0 +1,19 @@
++use percent_encoding::{percent_decode_str, percent_encode, AsciiSet, CONTROLS, NON_ALPHANUMERIC};
++use proptest::prelude::*;
++
++// Decoding inverts encoding only for sets that escape `%` itself.
++const SETS: [&AsciiSet; 3] = [
++    NON_ALPHANUMERIC,
++    &CONTROLS.add(b'%'),
++    &CONTROLS.add(b'%').add(b' ').add(b'\x22').add(b'#').add(b'<').add(b'>'),
++];
++
++proptest! {
++    // proob:01M62J363YZ0WJHN986MRZ2NMT
++    #[test]
++    fn percent_encoding_round_trips(bytes in any::<Vec<u8>>(), set in 0..SETS.len()) {
++        let encoded = percent_encode(&bytes, SETS[set]).to_string();
++        let decoded: Vec<u8> = percent_decode_str(&encoded).collect();
++        prop_assert_eq!(&decoded, &bytes, "set #{} encoded {:?}", set, encoded);
++    }
++}
+diff --git a/url/Cargo.toml b/url/Cargo.toml
+index 06a7149..a4c33f2 100644
+--- a/url/Cargo.toml
++++ b/url/Cargo.toml
+@@ -21,6 +21,7 @@ serde = "1.0"
+ serde_derive = "1.0"
+ serde_json = "1.0"
+ bencher = "0.1"
++proptest = "1"
+ 
+ [target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dev-dependencies]
+ wasm-bindgen-test = "0.3"
+diff --git a/url/tests/props.rs b/url/tests/props.rs
+new file mode 100644
+index 0000000..6df7df7
+--- /dev/null
++++ b/url/tests/props.rs
+@@ -0,0 +1,178 @@
++//! Property-based tests bound to proob properties.
++
++use proptest::prelude::*;
++use url::{Host, Position, Url};
++
++/// Characters that stress the host parsers: controls, DEL, `%` escapes,
++/// IP-address syntax, forbidden code points and non-ASCII.
++fn host_char() -> impl Strategy<Value = char> {
++    prop_oneof![
++        4 => prop::sample::select(vec![
++            'a', 'B', 'x', 'X', 'f', '0', '1', '7', '9', '.', '-', '%', '2', 'E',
++        ]),
++        2 => (0u8..0x20).prop_map(char::from),
++        1 => Just('\u{7f}'),
++        1 => prop::sample::select(vec![':', '[', ']', ' ', '@', '#', '/', '?', '\\', '^', '|', '~']),
++        1 => prop::sample::select(vec!['é', 'ß', 'Ⅸ', '\u{200b}', '\u{ff0e}', '日']),
++    ]
++}
++
++fn host_text() -> impl Strategy<Value = String> {
++    prop_oneof![
++        3 => prop::collection::vec(host_char(), 0..12).prop_map(|v| v.into_iter().collect()),
++        1 => any::<[u16; 8]>().prop_map(|g| {
++            let parts: Vec<String> = g.iter().map(|x| format!("{:x}", x & 0x3)).collect();
++            format!("[{}]", parts.join(":"))
++        }),
++        1 => any::<u32>().prop_map(|n| format!("0x{:x}", n)),
++        1 => any::<[u8; 4]>().prop_map(|b| format!("{}.0{:o}.0x{:x}.{}", b[0], b[1], b[2], b[3])),
++        1 => any::<String>(),
++    ]
++}
++
++fn part_text() -> impl Strategy<Value = String> {
++    prop_oneof![
++        3 => "[a-zA-Z0-9/.%?#:@;=&+ \\\\\t\n|^-]{0,10}",
++        1 => any::<String>(),
++    ]
++}
++
++/// Inputs built from URL parts, plus arbitrary text, across special and
++/// non-special schemes.
++fn url_input() -> impl Strategy<Value = String> {
++    let scheme = prop::sample::select(vec![
++        "http", "https", "ws", "wss", "ftp", "file", "foo", "git+ssh", "data", "mailto",
++    ]);
++    let structured = (
++        scheme,
++        prop::option::of(("[a-z%:]{0,4}", prop::option::of("[a-z%@]{0,4}"))),
++        host_text(),
++        prop::option::of(0u32..70000),
++        part_text(),
++        prop::option::of(part_text()),
++        prop::option::of(part_text()),
++        any::<bool>(),
++    )
++        .prop_map(|(scheme, user, host, port, path, query, fragment, slashes)| {
++            let mut s = format!("{}:", scheme);
++            if slashes {
++                s.push_str("//");
++            }
++            if let Some((u, p)) = user {
++                s.push_str(&u);
++                if let Some(p) = p {
++                    s.push(':');
++                    s.push_str(&p);
++                }
++                s.push('@');
++            }
++            s.push_str(&host);
++            if let Some(port) = port {
++                s.push_str(&format!(":{}", port));
++            }
++            if !path.is_empty() && !path.starts_with('/') {
++                s.push('/');
++            }
++            s.push_str(&path);
++            if let Some(q) = query {
++                s.push('?');
++                s.push_str(&q);
++            }
++            if let Some(f) = fragment {
++                s.push('#');
++                s.push_str(&f);
++            }
++            s
++        });
++    prop_oneof![5 => structured, 1 => any::<String>()]
++}
++
++const POSITIONS: [Position; 16] = [
++    Position::BeforeScheme,
++    Position::AfterScheme,
++    Position::BeforeUsername,
++    Position::AfterUsername,
++    Position::BeforePassword,
++    Position::AfterPassword,
++    Position::BeforeHost,
++    Position::AfterHost,
++    Position::BeforePort,
++    Position::AfterPort,
++    Position::BeforePath,
++    Position::AfterPath,
++    Position::BeforeQuery,
++    Position::AfterQuery,
++    Position::BeforeFragment,
++    Position::AfterFragment,
++];
++
++fn offsets(url: &Url) -> Vec<usize> {
++    POSITIONS.iter().map(|&p| url[..p].len()).collect()
++}
++
++proptest! {
++    // proob:01M62J35ZNX1QC61CE6MVBYTQE
++    #[test]
++    fn url_text_round_trips(input in url_input()) {
++        if let Ok(url) = Url::parse(&input) {
++            let again = Url::parse(url.as_str());
++            prop_assert!(again.is_ok(), "input {:?} parsed to {:?}, which fails to re-parse: {:?}", input, url.as_str(), again);
++            let again = again.unwrap();
++            prop_assert_eq!(url.as_str(), again.as_str(), "input {:?}", input);
++            prop_assert_eq!(offsets(&url), offsets(&again), "input {:?} -> {:?}", input, url.as_str());
++            prop_assert_eq!(url.host(), again.host(), "input {:?} -> {:?}", input, url.as_str());
++            prop_assert_eq!(url.port(), again.port(), "input {:?} -> {:?}", input, url.as_str());
++        }
++    }
++
++    // proob:01M62J360Q4PNB2TE7NN9728JC
++    #[test]
++    fn host_text_round_trips(input in host_text(), opaque in any::<bool>()) {
++        let parse = |s: &str| if opaque { Host::parse_opaque(s) } else { Host::parse(s) };
++        if let Ok(host) = parse(&input) {
++            let written = host.to_string();
++            let again = parse(&written);
++            prop_assert_eq!(Ok(host.clone()), again.clone(), "opaque={} input {:?} wrote {:?}, re-parsed to {:?}", opaque, input, written, again);
++        }
++    }
++
++    // proob:01M62J361SHW1TSWTJ38BNPJ6F
++    #[test]
++    fn url_parts_in_order(input in url_input()) {
++        if let Ok(url) = Url::parse(&input) {
++            if !url.has_authority() {
++                return Ok(());
++            }
++            let s = url.as_str();
++            let b = s.as_bytes();
++            let o = offsets(&url);
++            prop_assert!(o.windows(2).all(|w| w[0] <= w[1]), "{:?}: offsets out of order {:?}", s, o);
++            prop_assert_eq!(o[15], s.len(), "{:?}: fragment does not end the text", s);
++            let at = |p: Position| url[..p].len();
++            prop_assert_eq!(url.scheme(), &s[..at(Position::AfterScheme)], "{:?}", s);
++            prop_assert!(s[at(Position::AfterScheme)..].starts_with("://"), "{:?}: no :// after scheme", s);
++            prop_assert_eq!(url.username(), &s[at(Position::BeforeUsername)..at(Position::AfterUsername)], "{:?}", s);
++            if let Some(p) = url.password() {
++                prop_assert_eq!(b[at(Position::BeforePassword) - 1], b':', "{:?}: no : before password", s);
++                prop_assert_eq!(p, &s[at(Position::BeforePassword)..at(Position::AfterPassword)], "{:?}", s);
++            }
++            if !url.username().is_empty() || url.password().is_some() {
++                prop_assert_eq!(b[at(Position::BeforeHost) - 1], b'@', "{:?}: no @ before host", s);
++            }
++            prop_assert_eq!(url.host_str().unwrap_or(""), &s[at(Position::BeforeHost)..at(Position::AfterHost)], "{:?}", s);
++            if let Some(port) = url.port() {
++                prop_assert_eq!(b[at(Position::BeforePort) - 1], b':', "{:?}: no : before port", s);
++                prop_assert_eq!(port.to_string(), &s[at(Position::BeforePort)..at(Position::AfterPort)], "{:?}", s);
++            }
++            prop_assert_eq!(url.path(), &s[at(Position::BeforePath)..at(Position::AfterPath)], "{:?}", s);
++            if let Some(q) = url.query() {
++                prop_assert_eq!(b[at(Position::BeforeQuery) - 1], b'?', "{:?}: no ? before query", s);
++                prop_assert_eq!(q, &s[at(Position::BeforeQuery)..at(Position::AfterQuery)], "{:?}", s);
++            }
++            if let Some(f) = url.fragment() {
++                prop_assert_eq!(b[at(Position::BeforeFragment) - 1], b'#', "{:?}: no # before fragment", s);
++                prop_assert_eq!(f, &s[at(Position::BeforeFragment)..at(Position::AfterFragment)], "{:?}", s);
++            }
++        }
++    }
++}

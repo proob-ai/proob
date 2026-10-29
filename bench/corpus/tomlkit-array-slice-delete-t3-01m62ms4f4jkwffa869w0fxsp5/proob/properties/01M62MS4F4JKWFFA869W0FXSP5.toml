@@ -1,0 +1,6 @@
+id = "01M62MS4F4JKWFFA869W0FXSP5"
+title = "Document edits print parseable equal documents"
+statement = "After keys or tables are added, removed or replaced in a document, the printed text parses back to a document with exactly the edited values."
+scope = ["tomlkit/container.py", "tomlkit/items.py"]
+severity = "high"
+rationale = "CHANGELOG.md lists more than a dozen serialization fixes after edits (#486, #504, #513, #524, #533, #542, #543, #545), and a comment in tomlkit/container.py notes that new tables must appear after all entries that render inline. A failure silently re-nests or loses keys in written config."

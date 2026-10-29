@@ -1,0 +1,164 @@
+[
+  {
+    "trial": "t1",
+    "bug": "semver-prerelease-token-order",
+    "property": "01M62GJ3S2R9DT5D7SY7S8A0BD",
+    "statement": "Two versions that compare equal always have the same hash.",
+    "witness": "# The test always failed when commented parts were varied together., major=0,  # or any other generated value, minor=0,  # or any other generated value, patch=0,  # or any other generated value, prereleases=('0', '00'), build_a=None,  # or any other generated value, build_b=None,  # or any other generated value; AssertionError: Version(major=0, minor=0, patch=0, prerelease='0', build=None) == Version(major=0, minor=0, patch=0, prerelease='00', build=None) but hashes differ",
+    "class": "real-live",
+    "evidence": "Version(0,0,0,'0')==Version(0,0,0,'00') but hashes differ on PyPI semver 3.1.0 and upstream HEAD f3c7138: __eq__ normalises leading zeros (_nat_cmp 'Keep constructor leading zeros', test_compare.py ('0001','1',0)) while __hash__ hashes raw text; Python data model requires equal->equal hash. Caveat: parse() rejects '00', only the unvalidated constructor reaches it."
+  },
+  {
+    "trial": "t1",
+    "bug": "url-control-host-roundtrip",
+    "property": "01M62J35ZNX1QC61CE6MVBYTQE",
+    "statement": "Parsing the text of a parsed URL gives back the same URL, with every part in the same place.",
+    "witness": "input = \"http:a@[0:0:0:0:0:0:0:0]\"; assertion failed: self.username_end == self.host_start",
+    "class": "real-live",
+    "evidence": "Failure is a debug_assert panic in the public Position slicing, reached via the test's offsets() helper: url[..Position::BeforePassword] panics 'username_end == host_start' for any URL with a username and no password (minimal: Url::parse(\"http://a@b/\")). url/src/slicing.rs:148; reproduced on url 2.5.8 and HEAD 00a6ce5 (debug builds)."
+  },
+  {
+    "trial": "t1",
+    "bug": "url-control-host-roundtrip",
+    "property": "01M62J361SHW1TSWTJ38BNPJ6F",
+    "statement": "In a URL with an authority, the scheme, userinfo, host, port, path, query and fragment appear in that order, and each separator sits exactly where the recorded part boundaries say.",
+    "witness": "input = \"foo://a@é\"; assertion failed: self.username_end == self.host_start",
+    "class": "real-live",
+    "evidence": "Same slicing debug_assert as the row above (BeforePassword/AfterPassword with username, no password); minimal \"http://a@b/\"[..Position::BeforePassword] panics on url 2.5.8 and HEAD."
+  },
+  {
+    "trial": "t2",
+    "bug": "chrono-naivedate-iter-rev",
+    "property": "01M62KZ43W6ZYZZZ8G9ZDKHX5S",
+    "statement": "Writing a fixed UTC offset to whole minutes never produces the invalid text +24:00, and the timestamp text produced always reads back as the same instant.",
+    "witness": "off = -1, ts = 0; assertion failed: `(left == right)`",
+    "class": "false-alarm",
+    "evidence": "Offset -1s formats as -00:00 (formatting.rs rounds offsets to whole minutes by design, :413-416); reading back as the same instant is not promised - the library's own test_offset_minute_rounding_no_24h_rollover only asserts parse_from_rfc3339 is_ok, and +23:59:59 -> +23:59 is likewise lossy. Statement asserts beyond the docs."
+  },
+  {
+    "trial": "t2",
+    "bug": "chrono-naivedate-iter-rev",
+    "property": "01M62KZ467272R6CFZWZ1E8ZEX",
+    "statement": "Walking dates one day or one week at a time, in either direction, stops cleanly at the earliest and latest representable dates instead of crashing.",
+    "witness": "d = 8, weeks = true, back = false; start +262142-12-23, weeks true, back false: stopped at Some(+262142-12-23), 8 days short of +262142-12-31 at tests/properties.rs:145",
+    "class": "false-alarm",
+    "evidence": "Statement is 'stops cleanly instead of crashing'; no crash occurred. The test instead asserts the walk ends within one stride of MAX, which the library documents it does not do ('have no way to return NaiveDate::MAX', mod.rs:2222; test_week_iterator_limit expects count 2 from 12-12). Same behaviour on chrono 0.4.45. Fixed-tree failure is the test assuming rev() walks backward, which the fix changed."
+  },
+  {
+    "trial": "t2",
+    "bug": "humanize-naturalsize-rollover",
+    "property": "01M62K0VE2ZGKRTGZK8H0C9G4M",
+    "statement": "When rounding pushes a number in words up to the next power, it is named with the next power, such as 1.0 billion and never 1000.0 million.",
+    "witness": "magnitude=999_499_999_999_999_943_156_581_140, negative=False,  # or any other generated value, fmt='%.0f'; AssertionError: (999499999999999943156581140, '%.0f', '1000 septillion')",
+    "class": "real-fixed-upstream",
+    "evidence": "intword(999_499_999_999_999_943_156_581_140,'%.0f') = '1000 septillion' on PyPI humanize 4.16.0; '1 octillion' on upstream HEAD (ca892b3 #346 'Fix intword() rounding carry for very large numbers', unreleased). Matches the library's own rollover guard in number.py."
+  },
+  {
+    "trial": "t2",
+    "bug": "humanize-naturalsize-rollover",
+    "property": "01M62K0VF5DW8JQWS87YWV417F",
+    "statement": "Negating a file size changes only the sign: the text for minus x is a minus sign followed by the text for x.",
+    "witness": "mode=(False, False),  # or any other generated value, value=0.5; AssertionError: (0.5, False, False, '0 Bytes', '0 Bytes')",
+    "class": "false-alarm",
+    "evidence": "naturalsize(0.5) and naturalsize(-0.5) both '0 Bytes'; expected '-0 Bytes' is promised nowhere. Docstring: 'value: Integer to convert'; the negation re-test in tests/test_filesize.py:90-96 covers only cases >= 1 byte. Property's own rationale flagged this as an open question."
+  },
+  {
+    "trial": "t2",
+    "bug": "semver-prerelease-token-order",
+    "property": "01M62K9ET72XTD7H6FSH0WE385",
+    "statement": "Two versions that compare as equal always have the same hash.",
+    "witness": "# The test always failed when commented parts were varied together., a=Version(, 0,  # or any other generated value, 0,  # or any other generated value, 0,  # or any other generated value, '0', None,  # or any other generated value, ), b=Version(0, 0, 0, None, None),  # or any other generated value, zeros=1; AssertionError: Version(major=0, minor=0, patch=0, prerelease='0', build=None) == Version(major=0, minor=0, patch=0, prerelease='00', build=None) but hashes differ",
+    "class": "real-live",
+    "evidence": "Same defect as t1: Version(0,0,0,'0')==Version(0,0,0,'00'), hash differs; reproduced on semver 3.1.0 and HEAD f3c7138."
+  },
+  {
+    "trial": "t2",
+    "bug": "tomlkit-array-slice-delete",
+    "property": "01M62JXS2Q91ER0GQ1FQC577E4",
+    "statement": "Reading a valid TOML document and writing it back without changes gives the original text byte for byte.",
+    "witness": "# The test always failed when commented parts were varied together., text='[tbl-_]\\n_={_=1979-05-27 }'; AssertionError: '[tbl-_]\\n_={_=1979-05-27}'",
+    "class": "real-live",
+    "evidence": "README promises whitespace is preserved; whitespace after a bare date/datetime before ',' or '}' is dropped: tomlkit.dumps(parse('a=[1979-05-27 ,0]')) == 'a=[1979-05-27,0]' (also 'a={x=1979-05-27 }'). Integers keep it. Reproduced on PyPI 0.15.2 and HEAD 9e83543."
+  },
+  {
+    "trial": "t3",
+    "bug": "humanize-naturalsize-rollover",
+    "property": "01M62MZW84SQXTD2WAWRVPSKH7",
+    "statement": "A byte count beyond the largest unit is shown in the largest unit rather than failing.",
+    "witness": "data=data(...), mode='binary'; OverflowError: int too large to convert to float",
+    "class": "false-alarm",
+    "evidence": "OverflowError only for ints > ~1.8e308 bytes (test draws up to 10**400). Signature is value: float | str and filesize.py:90 does float(value) by design; every value in float range (e.g. 10**308) is shown in the largest unit. Outside documented domain."
+  },
+  {
+    "trial": "t3",
+    "bug": "semver-prerelease-token-order",
+    "property": "01M62N92Q8T8P6685CGQ2GSMBG",
+    "statement": "Moving a version to its next prerelease always gives a version that sorts strictly after the one it came from.",
+    "witness": "data=data(...), token='rc',  # or any other generated value; AssertionError: 0.0.0-rc9 -> next_version('prerelease', 'rc') = 0.0.0-rc10",
+    "class": "real-fixed-upstream",
+    "evidence": "next_version docstring 'preserving natural order'; 0.0.0-rc9 -> 0.0.0-rc10 sorts lower (buggy), PyPI 3.1.0 gives 0.0.0-rc.1 (also lower); upstream HEAD (9ef4131 #500 'Preserve version order when legacy prerelease counters roll over', unreleased) gives 0.0.1-rc10 > input."
+  },
+  {
+    "trial": "t3",
+    "bug": "semver-prerelease-token-order",
+    "property": "01M62N92TGG10DBK0THZ3QYG4H",
+    "statement": "Two versions that compare equal always have the same hash.",
+    "witness": "pair=(Version(major=0, minor=0, patch=0, prerelease='0', build=None), Version(major=0, minor=0, patch=0, prerelease='00', build=None)); AssertionError: Version(major=0, minor=0, patch=0, prerelease='0', build=None) == Version(major=0, minor=0, patch=0, prerelease='00', build=None) but hashes differ",
+    "class": "real-live",
+    "evidence": "Same defect: equal constructor-built versions '0'/'00' hash differently on semver 3.1.0 and HEAD f3c7138."
+  },
+  {
+    "trial": "t3",
+    "bug": "tomlkit-array-slice-delete",
+    "property": "01M62MS4EJ28VF6SDF75VE4PT6",
+    "statement": "Parsing a valid document and printing it without changes reproduces the original text exactly.",
+    "witness": "content='k0=[1979-05-27 07:32:00.999999-07:00 ,0]'; AssertionError: parsed 'k0=[1979-05-27 07:32:00.999999-07:00 ,0]', dumped 'k0=[1979-05-27 07:32:00.999999-07:00,0]'",
+    "class": "real-live",
+    "evidence": "Same date-trailing-whitespace loss: 'k0=[1979-05-27 07:32:00.999999-07:00 ,0]' dumps without the space; minimal 'a=[1979-05-27 ,0]'. tomlkit 0.15.2 and HEAD."
+  },
+  {
+    "trial": "t3",
+    "bug": "tomlkit-array-slice-delete",
+    "property": "01M62MS4F4JKWFFA869W0FXSP5",
+    "statement": "After keys or tables are added, removed or replaced in a document, the printed text parses back to a document with exactly the edited values.",
+    "witness": "content='k0.sub=0', data=data(...); AssertionError: edits [('del_in', 'k0', 'sub', None)] on 'k0.sub=0' printed ''; expected {'k0': {}}, parsed back {}",
+    "class": "real-live",
+    "evidence": "d=parse('k0.sub=0'); del d['k0']['sub'] -> d.unwrap()=={'k0': {}} but d.as_string()=='' so reparse gives {}: the printed text disagrees with the document's own value (with [k0] header form it prints '[k0]\\n'). tomlkit 0.15.2 and HEAD."
+  },
+  {
+    "trial": "t3",
+    "bug": "unicode-segmentation-zwj-midletter",
+    "property": "01M62NVRYMJAX04PH0NVW6N3B6",
+    "statement": "Splitting any valid text into graphemes, words, or sentences, or asking a grapheme cursor about any offset, never crashes the program.",
+    "witness": "s = \"א\", offsets = [3175797308288364671], is_extended = false; start byte index 1 is not a char boundary; it is inside 'א' (bytes 0..2 of string)",
+    "class": "false-alarm",
+    "evidence": "Panic is GraphemeCursor::new(1, ..) on \"\\u05D0\" (offset inside a 2-byte char); docs: 'The offset parameter must be on a codepoint boundary' (grapheme.rs:292). Test probes arbitrary offsets incl. non-boundaries and > len."
+  },
+  {
+    "trial": "t3",
+    "bug": "unicode-segmentation-zwj-midletter",
+    "property": "01M62NVRZRYBK5J200AMY1RKZC",
+    "statement": "Word boundaries match the official Unicode word-break rules, including when a zero-width joiner and an emoji follow a mid-word punctuation mark.",
+    "witness": "word = \"a\", number = \"1\", mid_letter = \":\", mid_num = \",\", extend = \"\", emoji = \"🛑\", use_number = false, row = 0; assertion failed: `(left == right)`",
+    "class": "real-fixed-upstream",
+    "evidence": "Buggy witness 'a:\\u200d\\U0001F6D1' forward split is one piece vs UAX#29 ['a', ':\\u200d\\U0001F6D1'] - this is the target bug; still on crates.io 1.13.3, fixed on HEAD (2ff73cc #187). Judge scored false because the test also fails on the fix: its expectation for Hebrew_Letter + \"'\" ignores WB7a (Hebrew_Letter x Single_Quote), so '\\u05D0\\'\\u200d\\U0001F6D1' is correctly one piece - a test bug."
+  },
+  {
+    "trial": "t3",
+    "bug": "url-control-host-roundtrip",
+    "property": "01M62NX1ZVDWQ33F20JZ84AK32",
+    "statement": "Changing any part of a valid URL leaves a URL whose text parses back to the same URL.",
+    "witness": "mut url = Url { scheme: \"foo\", cannot_be_a_base: false, username: \"\", password: None, host: None, port: None, path: \"\", query: None, fragment: None, }, ops = [IpHost(0.0.0.0)]; host Some(Ipv4(0.0.0.0)) re-parsed as Some(Domain(\"0.0.0.0\")) for \"foo://0.0.0.0\" at url/tests/props.rs:187",
+    "class": "real-live",
+    "evidence": "Url::parse(\"foo://\").set_ip_host(0.0.0.0) records Host::Ipv4 for a non-special scheme; reparse of \"foo://0.0.0.0\" gives Domain(\"0.0.0.0\"), and the library's own Url::check_invariants returns Err on url 2.5.8 and HEAD. set_ip_host docs do not exclude non-special schemes. (Url == still holds since equality is by text.)"
+  },
+  {
+    "trial": "t3",
+    "bug": "url-control-host-roundtrip",
+    "property": "01M62NX22E7YD3EPS9BH6CD04F",
+    "statement": "The host of a URL with a non-special scheme never contains a raw control character, space, or URL delimiter.",
+    "witness": "scheme = \"foo\", host = \"\\u{1}\", rest = \"\", new_host = None; host \"\\u{1}\" of \"foo://\\u{1}/\" at url/tests/props.rs:261",
+    "class": "real-fixed-upstream",
+    "evidence": "Buggy witness foo://\\x01/ is the benchmark's target bug (raw control byte in opaque host); url 2.5.8 serialises it as foo://%01/. Judge scored false because the fixed tree fails on another input: set_host(None) on \"foo://\\x01#/\" (minimal \"foo://x#/\") panics 'byte_at(path_start) == b'/'' - a separate real-live bug still on 2.5.8 and HEAD."
+  }
+]

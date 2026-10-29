@@ -1,0 +1,6 @@
+id = "01M63H33G24RF2S967NTWCCQDB"
+title = "Arrays behave like lists"
+statement = "Any sequence of list edits on a TOML array leaves it equal to the same edits applied to a plain list, and its printed form parses back to that list."
+scope = ["tomlkit/items.py"]
+severity = "high"
+rationale = "tests/test_items.py:361 (test_array_behaves_like_a_list) and :1520 check mutators against both equality and printed output; CHANGELOG.md:32 (#499 duplicated comma on insert), :218 (#213, #216), :306 (#146) record repeated drift between the value and its text."

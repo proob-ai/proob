@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question or idea
+    url: https://github.com/proob-ai/proob/discussions
+    about: Ask how to use proob or float an idea before it becomes a request.
+  - name: Security vulnerability
+    url: https://github.com/proob-ai/proob/security/advisories/new
+    about: Report privately. Anything that lets proob render Holds wrongly or lets an agent approve its own work is in scope (SECURITY.md).

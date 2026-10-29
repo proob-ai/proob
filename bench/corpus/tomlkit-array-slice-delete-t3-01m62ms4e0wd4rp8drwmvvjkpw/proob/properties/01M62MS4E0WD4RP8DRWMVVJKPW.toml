@@ -1,0 +1,6 @@
+id = "01M62MS4E0WD4RP8DRWMVVJKPW"
+title = "Array edits print parseable equal arrays"
+statement = "Any sequence of edits to an array (insert, append, replace, delete, add a line) prints text that parses back to an array equal to the edited one."
+scope = ["tomlkit/items.py"]
+severity = "high"
+rationale = "tests/test_items.py (around lines 342-358) asserts the re-parsed array equals the edited one, and tests near lines 1550-1570 re-parse after removal. Comments in tomlkit/items.py (GH #580, comma-first style) mark fixes made so edited output parses again. CHANGELOG.md lists #499 (duplicated comma on insert), #405 and #408."

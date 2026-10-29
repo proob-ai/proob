@@ -1,0 +1,6 @@
+id = "01M63JRTSSFABF35ZYWBAX97SF"
+title = "Zero arithmetic results are positive"
+statement = "Any addition, subtraction, multiplication, division, or remainder whose result equals zero gives a zero with a positive sign."
+scope = ["src/ops/*.rs"]
+severity = "high"
+rationale = "CHANGELOG.md:518 records a regression where 0 - 0 produced -0, and CHANGELOG.md:555-559 states -0 is corrected to 0. tests/decimal_tests/arithmetic.rs:50-52 and 183-185 expect 0 for 0 plus or minus -0. src/ops/add.rs:166-168 uses the unchecked constructor on the assumption both inputs are non-zero."

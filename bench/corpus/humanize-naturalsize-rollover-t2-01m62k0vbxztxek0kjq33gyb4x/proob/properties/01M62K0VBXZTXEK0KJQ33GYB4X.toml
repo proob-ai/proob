@@ -1,0 +1,6 @@
+id = "01M62K0VBXZTXEK0KJQ33GYB4X"
+title = "File size rolls over to the next unit"
+statement = "A file size below the largest unit never shows a number that has reached the next unit, such as 1000.0 kB or 1024.0 KiB; it moves up to the next unit instead."
+scope = ["src/humanize/filesize.py"]
+severity = "medium"
+rationale = "In src/humanize/filesize.py lines 99-101 the unit is picked from the logarithm before rounding and never rechecked, so 999950 bytes would read 1000.0 kB. The sibling formatters guard this case: intword at src/humanize/number.py:256-259 with tests in tests/test_number.py:104-112 and :135, and metric at src/humanize/number.py:549 with tests in tests/test_number.py:260-261. The top unit is excluded because outputs like 30000.0 QB are documented at src/humanize/filesize.py:64-65."

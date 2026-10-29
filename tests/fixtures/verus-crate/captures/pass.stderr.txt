@@ -1,0 +1,2 @@
+    Checking clamp v0.1.0 (<workspace>/clamp)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.46s

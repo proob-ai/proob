@@ -1,0 +1,7 @@
+id = "01K8V5NQ4A0F3R7Y2M9D6P1XHA"
+title = "Sorting preserves length"
+statement = "Sorting a list never adds or drops an element."
+scope = ["src/ordering.rs"]
+severity = "medium"
+rationale = "Callers size buffers from the input; a sort that changed the length would corrupt them."
+kind = "test"

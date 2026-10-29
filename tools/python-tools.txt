@@ -1,0 +1,9 @@
+# The Python adapter's tools (U6), pinned as a set: pip requirements syntax,
+# one place. CI installs this file; `crates/proob-adapters/src/python/tools.rs`
+# embeds it and refuses any other mutmut (its results format is the contract
+# the parser in `crates/proob-facts/src/parsers/mutmut.rs` reads); pytest and
+# hypothesis are recorded, not refused. Bump all three together, in one
+# reviewed PR, and recapture tests/fixtures/mutmut-output/.
+pytest==9.1.1
+hypothesis==6.169.4
+mutmut==3.8.0

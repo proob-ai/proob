@@ -1,0 +1,15 @@
+kind = "catch"
+bug = "unicode-segmentation-zwj-midletter"
+trial = "t2"
+language = "rust"
+repo = "https://github.com/unicode-rs/unicode-segmentation"
+buggy_commit = "e445e101b129862148127c9e41ab4486b0125232"
+fix_commit = "2ff73ccf19c47d411f12b1686d0724618ea27cf7"
+fix_paths = ["src/word.rs"]
+install = ["rustup run 1.99.1 cargo build --tests"]
+toolchain = "1.99.1"
+property = "01M62M155YAQ78G3E6THGM8XQV"
+seed = "1793099054109998856"
+expect_buggy = "counterexample"
+expect_fixed = "no_counterexample"
+flaky = false

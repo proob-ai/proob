@@ -1,0 +1,15 @@
+kind = "catch"
+bug = "ordered-float-mixed-nan-eq"
+trial = "t1"
+language = "rust"
+repo = "https://github.com/reem/rust-ordered-float"
+buggy_commit = "29d27c4cfb592016b1758843737c80ab4ff3a609"
+fix_commit = "b86fd8ced4fe0ee749163f8b0b5b0c238d0e30f0"
+fix_paths = ["src/lib.rs"]
+install = ["rustup run 1.99.1 cargo test --no-run --lib --tests"]
+toolchain = "1.99.1"
+property = "01M63JR83F3FP8RCCMDSMKKNZ9"
+seed = "1793145838573172184"
+expect_buggy = "counterexample"
+expect_fixed = "no_counterexample"
+flaky = false

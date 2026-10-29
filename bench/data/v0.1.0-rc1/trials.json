@@ -1,0 +1,790 @@
+[
+ {
+  "set": "bugs-v2",
+  "trial": "t1",
+  "bug": "boltons-barrellist-reverse-slice",
+  "model": "claude-opus-5-5",
+  "wall_s": 262,
+  "cost_usd": 1.6387326,
+  "properties": [
+   {
+    "id": "01M63HZNJ0TFNH94T72D9RARPN",
+    "buggy": "counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": true
+   },
+   {
+    "id": "01M63HZNK3TZKD40HTABBRT2H8",
+    "buggy": "no_counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": false
+   },
+   {
+    "id": "01M63HZNM6YYQ6EJ44PK45V0B9",
+    "buggy": "no_counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": false
+   },
+   {
+    "id": "01M63HZNN9YBQZ5WQRDEKMQQ2E",
+    "buggy": "counterexample",
+    "fixed": "counterexample",
+    "caught_real_bug": false
+   },
+   {
+    "id": "01M63HZNPDG9W4T447H3KSYPJJ",
+    "buggy": "no_counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": false
+   }
+  ]
+ },
+ {
+  "set": "bugs-v2",
+  "trial": "t1",
+  "bug": "bytes-try-get-int-sign-extend",
+  "model": "claude-opus-5-5",
+  "wall_s": 265,
+  "cost_usd": 1.7419229999999999,
+  "properties": [
+   {
+    "id": "01M63JF7YN69SH2SQ2NXX1SS73",
+    "buggy": "counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": true
+   },
+   {
+    "id": "01M63JF7ZS6MPM43XXARFMXHKH",
+    "buggy": "no_counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": false
+   },
+   {
+    "id": "01M63JF80YPBRWN8B7679P892E",
+    "buggy": "no_counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": false
+   },
+   {
+    "id": "01M63JF8232EG5HC9KTFM14MCR",
+    "buggy": "no_counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": false
+   },
+   {
+    "id": "01M63JF8371NQYJS3J94XR22GQ",
+    "buggy": "no_counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": false
+   }
+  ]
+ },
+ {
+  "set": "bugs-v2",
+  "trial": "t1",
+  "bug": "cattrs-literal-rename-disambiguation",
+  "model": "claude-opus-5-5",
+  "wall_s": 353,
+  "cost_usd": 1.8264204,
+  "properties": [
+   {
+    "id": "01M63HZBQC3J3W4TF7WN9T1P00",
+    "buggy": "counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": true
+   },
+   {
+    "id": "01M63HZBRHECS4FWZETXXSRG6J",
+    "buggy": "no_counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": false
+   },
+   {
+    "id": "01M63HZBSM44ZYGGZGF1QDW0C3",
+    "buggy": "no_counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": false
+   },
+   {
+    "id": "01M63HZBTQ3E81HG48HF9XCXKH",
+    "buggy": "no_counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": false
+   },
+   {
+    "id": "01M63HZBVV63AEY8CP1VHXCTBK",
+    "buggy": "no_counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": false
+   }
+  ]
+ },
+ {
+  "set": "bugs-v2",
+  "trial": "t1",
+  "bug": "funcy-counter-walk",
+  "model": "claude-opus-5-5",
+  "wall_s": 251,
+  "cost_usd": 1.479138,
+  "properties": [
+   {
+    "id": "01M63JA9X6H9WVS3BK86D2253G",
+    "buggy": "counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": true
+   },
+   {
+    "id": "01M63JA9YGMA7M9000T4A8NAGN",
+    "buggy": "counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": true
+   },
+   {
+    "id": "01M63JA9ZT3D8DXRJ8N2R8VAAZ",
+    "buggy": "counterexample",
+    "fixed": "counterexample",
+    "caught_real_bug": false
+   },
+   {
+    "id": "01M63JAA11KQNE1F19QZEC86VF",
+    "buggy": "counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": true
+   },
+   {
+    "id": "01M63JAA2BYH8BTG6NR72M0X82",
+    "buggy": "counterexample",
+    "fixed": "counterexample",
+    "caught_real_bug": false
+   }
+  ]
+ },
+ {
+  "set": "bugs-v2",
+  "trial": "t1",
+  "bug": "more-itertools-numeric-range-reversed",
+  "model": "claude-opus-5-5",
+  "wall_s": 277,
+  "cost_usd": 1.4586398,
+  "properties": [
+   {
+    "id": "01M63HQ9K80PDY1WFK24G734GA",
+    "buggy": "counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": true
+   },
+   {
+    "id": "01M63HQ9MBB0FMJKA6DN62T0Q8",
+    "buggy": "no_counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": false
+   },
+   {
+    "id": "01M63HQ9NENKD4ANQHGKFGQVZ4",
+    "buggy": "no_counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": false
+   },
+   {
+    "id": "01M63HQ9PFPBN5W5TCYMM0SVAG",
+    "buggy": "counterexample",
+    "fixed": "counterexample",
+    "caught_real_bug": false
+   },
+   {
+    "id": "01M63HQ9QJBN6D6TS053ZRJY29",
+    "buggy": "no_counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": false
+   }
+  ]
+ },
+ {
+  "set": "bugs-v2",
+  "trial": "t1",
+  "bug": "ordered-float-mixed-nan-eq",
+  "model": "claude-opus-5-5",
+  "wall_s": 408,
+  "cost_usd": 1.7517662,
+  "properties": [
+   {
+    "id": "01M63JR828N5FH5BXSWCWXP8BB",
+    "buggy": "no_counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": false
+   },
+   {
+    "id": "01M63JR83F3FP8RCCMDSMKKNZ9",
+    "buggy": "counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": true
+   },
+   {
+    "id": "01M63JR84PT155SGZ0743R1EBC",
+    "buggy": "no_counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": false
+   },
+   {
+    "id": "01M63JR85S2B1EQWN5MVS09DS6",
+    "buggy": "no_counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": false
+   },
+   {
+    "id": "01M63JR86YEVHJVJHP2S9822GE",
+    "buggy": "no_counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": false
+   }
+  ]
+ },
+ {
+  "set": "bugs-v2",
+  "trial": "t1",
+  "bug": "portion-intervaldict-combine-drop",
+  "model": "claude-opus-5-5",
+  "wall_s": 236,
+  "cost_usd": 1.374738,
+  "properties": [
+   {
+    "id": "01M63J7B3TX5ZP9Z0ABB01Z03K",
+    "buggy": "counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": true
+   },
+   {
+    "id": "01M63J7B4TWJGJJ8EATM14MCZM",
+    "buggy": "no_counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": false
+   },
+   {
+    "id": "01M63J7B5WYQ30R9D47JM92RS8",
+    "buggy": "no_counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": false
+   },
+   {
+    "id": "01M63J7B6Z6Z14F0P1KXVAGWVQ",
+    "buggy": "no_counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": false
+   },
+   {
+    "id": "01M63J7B83DBD65W70RQT47QWB",
+    "buggy": "no_counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": false
+   }
+  ]
+ },
+ {
+  "set": "bugs-v2",
+  "trial": "t1",
+  "bug": "rust-decimal-mul-negative-zero",
+  "model": "claude-opus-5-5",
+  "wall_s": 342,
+  "cost_usd": 1.8234596000000005,
+  "properties": [
+   {
+    "id": "01M63JRTRNKGHDZDPV669148PD",
+    "buggy": "counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": true
+   },
+   {
+    "id": "01M63JRTSSFABF35ZYWBAX97SF",
+    "buggy": "counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": true
+   },
+   {
+    "id": "01M63JRTTV80GA3PYCDTKX8NV4",
+    "buggy": "no_counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": false
+   },
+   {
+    "id": "01M63JRTVZRW6P2KTA84DEPEBW",
+    "buggy": "no_counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": false
+   },
+   {
+    "id": "01M63JRTX4HGG0R79S7P5B1YE6",
+    "buggy": "no_counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": false
+   }
+  ]
+ },
+ {
+  "set": "bugs-v2",
+  "trial": "t1",
+  "bug": "time-sunday-week-number",
+  "model": "claude-opus-5-5",
+  "wall_s": 350,
+  "cost_usd": 1.9454947999999994,
+  "properties": [
+   {
+    "id": "01M63JVX1JGB1GKVCT8PD266W6",
+    "buggy": "errored",
+    "fixed": null,
+    "caught_real_bug": false
+   },
+   {
+    "id": "01M63JVX2S8X3HAJNVVRBKGBWH",
+    "buggy": "errored",
+    "fixed": null,
+    "caught_real_bug": false
+   },
+   {
+    "id": "01M63JVX3YQ81W2KPN9NC1QE7A",
+    "buggy": "errored",
+    "fixed": null,
+    "caught_real_bug": false
+   },
+   {
+    "id": "01M63JVX54VJ6842GWTKWDPWKT",
+    "buggy": "errored",
+    "fixed": null,
+    "caught_real_bug": false
+   },
+   {
+    "id": "01M63JVX6BZXK8MEFS88W89845",
+    "buggy": "errored",
+    "fixed": null,
+    "caught_real_bug": false
+   }
+  ]
+ },
+ {
+  "set": "bugs-v2",
+  "trial": "t1",
+  "bug": "tomlkit-bool-eq",
+  "model": "claude-opus-5-5",
+  "wall_s": 831,
+  "cost_usd": 1.8111193999999997,
+  "properties": [
+   {
+    "id": "01M63J41ZA5FM8MSPJ9W99FA8V",
+    "buggy": "counterexample",
+    "fixed": "counterexample",
+    "caught_real_bug": false
+   },
+   {
+    "id": "01M63J420B80RQ13ARVTWMABPD",
+    "buggy": "counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": true
+   },
+   {
+    "id": "01M63J421ES9KWYEHRAES76DDH",
+    "buggy": "counterexample",
+    "fixed": "counterexample",
+    "caught_real_bug": false
+   },
+   {
+    "id": "01M63J422J8G4VVWRFXNGYGF64",
+    "buggy": "counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": true
+   },
+   {
+    "id": "01M63J423JSVWW0MZ7SDK7KHDX",
+    "buggy": "no_counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": false
+   }
+  ]
+ },
+ {
+  "set": "bugs",
+  "trial": "t1",
+  "bug": "cachetools-getsizeof-overevict",
+  "model": "claude-opus-5-5",
+  "wall_s": 514,
+  "cost_usd": 2.2146389999999996,
+  "properties": [
+   {
+    "id": "01M63GPJJQ5DS2BASEET0QCH7K",
+    "buggy": "no_counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": false
+   },
+   {
+    "id": "01M63GPJKQDTYWVFASHEY4EA95",
+    "buggy": "no_counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": false
+   },
+   {
+    "id": "01M63GPJMVG5DJDR90WPP8VAQQ",
+    "buggy": "no_counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": false
+   },
+   {
+    "id": "01M63GPJNZ3GCZNPZR5QRZGADM",
+    "buggy": "no_counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": false
+   },
+   {
+    "id": "01M63GPJQ2TAHDK7ZMBSSMN887",
+    "buggy": "no_counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": false
+   }
+  ]
+ },
+ {
+  "set": "bugs",
+  "trial": "t1",
+  "bug": "packaging-marker-nested-parens",
+  "model": "claude-opus-5-5",
+  "wall_s": 391,
+  "cost_usd": 1.4854825999999999,
+  "properties": [
+   {
+    "id": "01M63GPFN9TTYJTAKF0HHYHYW4",
+    "buggy": "counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": true
+   },
+   {
+    "id": "01M63GPFPF0SVHHX9N7WTDREMF",
+    "buggy": "counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": true
+   },
+   {
+    "id": "01M63GPFQJRNEZJ80NR0X83KDB",
+    "buggy": "no_counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": false
+   },
+   {
+    "id": "01M63GPFRHEXW7JR28DYWKA231",
+    "buggy": "no_counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": false
+   },
+   {
+    "id": "01M63GPFSKQVYPT6XKGV76Z946",
+    "buggy": "no_counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": false
+   }
+  ]
+ },
+ {
+  "set": "bugs",
+  "trial": "t1",
+  "bug": "toml-serde-key-quoting",
+  "model": "claude-opus-5-5",
+  "wall_s": 525,
+  "cost_usd": 2.4984268,
+  "properties": [
+   {
+    "id": "01M63H6WKPW8HC8YXV0X52NEB7",
+    "buggy": "counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": true
+   },
+   {
+    "id": "01M63H6WMTSNJ6D5YVE7DJQ4Z7",
+    "buggy": "no_counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": false
+   },
+   {
+    "id": "01M63H6WNZ6Z3YE9CN81PAXBBM",
+    "buggy": "no_counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": false
+   },
+   {
+    "id": "01M63H6WQ2HQCE539VWXQDX2YC",
+    "buggy": "no_counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": false
+   },
+   {
+    "id": "01M63H6WR6CFPS0PA4WG9XHRZV",
+    "buggy": "no_counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": false
+   }
+  ]
+ },
+ {
+  "set": "bugs",
+  "trial": "t1",
+  "bug": "tomlkit-array-slice-delete",
+  "model": "claude-opus-5-5",
+  "wall_s": 513,
+  "cost_usd": 2.0961208,
+  "properties": [
+   {
+    "id": "01M63GP5NQGSQBKZYMS7YKWP4V",
+    "buggy": "counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": true
+   },
+   {
+    "id": "01M63GP5PWYK27HHR8E1STT0SX",
+    "buggy": "no_counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": false
+   },
+   {
+    "id": "01M63GP5QZY58C9K0SBV4ZVZKQ",
+    "buggy": "counterexample",
+    "fixed": "counterexample",
+    "caught_real_bug": false
+   },
+   {
+    "id": "01M63GP5S2J4846DVVQPBCZ877",
+    "buggy": "no_counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": false
+   }
+  ]
+ },
+ {
+  "set": "bugs",
+  "trial": "t1",
+  "bug": "unicode-segmentation-zwj-midletter",
+  "model": "claude-opus-5-5",
+  "wall_s": 363,
+  "cost_usd": 1.7283901999999998,
+  "properties": [
+   {
+    "id": "01M63H0NRCDPY5YKBM1Y5Y0PSB",
+    "buggy": "no_counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": false
+   },
+   {
+    "id": "01M63H0NSMNVPHTS4VRXJ4M13D",
+    "buggy": "counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": true
+   },
+   {
+    "id": "01M63H0NTWJA9YR4KXP6P53K5Q",
+    "buggy": "no_counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": false
+   },
+   {
+    "id": "01M63H0NW3VT8FTQNB7SMFY31R",
+    "buggy": "no_counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": false
+   },
+   {
+    "id": "01M63H0NXASKFGEKEZYTC4GFX2",
+    "buggy": "no_counterexample",
+    "fixed": null,
+    "caught_real_bug": false
+   }
+  ]
+ },
+ {
+  "set": "bugs",
+  "trial": "t2",
+  "bug": "cachetools-getsizeof-overevict",
+  "model": "claude-opus-5-5",
+  "wall_s": 400,
+  "cost_usd": 1.6672993999999999,
+  "properties": [
+   {
+    "id": "01M63HDHR40B1TWVQVETWPK6VT",
+    "buggy": "no_counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": false
+   },
+   {
+    "id": "01M63HDHS8KWSPH7HQ5HYAS47A",
+    "buggy": "counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": true
+   },
+   {
+    "id": "01M63HDHTBRQM021KZWP9M79BS",
+    "buggy": "no_counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": false
+   },
+   {
+    "id": "01M63HDHVFMMZJYX6V3YHQSWMH",
+    "buggy": "no_counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": false
+   },
+   {
+    "id": "01M63HDHWKE47X6N8A7P702Y7P",
+    "buggy": "no_counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": false
+   }
+  ]
+ },
+ {
+  "set": "bugs",
+  "trial": "t2",
+  "bug": "packaging-marker-nested-parens",
+  "model": "claude-opus-5-5",
+  "wall_s": 287,
+  "cost_usd": 1.7316164000000005,
+  "properties": [
+   {
+    "id": "01M63HBEDEB7PNY2P4S52G2G36",
+    "buggy": "counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": true
+   },
+   {
+    "id": "01M63HBEEHTGYVNZ7YHV6H4XD5",
+    "buggy": "no_counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": false
+   },
+   {
+    "id": "01M63HBEFMB4512908ZTMRQ7C1",
+    "buggy": "no_counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": false
+   },
+   {
+    "id": "01M63HBEGQJVBM985YKTHV1TF7",
+    "buggy": "no_counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": false
+   },
+   {
+    "id": "01M63HBEHTG6M0QQAQY65GEJRV",
+    "buggy": "no_counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": false
+   }
+  ]
+ },
+ {
+  "set": "bugs",
+  "trial": "t2",
+  "bug": "toml-serde-key-quoting",
+  "model": "claude-opus-5-5",
+  "wall_s": 299,
+  "cost_usd": 1.8587023999999999,
+  "properties": [
+   {
+    "id": "01M63HPCWV340FPWKSE6RZ6PWN",
+    "buggy": "counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": true
+   },
+   {
+    "id": "01M63HPCY06JFS767MQ569YHQ6",
+    "buggy": "no_counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": false
+   },
+   {
+    "id": "01M63HPCZ49J4PV24ZYQ0S6JQY",
+    "buggy": "no_counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": false
+   },
+   {
+    "id": "01M63HPD09N9ZBYJYBCQPQEFE1",
+    "buggy": "no_counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": false
+   },
+   {
+    "id": "01M63HPD1DA773F19J4M21070A",
+    "buggy": "no_counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": false
+   }
+  ]
+ },
+ {
+  "set": "bugs",
+  "trial": "t2",
+  "bug": "tomlkit-array-slice-delete",
+  "model": "claude-opus-5-5",
+  "wall_s": 293,
+  "cost_usd": 1.6031596000000001,
+  "properties": [
+   {
+    "id": "01M63H33EZ82FZHPN3PM2ZKJJE",
+    "buggy": "counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": true
+   },
+   {
+    "id": "01M63H33G24RF2S967NTWCCQDB",
+    "buggy": "counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": true
+   },
+   {
+    "id": "01M63H33H5TNW7S7B8BFF041BG",
+    "buggy": "counterexample",
+    "fixed": "counterexample",
+    "caught_real_bug": false
+   },
+   {
+    "id": "01M63H33J55MPG1MKE53D2GPFQ",
+    "buggy": "no_counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": false
+   }
+  ]
+ },
+ {
+  "set": "bugs",
+  "trial": "t2",
+  "bug": "unicode-segmentation-zwj-midletter",
+  "model": "claude-opus-5-5",
+  "wall_s": 414,
+  "cost_usd": 1.8346348,
+  "properties": [
+   {
+    "id": "01M63HPE6B3ZTSW4BZ3RNZ73DX",
+    "buggy": "counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": true
+   },
+   {
+    "id": "01M63HPE7HJAZ0WADR4877QPMY",
+    "buggy": "no_counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": false
+   },
+   {
+    "id": "01M63HPE8P2JW1J7AG21XA5W4C",
+    "buggy": "no_counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": false
+   },
+   {
+    "id": "01M63HPE9W59M017TWJ81ZYR6B",
+    "buggy": "no_counterexample",
+    "fixed": "no_counterexample",
+    "caught_real_bug": false
+   },
+   {
+    "id": "01M63HPEB0QD0RN84K477M334G",
+    "buggy": "no_counterexample",
+    "fixed": null,
+    "caught_real_bug": false
+   }
+  ]
+ }
+]

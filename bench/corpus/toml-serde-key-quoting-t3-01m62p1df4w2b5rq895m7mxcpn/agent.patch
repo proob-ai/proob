@@ -1,0 +1,307 @@
+diff --git a/Cargo.lock b/Cargo.lock
+index dc0d6fe..8c40906 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -970,6 +970,7 @@ dependencies = [
+  "foldhash 0.2.0",
+  "indexmap 2.14.2",
+  "itertools",
++ "proptest",
+  "serde",
+  "serde-untagged",
+  "serde_core",
+diff --git a/crates/toml/Cargo.toml b/crates/toml/Cargo.toml
+index c3481f6..dde64db 100644
+--- a/crates/toml/Cargo.toml
++++ b/crates/toml/Cargo.toml
+@@ -69,6 +69,7 @@ snapbox = "1.1.0"
+ walkdir = "2.5.0"
+ itertools = "0.15.0"
+ serde-untagged = "0.1.9"
++proptest = "1.10.0"
+ 
+ [[test]]
+ name = "decoder_compliance"
+diff --git a/crates/toml/tests/serde/de_errors.rs b/crates/toml/tests/serde/de_errors.rs
+index dffb8c3..a9e51f5 100644
+--- a/crates/toml/tests/serde/de_errors.rs
++++ b/crates/toml/tests/serde/de_errors.rs
+@@ -421,3 +421,51 @@ invalid type: integer `1`, expected a string
+ "#]],
+     );
+ }
++
++mod duplicate_keys {
++    use proptest::prelude::*;
++    use toml_writer::{ToTomlKey, TomlKeyBuilder};
++
++    /// Every way the writer can spell `key`; TOML treats them all as the same key
++    fn spellings(key: &str) -> Vec<String> {
++        let b = TomlKeyBuilder::new(key);
++        [
++            Some(b.as_default()),
++            b.as_unquoted(),
++            b.as_literal(),
++            b.as_basic_pretty(),
++            Some(b.as_basic()),
++        ]
++        .into_iter()
++        .flatten()
++        .map(|k| k.to_toml_key())
++        .collect()
++    }
++
++    /// Documents that define the key named by `a` and again by `b`
++    fn repeats(a: &str, b: &str) -> Vec<String> {
++        vec![
++            format!("{a} = 1\n{b} = 2\n"),
++            format!("t = {{ {a} = 1, {b} = 2 }}\n"),
++            format!("[{a}]\n[{b}]\n"),
++            format!("{a} = 1\n[{b}]\n"),
++            format!("[{a}]\nx = 1\n[[{b}]]\n"),
++            format!("t.{a} = 1\nt.{b} = 2\n"),
++            format!("[t]\n{a} = 1\n[t]\n{b} = 2\n"),
++            format!("[t]\n{a}.x = 1\n{b}.x = 2\n"),
++        ]
++    }
++
++    proptest! {
++        // proob:01M62P1DJFTY3W24FCKJDYMKKP
++        #[test]
++        fn a_repeated_key_is_an_error(key in any::<String>(), i in any::<prop::sample::Index>(), j in any::<prop::sample::Index>()) {
++            let names = spellings(&key);
++            let (a, b) = (i.get(&names), j.get(&names));
++            for doc in repeats(a, b) {
++                let read = toml::from_str::<toml::Table>(&doc);
++                prop_assert!(read.is_err(), "key {:?} repeated as {} and {} read as {:?}\ndocument:\n{}", key, a, b, read, doc);
++            }
++        }
++    }
++}
+diff --git a/crates/toml/tests/serde/ser_key.rs b/crates/toml/tests/serde/ser_key.rs
+index 26a07da..a1d2d3b 100644
+--- a/crates/toml/tests/serde/ser_key.rs
++++ b/crates/toml/tests/serde/ser_key.rs
+@@ -556,3 +556,115 @@ k = "value"
+         assert_eq!(json, input);
+     }
+ }
++
++mod roundtrip_names {
++    use proptest::prelude::*;
++    use serde::ser::{SerializeStruct, SerializeStructVariant};
++
++    /// How a named field is written: a key-value pair, a `[table]`, an `[[array]]` of tables, or
++    /// a struct-variant enum whose variant name is also arbitrary
++    #[derive(Debug, Clone)]
++    enum Field {
++        Plain(i64),
++        Table(i64),
++        Tables(Vec<i64>),
++        Variant(&'static str, i64),
++    }
++
++    struct Inner(i64);
++
++    impl serde::Serialize for Inner {
++        fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
++            let mut st = s.serialize_struct("Inner", 1)?;
++            st.serialize_field("value", &self.0)?;
++            st.end()
++        }
++    }
++
++    impl serde::Serialize for Field {
++        fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
++            match self {
++                Field::Plain(v) => s.serialize_i64(*v),
++                Field::Table(v) => Inner(*v).serialize(s),
++                Field::Tables(vs) => s.collect_seq(vs.iter().map(|v| Inner(*v))),
++                Field::Variant(name, v) => {
++                    let mut sv = s.serialize_struct_variant("Variant", 0, name, 1)?;
++                    sv.serialize_field("value", v)?;
++                    sv.end()
++                }
++            }
++        }
++    }
++
++    /// A struct whose field names are chosen at runtime, as `#[serde(rename)]` would
++    #[derive(Debug, Clone)]
++    struct Doc(Vec<(&'static str, Field)>);
++
++    impl serde::Serialize for Doc {
++        fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
++            let mut st = s.serialize_struct("Doc", self.0.len())?;
++            for (name, field) in &self.0 {
++                st.serialize_field(name, field)?;
++            }
++            st.end()
++        }
++    }
++
++    fn inner(v: i64) -> toml::Value {
++        toml::Value::Table(toml::Table::from_iter([("value".to_owned(), v.into())]))
++    }
++
++    fn expected(doc: &Doc) -> toml::Table {
++        doc.0
++            .iter()
++            .map(|(name, field)| {
++                let value = match field {
++                    Field::Plain(v) => (*v).into(),
++                    Field::Table(v) => inner(*v),
++                    Field::Tables(vs) => toml::Value::Array(vs.iter().map(|v| inner(*v)).collect()),
++                    Field::Variant(variant, v) => toml::Value::Table(toml::Table::from_iter([(
++                        (*variant).to_owned(),
++                        inner(*v),
++                    )])),
++                };
++                ((*name).to_owned(), value)
++            })
++            .collect()
++    }
++
++    fn leak(s: String) -> &'static str {
++        Box::leak(s.into_boxed_str())
++    }
++
++    fn field() -> impl Strategy<Value = Field> {
++        prop_oneof![
++            any::<i64>().prop_map(Field::Plain),
++            any::<i64>().prop_map(Field::Table),
++            prop::collection::vec(any::<i64>(), 1..3).prop_map(Field::Tables),
++            (any::<String>(), any::<i64>()).prop_map(|(n, v)| Field::Variant(leak(n), v)),
++        ]
++    }
++
++    fn doc() -> impl Strategy<Value = Doc> {
++        prop::collection::btree_map(any::<String>(), field(), 1..4)
++            .prop_map(|m| Doc(m.into_iter().map(|(k, f)| (leak(k), f)).collect()))
++    }
++
++    proptest! {
++        // proob:01M62P1DF4W2B5RQ895M7MXCPN
++        #[test]
++        fn write_then_read_is_equal_for_any_names(doc in doc()) {
++            let want = expected(&doc);
++            for (style, written) in [
++                ("to_string", toml::to_string(&doc)),
++                ("to_string_pretty", toml::to_string_pretty(&doc)),
++            ] {
++                let written = written.unwrap_or_else(|e| panic!("{style} failed: {e}\nfields: {:?}", doc.0));
++                let read = toml::from_str::<toml::Table>(&written).unwrap_or_else(|e| {
++                    panic!("{style} wrote a document that does not read back\nfields: {:?}\ndocument:\n{written}\nerror: {e}", doc.0)
++                });
++                prop_assert_eq!(&read, &want, "{} document:\n{}", style, written);
++            }
++        }
++    }
++}
+diff --git a/crates/toml_edit/src/parser/mod.rs b/crates/toml_edit/src/parser/mod.rs
+index 1adf567..265e6e4 100644
+--- a/crates/toml_edit/src/parser/mod.rs
++++ b/crates/toml_edit/src/parser/mod.rs
+@@ -154,3 +154,38 @@ pub(crate) mod prelude {
+     #[cfg(feature = "debug")]
+     pub(crate) use super::debug::trace;
+ }
++
++#[cfg(test)]
++mod test {
++    use proptest::prelude::*;
++
++    /// Fragments of TOML syntax, so most cases get past the first token instead of failing on it
++    fn toml_ish() -> impl Strategy<Value = String> {
++        let piece = prop_oneof![
++            any::<char>().prop_map(String::from),
++            prop::sample::select(vec![
++                "[", "]", "[[", "]]", "{", "}", "=", ".", ",", "\n", "\r\n", " ", "#", "\"", "'",
++                "\"\"\"", "'''", "\\", "\\u", "a", "b", "1", "-", "+", "_", "0x", "0o", "0b",
++                "1e5", "1.0", "inf", "nan", "true", "false", "1979-05-27", "T07:32:00", "Z",
++                "+07:00", "a = 1", "[a]", "[[a]]", "a.b", "a = {", "a = [",
++            ])
++            .prop_map(String::from),
++        ];
++        prop::collection::vec(piece, 0..64).prop_map(|v| v.concat())
++    }
++
++    proptest! {
++        // proob:01M62P1DKK7GZNXP02PDDRXBJG
++        #[test]
++        fn reading_any_text_never_panics(input in prop_oneof![any::<String>(), toml_ish()]) {
++            let read = std::panic::catch_unwind(|| {
++                let _ = input.parse::<crate::DocumentMut>();
++                let _ = input.parse::<crate::Document<String>>();
++                let _ = input.parse::<crate::Value>();
++                let _ = input.parse::<crate::Key>();
++                let _ = crate::Key::parse(&input);
++            });
++            prop_assert!(read.is_ok(), "reading panicked on {:?}", input);
++        }
++    }
++}
+diff --git a/crates/toml_writer/tests/string.rs b/crates/toml_writer/tests/string.rs
+index 2e68f01..1031eb5 100644
+--- a/crates/toml_writer/tests/string.rs
++++ b/crates/toml_writer/tests/string.rs
+@@ -703,3 +703,59 @@ proptest! {
+         assert_eq!(value.as_str().unwrap(), decoded);
+     }
+ }
++
++#[track_caller]
++fn read_back(toml: &str) -> (String, toml_old::Value) {
++    let value = match toml.parse::<toml_old::Value>() {
++        Ok(value) => value,
++        Err(err) => panic!("could not parse {toml:?}: {err}"),
++    };
++    let table = value.as_table().unwrap();
++    assert_eq!(table.len(), 1, "{toml:?} read as {table:?}");
++    let (key, value) = table.iter().next().unwrap();
++    (key.clone(), value.clone())
++}
++
++proptest! {
++    // proob:01M62P1DG83RRRVFV2RY5FYTXF
++    #[test]
++    fn every_key_form_reads_back_unchanged(decoded in any::<String>()) {
++        let key = TomlKeyBuilder::new(&decoded);
++        let forms = [
++            ("default", Some(key.as_default())),
++            ("unquoted", key.as_unquoted()),
++            ("literal", key.as_literal()),
++            ("basic_pretty", key.as_basic_pretty()),
++            ("basic", Some(key.as_basic())),
++        ];
++        for (form, encoded) in forms {
++            let Some(encoded) = encoded else { continue };
++            let toml = format!("{} = 0", encoded.to_toml_key());
++            let (read, _) = read_back(&toml);
++            prop_assert_eq!(&read, &decoded, "{} key written as {:?}", form, toml);
++        }
++    }
++}
++
++proptest! {
++    // proob:01M62P1DHEVDDGJ1CND61FYQ56
++    #[test]
++    fn every_string_form_reads_back_unchanged(decoded in any::<String>()) {
++        let string = TomlStringBuilder::new(&decoded);
++        let forms = [
++            ("default", Some(string.as_default())),
++            ("literal", string.as_literal()),
++            ("ml_literal", string.as_ml_literal()),
++            ("basic_pretty", string.as_basic_pretty()),
++            ("ml_basic_pretty", string.as_ml_basic_pretty()),
++            ("basic", Some(string.as_basic())),
++            ("ml_basic", Some(string.as_ml_basic())),
++        ];
++        for (form, encoded) in forms {
++            let Some(encoded) = encoded else { continue };
++            let toml = format!("k = {}", encoded.to_toml_value());
++            let (_, read) = read_back(&toml);
++            prop_assert_eq!(read.as_str(), Some(decoded.as_str()), "{} string written as {:?}", form, toml);
++        }
++    }
++}

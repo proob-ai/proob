@@ -1,0 +1,7 @@
+id = "01K8V5NQ4A0F3R7Y2M9D6P1XVE"
+title = "Classifying a value by its sign"
+statement = "A value is classified negative, zero, or positive exactly as its sign says."
+scope = ["clamp/src/lib.rs"]
+severity = "medium"
+rationale = "Bound to an item whose body is a single `match` of constructors: the first operator set found nothing to mutate in it, so the property could never reach the kill floor; the arm swap of v2 is what lets its `ensures` show it can fail."
+kind = "proof"

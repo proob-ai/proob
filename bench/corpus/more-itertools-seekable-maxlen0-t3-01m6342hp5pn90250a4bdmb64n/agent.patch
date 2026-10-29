@@ -1,0 +1,131 @@
+diff --git a/requirements/testing.txt b/requirements/testing.txt
+index a975870..6e2c305 100644
+--- a/requirements/testing.txt
++++ b/requirements/testing.txt
+@@ -1,2 +1,3 @@
+ coverage
+ ruff
++hypothesis
+diff --git a/tests/test_properties.py b/tests/test_properties.py
+new file mode 100644
+index 0000000..510cf6b
+--- /dev/null
++++ b/tests/test_properties.py
+@@ -0,0 +1,117 @@
++"""Property-based tests bound to proob properties (proob/properties/)."""
++
++from collections import deque
++from decimal import Decimal
++from threading import Thread
++
++from hypothesis import given, strategies as st
++
++import more_itertools as mi
++
++items = st.lists(st.integers(), max_size=20)
++# small limits, 0 included, drawn often: the edge cases of a bounded cache
++maxlens = st.one_of(st.none(), st.integers(0, 2), st.integers(min_value=0, max_value=25))
++
++
++# proob:01M6342HN38MEJA0EJH1XNX320
++@given(items, maxlens, st.lists(st.booleans(), max_size=50))
++def test_seekable_peek_never_changes_iteration(source, maxlen, peeks):
++    s = mi.seekable(source, maxlen=maxlen)
++    out = []
++    for peek_first in peeks:
++        peeked = s.peek(None) if peek_first else None
++        nxt = next(s, None)
++        assert not peek_first or peeked == nxt, (source, maxlen, peeks, peeked, nxt)
++        if nxt is not None:
++            out.append(nxt)
++    out.extend(s)
++    assert out == source, (source, maxlen, peeks, out)
++
++
++# proob:01M6342HP5PN90250A4BDMB64N
++@given(items, maxlens, st.integers(min_value=0, max_value=20))
++def test_seekable_truthiness_consumes_nothing(source, maxlen, before):
++    s = mi.seekable(source, maxlen=maxlen)
++    head = list(mi.take(before, s))
++    truth = bool(s)
++    rest = list(s)
++    assert truth == bool(rest), (source, maxlen, before, truth, rest)
++    assert head + rest == source, (source, maxlen, before, head, rest)
++
++
++numbers = {
++    int: st.integers(-10**6, 10**6),
++    float: st.floats(-1e6, 1e6, allow_nan=False, allow_infinity=False),
++    Decimal: st.decimals(-10**6, 10**6, allow_nan=False, allow_infinity=False, places=6),
++}
++
++
++def _range_args(kind):
++    num, tiny = numbers[kind], kind(0 if kind is int else '1e-9')
++    # stop lands near start + k*step, so ranges stay small and hit the boundary
++    # |step| >= 1e-3 keeps ranges iterable: a near-zero step means billions of items
++    step = st.tuples(num.filter(lambda x: 1e-3 <= abs(x) <= 1e3), st.booleans()).map(
++        lambda t: t[0] if t[1] else -t[0]
++    )
++    return st.tuples(num, step, st.integers(0, 200), st.integers(-1, 1)).map(
++        lambda t: (t[0], t[0] + t[1] * t[2] + t[3] * tiny, t[1])
++    )
++
++
++range_args = st.sampled_from(list(numbers)).flatmap(_range_args)
++
++
++# proob:01M6342HQ87K6KD890RE5HF377
++@given(range_args)
++def test_numeric_range_len_matches_iteration(args):
++    r = mi.numeric_range(*args)
++    produced = sum(1 for _ in r)
++    assert len(r) == produced, (args, len(r), produced)
++
++
++ops = st.lists(
++    st.one_of(
++        st.just(('next',)),
++        st.just(('peek',)),
++        st.tuples(st.just('prepend'), st.lists(st.integers(), max_size=3)),
++    ),
++    max_size=40,
++)
++
++
++# proob:01M6342HRB602NF6D80XXFS61H
++@given(items, ops)
++def test_peekable_yields_each_item_once_prepends_first(source, operations):
++    p = mi.peekable(source)
++    pending, rest = deque(), iter(list(source))
++    out, expected = [], []
++    for op in operations:
++        if op[0] == 'prepend':
++            p.prepend(*op[1])
++            pending.extendleft(reversed(op[1]))
++        elif op[0] == 'peek':
++            p.peek(None)
++        else:
++            out.append(next(p, None))
++            expected.append(pending.popleft() if pending else next(rest, None))
++    out.extend(p)
++    expected.extend(pending)
++    expected.extend(rest)
++    assert out == expected, (source, operations, out, expected)
++
++
++# proob:01M6342HSD8KP4K8QZA2520AQ6
++@given(st.lists(st.integers(), max_size=200), st.integers(min_value=1, max_value=8))
++def test_concurrent_tees_each_yield_full_source(source, n):
++    tees = mi.concurrent_tee(iter(source), n=n)
++    results = [None] * n
++
++    def consume(i):
++        results[i] = list(tees[i])
++
++    threads = [Thread(target=consume, args=(i,)) for i in range(n)]
++    for t in threads:
++        t.start()
++    for t in threads:
++        t.join()
++    assert all(r == source for r in results), (source, n, results)

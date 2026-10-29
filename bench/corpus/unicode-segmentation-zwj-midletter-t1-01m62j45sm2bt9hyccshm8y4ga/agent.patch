@@ -1,0 +1,163 @@
+diff --git a/tests/test.rs b/tests/test.rs
+index ee31b94..620cd59 100644
+--- a/tests/test.rs
++++ b/tests/test.rs
+@@ -433,3 +433,158 @@ fn test_size_hint_is_a_valid_bound() {
+         check!("unicode_sentences", s, || s.unicode_sentences());
+     }
+ }
++
++// Property-based checks bound to the properties declared under proob/properties/.
++// Text is any Unicode, with characters from each break class the rules single out
++// drawn often enough to meet each other.
++mod props {
++    use proptest::prelude::*;
++    use unicode_segmentation::{GraphemeCursor, GraphemeIncomplete, UnicodeSegmentation};
++
++    // One row per break class, so any class sits next to any other often.
++    const SEG_CLASSES: &[&[char]] = &[
++        &['a', 'Z', '\u{05D0}', '\u{00E9}'],           // letters
++        &[':', '.', '\'', '\u{00B7}', ',', ';'],       // MidLetter / MidNum
++        &['1', '\u{0661}'],                            // numbers
++        &['_', '\u{3042}', '\u{30A2}', '\u{0E01}'],    // ExtendNumLet, Hiragana, Katakana, Thai
++        &[' ', '\t', '\r', '\n', '\u{0}', '\u{2028}'], // space, controls
++        &['\u{200D}'],                                 // ZWJ
++        &[
++            '\u{0301}',
++            '\u{FE0F}',
++            '\u{200C}',
++            '\u{00AD}',
++            '\u{2060}',
++            '\u{1F3FB}',
++        ], // Extend, Format
++        &['\u{1F600}', '\u{1F468}', '\u{2764}'],       // Extended_Pictographic
++        &['\u{1F1E6}', '\u{1F1EB}'],                   // regional indicators
++        &['\u{0600}', '\u{06DD}'],                     // Prepend
++        &['\u{0915}', '\u{093C}', '\u{094D}'],         // Indic consonant, extend, linker
++        &['\u{1100}', '\u{1161}', '\u{11A8}', '\u{AC00}'], // Hangul L, V, T, LV
++    ];
++
++    fn text() -> impl Strategy<Value = String> {
++        let class_char =
++            prop::sample::select(SEG_CLASSES).prop_flat_map(|class| prop::sample::select(class));
++        prop::collection::vec(prop_oneof![1 => any::<char>(), 9 => class_char], 0..64)
++            .prop_map(|v| v.into_iter().collect())
++    }
++
++    fn boundaries(s: &str) -> Vec<usize> {
++        s.char_indices()
++            .map(|(i, _)| i)
++            .chain(Some(s.len()))
++            .collect()
++    }
++
++    proptest! {
++        // proob:01M62J45SM2BT9HYCCSHM8Y4GA
++        #[test]
++        fn word_bounds_agree_forwards_and_backwards(s in text()) {
++            let fwd: Vec<(usize, &str)> = s.split_word_bound_indices().collect();
++            let mut back: Vec<(usize, &str)> = s.split_word_bound_indices().rev().collect();
++            back.reverse();
++            prop_assert_eq!(&fwd, &back, "word pieces of {:?}: forwards vs backwards", s);
++        }
++
++        // proob:01M62J45TRXX0NBE2DWE3DJD5C
++        #[test]
++        fn chunked_cursor_matches_whole_string(
++            s in text(),
++            cut_bits in prop::collection::vec(any::<bool>(), 32),
++            is_extended in any::<bool>(),
++        ) {
++            let bounds = boundaries(&s);
++            // Chunk edges: 0, len, and any interior codepoint boundary the bits select.
++            let cuts: Vec<usize> = bounds.iter().enumerate()
++                .filter(|&(k, &b)| b == 0 || b == s.len() || cut_bits[k % cut_bits.len()])
++                .map(|(_, &b)| b)
++                .collect();
++            let expected: Vec<usize> = std::iter::once(0)
++                .chain(s.grapheme_indices(is_extended).map(|(i, g)| i + g.len()))
++                .collect();
++            for &offset in bounds.iter().filter(|&&b| b > 0 && b < s.len()) {
++                let k = cuts.iter().rposition(|&c| c <= offset).unwrap();
++                let (start, end) = (cuts[k], cuts[k + 1]);
++                let mut cursor = GraphemeCursor::new(offset, s.len(), is_extended);
++                let got = loop {
++                    match cursor.is_boundary(&s[start..end], start) {
++                        Ok(b) => break b,
++                        Err(GraphemeIncomplete::PreContext(n)) => {
++                            let j = cuts.iter().position(|&c| c == n);
++                            prop_assert!(j.map_or(false, |j| j > 0),
++                                "{:?} cuts={:?} offset={}: context requested up to {}, not a chunk end",
++                                s, cuts, offset, n);
++                            let j = j.unwrap();
++                            cursor.provide_context(&s[cuts[j - 1]..n], cuts[j - 1]);
++                        }
++                        Err(e) => prop_assert!(false,
++                            "{:?} cuts={:?} offset={}: unexpected {:?}", s, cuts, offset, e),
++                    }
++                };
++                prop_assert_eq!(got, expected.contains(&offset),
++                    "{:?} extended={} cuts={:?} offset={}", s, is_extended, cuts, offset);
++            }
++        }
++
++        // The cursor documents that offsets lie on a codepoint boundary; within that,
++        // and for offsets past the end, every call must return rather than panic.
++        // proob:01M62J45VV6N80DMMQH07PBBHN
++        #[test]
++        fn no_splitter_or_cursor_call_panics(
++            s in text(),
++            picks in prop::collection::vec((any::<prop::sample::Index>(), 0usize..3, 0usize..8), 1..8),
++            is_extended in any::<bool>(),
++        ) {
++            let _ = s.graphemes(is_extended).rev().count() + s.graphemes(is_extended).count();
++            let _ = s.grapheme_indices(is_extended).rev().count();
++            let _ = s.unicode_words().rev().count() + s.unicode_words().count();
++            let _ = s.unicode_word_indices().rev().count();
++            let _ = s.split_word_bounds().rev().count() + s.split_word_bound_indices().count();
++            let _ = s.unicode_sentences().count() + s.split_sentence_bound_indices().count();
++            let _ = s.split_sentence_bounds().size_hint();
++            let bounds = boundaries(&s);
++            let off = |(i, past, extra): (prop::sample::Index, usize, usize)| match past {
++                0 => s.len() + 1 + extra,
++                _ => *i.get(&bounds),
++            };
++            let mut cursor = GraphemeCursor::new(off(picks[0].clone()), s.len(), is_extended);
++            for p in picks.iter().cloned() {
++                let start = *p.0.get(&bounds);
++                let _ = cursor.is_boundary(&s, 0);
++                let _ = cursor.next_boundary(&s, 0);
++                let _ = cursor.prev_boundary(&s[start..], start);
++                let _ = cursor.is_boundary(&s[start..], start);
++                cursor.provide_context(&s[..start], 0);
++                cursor.set_cursor(off(p));
++                let _ = cursor.prev_boundary(&s, 0);
++            }
++        }
++
++        // proob:01M62J45WVSZPW1GWM35F7BB4D
++        #[test]
++        fn pieces_rejoin_to_original(s in text()) {
++            for (name, joined) in [
++                ("graphemes extended", s.graphemes(true).collect::<String>()),
++                ("graphemes legacy", s.graphemes(false).collect::<String>()),
++                ("word bounds", s.split_word_bounds().collect::<String>()),
++                ("word bounds reversed",
++                    s.split_word_bounds().rev().collect::<Vec<_>>().into_iter().rev().collect()),
++                ("sentence bounds", s.split_sentence_bounds().collect::<String>()),
++            ] {
++                prop_assert_eq!(&joined, &s, "{} of {:?} rejoined to {:?}", name, s, joined);
++            }
++        }
++
++        // proob:01M62J45Y1KRW9NKP2K6V5XXJ2
++        #[test]
++        fn graphemes_agree_forwards_and_backwards(s in text(), is_extended in any::<bool>()) {
++            let fwd: Vec<(usize, &str)> = s.grapheme_indices(is_extended).collect();
++            let mut back: Vec<(usize, &str)> = s.grapheme_indices(is_extended).rev().collect();
++            back.reverse();
++            prop_assert_eq!(&fwd, &back,
++                "graphemes (extended={}) of {:?}: forwards vs backwards", is_extended, s);
++        }
++    }
++}

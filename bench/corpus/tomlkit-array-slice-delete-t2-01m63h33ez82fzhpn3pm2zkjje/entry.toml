@@ -1,0 +1,15 @@
+kind = "catch"
+bug = "tomlkit-array-slice-delete"
+trial = "t2"
+language = "python"
+repo = "https://github.com/python-poetry/tomlkit"
+buggy_commit = "88aa4b1c1128587b8c8ee92d0db11db7bfbdc0ed"
+fix_commit = "8c30fc17d91aee7469c0287e509300e78aa15227"
+fix_paths = ["tomlkit/items.py"]
+install = ["git submodule update --init --recursive", "uv venv --python 3.13 .venv", "uv pip install --python .venv/bin/python -e . pytest PyYAML"]
+python = "3.13"
+property = "01M63H33EZ82FZHPN3PM2ZKJJE"
+seed = "1793500359278419720"
+expect_buggy = "counterexample"
+expect_fixed = "no_counterexample"
+flaky = false

@@ -1,0 +1,6 @@
+id = "01M62MS4DFXMBD38RQSAMN7Q10"
+title = "Slice delete keeps array text in step"
+statement = "After a range of elements is deleted from an array, the printed array contains exactly the elements that remain, in the same order."
+scope = ["tomlkit/items.py"]
+severity = "high"
+rationale = "tomlkit/items.py around line 1690 computes the rendered positions to drop from the raw slice bounds without normalizing them, so negative bounds, a negative step, or an explicit stop of 0 can drop a different set of rendered elements than the list itself loses. tests/test_items.py test_array_behaves_like_a_list deletes only single indices; no test deletes a range. CHANGELOG.md records earlier array-removal rendering bugs (#405, #408). A mismatch is written silently by dumps and TOMLFile.write."

@@ -1,0 +1,6 @@
+id = "01M62JXS2Q91ER0GQ1FQC577E4"
+title = "Unedited round-trip is exact"
+statement = "Reading a valid TOML document and writing it back without changes gives the original text byte for byte."
+scope = ["tomlkit/*.py"]
+severity = "high"
+rationale = "This is the library's stated purpose: README says it preserves all comments, indentations, whitespace and internal element ordering. tests/test_toml_tests.py:127 asserts it over the toml-test 1.1.0 valid corpus. Tools such as Poetry rewrite users' pyproject.toml through it."

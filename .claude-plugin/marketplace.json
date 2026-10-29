@@ -1,0 +1,19 @@
+{
+  "name": "proob",
+  "owner": {
+    "name": "proob-ai"
+  },
+  "metadata": {
+    "description": "The proob marketplace: the proob plugin, served from its own repository.",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "proob",
+      "source": "./",
+      "description": "Team-approved, machine-checked, continuously guarded properties for your codebase.",
+      "version": "0.1.0",
+      "license": "Apache-2.0"
+    }
+  ]
+}

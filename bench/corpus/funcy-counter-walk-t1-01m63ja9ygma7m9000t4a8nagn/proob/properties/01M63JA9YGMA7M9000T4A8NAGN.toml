@@ -1,0 +1,6 @@
+id = "01M63JA9YGMA7M9000T4A8NAGN"
+title = "Mapping values keeps keys and kind"
+statement = "Changing only the values of any kind of dictionary keeps exactly the same keys and the same kind, and gives each key its own value transformed once."
+scope = ["funcy/colls.py"]
+severity = "high"
+rationale = "funcy/colls.py walk_values (145-153) shares the same type-constructor path as walk; tests/test_colls.py test_walk_values covers dict and defaultdict only."

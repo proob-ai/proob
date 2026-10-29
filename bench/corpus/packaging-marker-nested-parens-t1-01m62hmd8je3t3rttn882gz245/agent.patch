@@ -1,0 +1,193 @@
+diff --git a/tests/property/test_markers_properties.py b/tests/property/test_markers_properties.py
+new file mode 100644
+index 0000000..cc3cb0f
+--- /dev/null
++++ b/tests/property/test_markers_properties.py
+@@ -0,0 +1,187 @@
++# This file is dual licensed under the terms of the Apache License, Version
++# 2.0, and the BSD License. See the LICENSE file in the root of this repository
++# for complete details.
++
++"""Property tests for marker parsing, printing, and evaluation.
++
++Markers are generated as a small tree (or-of-and-of-factors, where a factor
++is a comparison or a group wrapped in one to three bracket pairs) together
++with a reference evaluator that applies "and before or" directly to the tree.
++"""
++
++from __future__ import annotations
++
++import itertools
++import pickle
++
++import pytest
++from hypothesis import given
++from hypothesis import strategies as st
++
++from packaging.markers import InvalidMarker, Marker
++
++# No `property` mark: pyproject's `-m "not property"` would deselect these bound checks.
++
++VARIABLES = ("os_name", "sys_platform", "platform_machine", "implementation_name")
++VALUES = ("a", "b")
++
++# Every assignment of VALUES to VARIABLES: 16 environments.
++ENVIRONMENTS = [
++    dict(zip(VARIABLES, combo))
++    for combo in itertools.product(VALUES, repeat=len(VARIABLES))
++]
++
++atoms = st.tuples(
++    st.sampled_from(VARIABLES), st.sampled_from(("==", "!=")), st.sampled_from(VALUES)
++).map(lambda t: ("atom", *t))
++
++
++def _extend(children: st.SearchStrategy) -> st.SearchStrategy:
++    group = st.tuples(st.integers(1, 3), children).map(lambda t: ("group", *t))
++    factor = st.one_of(atoms, group)
++    term = st.lists(factor, min_size=1, max_size=3)
++    return st.lists(term, min_size=1, max_size=3).map(lambda ts: ("or", ts))
++
++
++trees = st.recursive(
++    st.lists(st.lists(atoms, min_size=1, max_size=3), min_size=1, max_size=3).map(
++        lambda ts: ("or", ts)
++    ),
++    _extend,
++    max_leaves=12,
++)
++
++
++def render(node: tuple) -> str:
++    kind = node[0]
++    if kind == "atom":
++        _, var, op, val = node
++        return f'{var} {op} "{val}"'
++    if kind == "group":
++        _, depth, inner = node
++        return "(" * depth + render(inner) + ")" * depth
++    return " or ".join(" and ".join(render(f) for f in term) for term in node[1])
++
++
++def reference(node: tuple, env: dict[str, str]) -> bool:
++    kind = node[0]
++    if kind == "atom":
++        _, var, op, val = node
++        return (env[var] == val) if op == "==" else (env[var] != val)
++    if kind == "group":
++        return reference(node[2], env)
++    return any(all(reference(f, env) for f in term) for term in node[1])
++
++
++# Markers built by parsing, or by joining two parsed markers with & or |.
++markers = st.one_of(
++    trees.map(lambda t: Marker(render(t))),
++    st.tuples(trees, st.sampled_from(("&", "|")), trees).map(
++        lambda t: (
++            Marker(render(t[0])) & Marker(render(t[2]))
++            if t[1] == "&"
++            else Marker(render(t[0])) | Marker(render(t[2]))
++        )
++    ),
++)
++
++
++# proob:01M62HMD8JE3T3RTTN882GZ245
++@given(markers)
++def test_printed_marker_parses_to_same_meaning(marker: Marker) -> None:
++    printed = str(marker)
++    reparsed = Marker(printed)
++    for env in ENVIRONMENTS:
++        before = marker.evaluate(env)
++        after = reparsed.evaluate(env)
++        assert before == after, (
++            f"printed {printed!r} evaluates to {after} in {env}, "
++            f"the original marker to {before}"
++        )
++
++
++# proob:01M62HMD92NDE3KXXBD3FKTPKH
++@given(trees)
++def test_and_binds_tighter_than_or_and_groups_are_units(tree: tuple) -> None:
++    text = render(tree)
++    marker = Marker(text)
++    for env in ENVIRONMENTS:
++        expected = reference(tree, env)
++        observed = marker.evaluate(env)
++        assert observed == expected, (
++            f"{text!r} in {env}: evaluated {observed}, expected {expected}"
++        )
++
++
++# proob:01M62HMD9KRZ9CP2TX2CSZXHCZ
++@given(markers, markers)
++def test_equal_markers_hash_alike_and_survive_pickle(a: Marker, b: Marker) -> None:
++    if a == b:
++        assert hash(a) == hash(b), f"{a!r} == {b!r} but hashes differ"
++    for m in (a, b):
++        restored = pickle.loads(pickle.dumps(m))
++        assert restored == m, f"{m!r} unpickled as {restored!r}"
++        assert hash(restored) == hash(m), f"{m!r} unpickled with a different hash"
++
++
++name_parts = st.lists(
++    st.text(alphabet="abcdefghijklmnopqrstuvwxyz0123456789", min_size=1, max_size=4),
++    min_size=1,
++    max_size=3,
++)
++separators = st.text(alphabet="-_.", min_size=1, max_size=3)
++
++
++@st.composite
++def spellings(draw: st.DrawFn, parts: list[str]) -> str:
++    out = ""
++    for i, part in enumerate(parts):
++        if i:
++            out += draw(separators)
++        out += "".join(
++            c.upper() if draw(st.booleans()) else c for c in part
++        )
++    return out
++
++
++@st.composite
++def extra_pairs(draw: st.DrawFn) -> tuple[str, str, bool]:
++    parts = draw(name_parts)
++    other = parts if draw(st.booleans()) else draw(name_parts)
++    same = "-".join(parts) == "-".join(other)
++    return draw(spellings(parts)), draw(spellings(other)), same
++
++
++# proob:01M62HMD7YECVFXMKWV3HEV9TG
++@given(extra_pairs(), st.booleans())
++def test_extra_names_compare_normalized(
++    pair: tuple[str, str, bool], reversed_sides: bool
++) -> None:
++    in_marker, requested, same = pair
++    text = (
++        f'"{in_marker}" == extra' if reversed_sides else f'extra == "{in_marker}"'
++    )
++    observed = Marker(text).evaluate({"extra": requested})
++    assert observed == same, (
++        f"{text!r} with extra={requested!r}: evaluated {observed}, expected {same}"
++    )
++    observed_ne = Marker(text.replace("==", "!=")).evaluate({"extra": requested})
++    assert observed_ne == (not same), (
++        f"!= form of {text!r} with extra={requested!r}: evaluated {observed_ne}"
++    )
++
++
++trailing = st.lists(
++    st.sampled_from((")", "(", "and", "or", "not", "foo", '"x"', "==", ";", "os_name")),
++    min_size=1,
++    max_size=3,
++).map(" ".join)
++
++
++# proob:01M62HMDA4MADMY5HDSEHEN9C1
++@given(trees, trailing)
++def test_trailing_text_is_rejected(tree: tuple, tail: str) -> None:
++    text = f"{render(tree)} {tail}"
++    with pytest.raises(InvalidMarker):
++        Marker(text)
++        pytest.fail(f"{text!r} was accepted")

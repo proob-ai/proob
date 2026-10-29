@@ -1,0 +1,6 @@
+id = "01M63JA9X6H9WVS3BK86D2253G"
+title = "Walking a dictionary keeps its kind and contents"
+statement = "Walking any kind of dictionary with a step that returns each key and value unchanged gives back an equal dictionary of the same kind."
+scope = ["funcy/colls.py"]
+severity = "high"
+rationale = "docs/colls.rst describes walk as returning a collection of the same type; funcy/colls.py walk builds the result with the input type constructor from key-value pairs (_factory, colls.py:32-46, 130-133). tests/test_colls.py covers plain dict and defaultdict only; a counting dictionary built from pairs would count the pairs instead of rebuilding the mapping."

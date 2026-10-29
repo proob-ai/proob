@@ -1,0 +1,7 @@
+id = "01M622RQ7C066YFA9NDMB7EG6K"
+title = "A run off the default branch is not evidence"
+statement = "A run on any branch other than the default branch is never accepted as evidence."
+scope = ["crates/proob-effects/src/evidence.rs"]
+severity = "high"
+rationale = "ASSERTIONS.md, evidence acceptance: the effects layer builds Evidence only from runs the verified accept_run accepts, and a run whose head branch is not the default branch is rejected before its artifact is read."
+kind = "test"

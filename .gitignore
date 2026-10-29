@@ -1,0 +1,9 @@
+/target/
+**/target/
+/proob/.cache/
+/.claude/worktrees/
+/mutants.out/
+**/*.orig
+.DS_Store
+/evals/results/
+/evals/.bin/

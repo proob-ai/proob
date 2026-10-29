@@ -1,0 +1,7 @@
+id = "01M622RQ71P6ZXCKVVTRCA4DSE"
+title = "A statement nobody else approved never holds"
+statement = "No property is ever shown as holding unless its statement was approved by a reviewer who did not write it."
+scope = ["crates/proob-core/src/verdict.rs", "crates/proob-core/src/specs.rs"]
+severity = "critical"
+rationale = "ASSERTIONS.md row 1 (statement_team_approved): the first condition of Holds, carried as the `verdict` function's own guarantee. Without it the agent that wrote a property could also certify it."
+kind = "proof"

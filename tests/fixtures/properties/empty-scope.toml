@@ -1,0 +1,6 @@
+id = "01K8PBH7WXN5F2A3C4D5E6G7H8"
+title = "About nothing"
+statement = "A property is always about at least one path."
+scope = []
+severity = "low"
+rationale = "Rejected at conversion: the scope is empty."

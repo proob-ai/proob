@@ -1,0 +1,6 @@
+id = "01M6352CV18JTCGW23WTYBEST6"
+title = "Reverse date iteration mirrors forward"
+statement = "Walking a run of dates backwards gives exactly the dates a forward walk gives, in reverse order."
+scope = ["src/naive/date/mod.rs"]
+severity = "high"
+rationale = "The day and week iterators implement double-ended iteration (src/naive/date/mod.rs:2237, :2271), whose standard contract is that reversing yields the forward items backwards; next_back instead walks the shared cursor toward the minimum date, and the doc examples at src/naive/date/mod.rs:1344 and :1375 show rev counting down from the start date, so a team decision on the intended API is needed."

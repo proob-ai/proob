@@ -1,0 +1,125 @@
+diff --git a/tests/test_bidict.py b/tests/test_bidict.py
+index 59e6718..2715763 100644
+--- a/tests/test_bidict.py
++++ b/tests/test_bidict.py
+@@ -60,8 +60,10 @@ from hypothesis.stateful import invariant
+ from hypothesis.stateful import precondition
+ from hypothesis.stateful import rule
+ from hypothesis.strategies import booleans
++from hypothesis.strategies import lists
+ from hypothesis.strategies import randoms
+ from hypothesis.strategies import sampled_from
++from hypothesis.strategies import tuples
+ from typing_extensions import TypeIs
+ 
+ from bidict import BidirectionalMapping
+@@ -817,3 +819,109 @@ def assert_bidicts_equal(b1: BB[KT, VT], b2: BB[KT, VT]) -> None:
+     assert b1.inv == b2.inv
+     assert_mappings_are_inverse(b1, b2.inv)
+     assert_mappings_are_inverse(b1.inv, b2)
++
++
++# A random sequence of mutations, reaching the bidict through both itself and its inverse.
++mutations = lists(tuples(sampled_from(('putall', 'inv_putall', 'forceupdate', 'pop', 'popitem')), items, on_dup), max_size=8)
++ordered_mut_bidict_t = sampled_from([bt for bt in mutable_bidict_types if issubclass(bt, OrderedBidictBase)])
++
++
++def apply_mutation(bi: MutableBidict[int, int], mutation: tuple[str, Items, OnDup]) -> None:
++    name, new_items, od = mutation
++    try:
++        match name:
++            case 'putall':
++                bi.putall(new_items, od)
++            case 'inv_putall':
++                bi.inv.putall(new_items, od)
++            case 'forceupdate':
++                bi.forceupdate(new_items)
++            case 'pop' if new_items:
++                bi.pop(new_items[0][0], None)
++            case 'popitem' if bi:
++                bi.popitem()
++    except DuplicationError:
++        pass
++
++
++# proob:01M634R8EEBEVH1YN4K8Q5NJCA
++@given(bi_t=mut_bidict_t, init=items121, muts=mutations)
++def test_bidict_and_inverse_mirror_after_mutations(bi_t: MBT[int, int], init: Items121, muts: list[t.Any]) -> None:
++    bi = bi_t(init)
++    for mut in muts:
++        apply_mutation(bi, mut)
++        fwd = {k: bi[k] for k in bi}
++        inv = {v: bi.inv[v] for v in bi.inv}
++        assert inv == {v: k for (k, v) in fwd.items()}, f'{init=} {muts=} {fwd=} {inv=}'
++        assert len(bi) == len(bi.inv) == len(fwd), f'{init=} {muts=} {len(bi)=} {len(bi.inv)=}'
++        assert bi.inv.inv is bi
++
++
++# proob:01M634R8FWSFFSE1ASZNXH5CZ0
++@given(bi_t=mut_bidict_t, init=items121, muts=mutations)
++def test_values_stay_unique_after_mutations(bi_t: MBT[int, int], init: Items121, muts: list[t.Any]) -> None:
++    bi = bi_t(init)
++    for mut in muts:
++        apply_mutation(bi, mut)
++        seen = [bi[k] for k in bi]
++        assert len(set(seen)) == len(seen), f'{init=} {muts=} values={seen}'
++
++
++# proob:01M634R8HR8HXZ0FY7V413YJJ2
++@given(
++    bi_t=mut_bidict_t,
++    init=items121,
++    new_items=items,
++    od=sampled_from((None, *on_dups)),
++    bad=sampled_from((None, *range(len(BAD_ITEMS)))),  # an index: BAD_ITEMS' bomb cannot be hashed
++)
++def test_rejected_bulk_update_fails_clean(
++    bi_t: MBT[t.Any, t.Any], init: Items121, new_items: Items, od: OnDup | None, bad: int | None
++) -> None:
++    bi = bi_t(init)
++    before = bi.copy()
++    updates = list(new_items) if bad is None else [*new_items, BAD_ITEMS[bad][1]]
++    try:
++        bi.update(updates) if od is None else bi.putall(updates, od)
++    except (DuplicationError, RuntimeError, TypeError, ValueError):
++        msg = f'{init=} {updates=} {od=} before={list(before.items())} after={list(bi.items())}'
++        if isinstance(bi, OrderedBidictBase):
++            assert bi.equals_order_sensitive(before), msg
++            assert bi.inv.equals_order_sensitive(before.inv), msg
++        else:
++            assert bi == before, msg
++            assert bi.inv == before.inv, msg
++
++
++# proob:01M634R8KCNXGSKD29VE588PNZ
++@given(bi_t=bidict_t, init=items, overwrites=items)
++def test_values_iterate_in_item_order(bi_t: BT[int, int], init: Items, overwrites: Items) -> None:
++    try:
++        bi = bi_t(init)
++    except DuplicationError:
++        bi = bi_t(dedup(init))
++    if isinstance(bi, MutableBidict):
++        bi.forceupdate(overwrites)
++    expect = [v for (_, v) in bi.items()]
++    assert list(bi.values()) == expect, f'{bi_t=} {init=} {overwrites=} values={list(bi.values())} items={list(bi.items())}'
++
++
++# proob:01M634R8N27Y6W0HS37CW6N6ER
++@given(bi_t=ordered_mut_bidict_t, puts=lists(tuples(items, on_dup), max_size=6))
++def test_ordered_views_follow_insertion_order(bi_t: type[OrderedBidict[int, int]], puts: list[t.Any]) -> None:
++    bi = bi_t()
++    oracle: Oracle[int, int] = Oracle({}, ordered=True)
++    for new_items, od in puts:
++        for target in (bi, oracle):
++            try:
++                target.putall(new_items, od)
++            except DuplicationError:
++                pass
++    expect = list(oracle.data.items())
++    msg = f'{puts=} expect={expect} items={list(bi.items())}'
++    assert list(bi) == list(bi.keys()) == [k for (k, _) in expect], msg
++    assert list(bi.values()) == [v for (_, v) in expect], msg
++    assert list(bi.items()) == expect, msg
++    assert list(reversed(bi)) == list(reversed(bi.keys())) == [k for (k, _) in expect][::-1], msg
++    assert list(reversed(bi.items())) == expect[::-1], msg
++    assert list(reversed(bi.values())) == [v for (_, v) in expect][::-1], msg

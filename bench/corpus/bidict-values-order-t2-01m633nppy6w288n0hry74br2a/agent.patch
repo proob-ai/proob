@@ -1,0 +1,193 @@
+diff --git a/tests/test_bidict.py b/tests/test_bidict.py
+index 59e6718..2de3621 100644
+--- a/tests/test_bidict.py
++++ b/tests/test_bidict.py
+@@ -12,6 +12,7 @@ Mainly these are property-based tests implemented via https://hypothesis.works.
+ from __future__ import annotations
+ 
+ import gc
++import operator
+ import pickle
+ import sys
+ import typing as t
+@@ -60,8 +61,12 @@ from hypothesis.stateful import invariant
+ from hypothesis.stateful import precondition
+ from hypothesis.stateful import rule
+ from hypothesis.strategies import booleans
++from hypothesis.strategies import just
++from hypothesis.strategies import lists
++from hypothesis.strategies import one_of
+ from hypothesis.strategies import randoms
+ from hypothesis.strategies import sampled_from
++from hypothesis.strategies import tuples
+ from typing_extensions import TypeIs
+ 
+ from bidict import BidirectionalMapping
+@@ -817,3 +822,167 @@ def assert_bidicts_equal(b1: BB[KT, VT], b2: BB[KT, VT]) -> None:
+     assert b1.inv == b2.inv
+     assert_mappings_are_inverse(b1, b2.inv)
+     assert_mappings_are_inverse(b1.inv, b2)
++
++
++# A mutating call, made through the bidict itself or through its inverse (flipping keys and values).
++ops = tuples(
++    booleans(),
++    one_of(
++        tuples(just('put'), keys, vals, on_dup),
++        tuples(just('forceput'), keys, vals),
++        tuples(just('putall'), items, on_dup),
++        tuples(just('pop'), keys),
++        tuples(just('popitem'), booleans()),
++        tuples(just('move_to_end'), keys, booleans()),
++    ),
++)
++op_lists = lists(ops, max_size=12)
++
++
++def build(bidict_t: BT[int, int], items: Items) -> BidirectionalMapping[int, int]:
++    try:
++        return bidict_t(items)
++    except DuplicationError:  # this type's on_dup rejects these items; settle for a 1:1 init
++        return bidict_t(dedup(items))
++
++
++def apply_op(bi: BidirectionalMapping[int, int], op: tuple[bool, tuple[t.Any, ...]]) -> None:
++    """Apply *op* to *bi* if *bi* is mutable, ignoring the errors that leave a bidict unchanged."""
++    via_inv, (name, *args) = op
++    if not isinstance(bi, MutableBidict):
++        return
++    target = bi.inv if via_inv else bi
++    flip = (lambda k, v: (v, k)) if via_inv else (lambda k, v: (k, v))
++    fkey = operator.neg if via_inv else (lambda k: k)
++    try:
++        match name, args:
++            case 'put', [k, v, od]:
++                target.put(*flip(k, v), od)
++            case 'forceput', [k, v]:
++                target.forceput(*flip(k, v))
++            case 'putall', [its, od]:
++                target.putall(list(starmap(flip, its)), od)
++            case 'pop', [k]:
++                target.pop(fkey(k))
++            case 'popitem', [last]:
++                target.popitem(last) if is_ordered(target) else target.popitem()
++            case 'move_to_end', [k, last] if is_ordered(target):
++                target.move_to_end(fkey(k), last)
++    except (KeyError, DuplicationError):
++        pass
++
++
++UPDATE_ERRORS = (DuplicationError, *(exc_t for (exc_t, _) in BAD_ITEMS))
++
++
++# proob:01M633NPH5TJXK2P5T7RRTSSS3
++@given(
++    bi_t=mut_bidict_t,
++    items121=items121,
++    updates=items,
++    bad=one_of(just(None), sampled_from(range(len(BAD_ITEMS)))),  # an index: the items themselves are unhashable
++    rand=randoms(),
++    od=one_of(just(None), on_dup),
++    via_inv=booleans(),
++)
++def test_failed_bulk_update_changes_nothing(
++    bi_t: MBT[t.Any, t.Any],
++    items121: Items121,
++    updates: Items,
++    bad: int | None,
++    rand: Random,
++    od: OnDup | None,
++    via_inv: bool,
++) -> None:
++    bi = bi_t(items121)
++    target = bi.inv if via_inv else bi
++    upd: list[t.Any] = list(updates)
++    if bad is not None:
++        upd.insert(rand.randint(0, len(upd)), BAD_ITEMS[bad][1])
++    before, before_inv = dict(target), dict(target.inv)
++    failed: Exception | None = None
++    try:
++        target.update(upd) if od is None else target.putall(upd, od)
++    except UPDATE_ERRORS as exc:
++        failed = exc
++    if failed is not None:
++        assert dict(target) == before, f'{bi_t.__name__}({items121}) after failed update {upd} ({failed!r}): {target!r}'
++        assert dict(target.inv) == before_inv, f'inverse after failed update {upd} ({failed!r}): {target.inv!r}'
++
++
++# proob:01M633NPJZBTHSXYSGS82TFY14
++@given(bidict_t=bidict_t, items=items, ops=op_lists)
++def test_inverse_mirrors_forward(bidict_t: BT[int, int], items: Items, ops: list[t.Any]) -> None:
++    bi = build(bidict_t, items)
++    for op in [None, *ops]:
++        if op is not None:
++            apply_op(bi, op)
++        fwd, inv = dict(bi), dict(bi.inv)
++        assert inv == {v: k for (k, v) in fwd.items()}, f'after {op}: forward {fwd}, inverse {inv}'
++        assert len(bi) == len(bi.inv), f'after {op}: forward {fwd}, inverse {inv}'
++        assert bi.inv.inv is bi
++
++
++# proob:01M633NPMX5D04934ECSHDVGNF
++@given(bidict_t=bidict_t, items=items, ops=op_lists)
++def test_values_stay_unique(bidict_t: BT[int, int], items: Items, ops: list[t.Any]) -> None:
++    bi = build(bidict_t, items)
++    for op in [None, *ops]:
++        if op is not None:
++            apply_op(bi, op)
++        held = [bi[k] for k in bi]
++        assert len(set(held)) == len(held), f'after {op}: values held by keys {held}'
++
++
++# proob:01M633NPPY6W288N0HRY74BR2A
++@given(bidict_t=bidict_t, items=items, ops=op_lists)
++def test_values_follow_key_order(bidict_t: BT[int, int], items: Items, ops: list[t.Any]) -> None:
++    bi = build(bidict_t, items)
++    for op in [None, *ops]:
++        if op is not None:
++            apply_op(bi, op)
++        expect = [bi[k] for k in bi.keys()]
++        got = list(bi.values())
++        assert got == expect, f'{bidict_t.__name__} {list(bi.items())} after {op}: values() {got}'
++        assert list(bi.items()) == list(zip(bi.keys(), bi.values(), strict=True))
++
++
++ordered_bidict_t = sampled_from([b for b in bidict_types if issubclass(b, OrderedBidictBase)])
++forward_ops = one_of(
++    tuples(just('put'), keys, vals, on_dup),
++    tuples(just('forceput'), keys, vals),
++    tuples(just('pop'), keys),
++    tuples(just('popitem'), booleans()),
++    tuples(just('move_to_end'), keys, booleans()),
++)
++
++
++# proob:01M633NPSM886QNZH9PMD1D617
++@given(bidict_t=ordered_bidict_t, items=items, ops=lists(forward_ops, max_size=12))
++def test_ordered_bidicts_keep_insertion_order(bidict_t: BT[int, int], items: Items, ops: list[t.Any]) -> None:
++    oracle: Oracle[int, int] = Oracle({}, ordered=True)
++    try:
++        oracle.putall(items, bidict_t.on_dup)
++    except DuplicationError:
++        oracle = Oracle(dedup(items), ordered=True)
++    bi = build(bidict_t, items)
++    for op in [None, *ops]:
++        if op is not None and isinstance(bi, OrderedBidict):
++            name, *args = op
++            if name == 'forceput':
++                name, args = 'put', [*args, OnDup(OnDupAction.DROP_OLD, OnDupAction.DROP_OLD)]
++            outcomes = []
++            for obj in (bi, oracle):
++                try:
++                    getattr(obj, name)(*args)
++                    outcomes.append(None)
++                except (KeyError, StopIteration):  # the model's popitem(last=False) on empty raises StopIteration
++                    outcomes.append(KeyError)
++                except DuplicationError as exc:
++                    outcomes.append(type(exc))
++            assert outcomes[0] == outcomes[1], f'{op}: bidict raised {outcomes[0]}, model raised {outcomes[1]}'
++        expect = list(oracle.data.items())
++        assert list(bi.items()) == expect, f'after {op}: items {list(bi.items())}, expected {expect}'
++        assert list(bi) == [k for (k, _) in expect], f'after {op}: keys {list(bi)}'
++        expect_repr = f'{bidict_t.__name__}({oracle.data!r})' if expect else f'{bidict_t.__name__}()'
++        assert repr(bi) == expect_repr, f'after {op}: {bi!r}, expected {expect_repr}'

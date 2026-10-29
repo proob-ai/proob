@@ -1,0 +1,6 @@
+id = "01K8PBH7WXN5F2A3C4D5E6G7H8"
+title = "Reaches above the root"
+statement = "A scope glob never reaches above the repository root."
+scope = ["../secrets/*.toml"]
+severity = "high"
+rationale = "Rejected at conversion: the glob contains a `..` segment."

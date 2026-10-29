@@ -1,0 +1,7 @@
+id = "01M622RQ781KT06FB0MKKCZNPF"
+title = "The gate blocks only a broken property this change affects"
+statement = "The gate blocks a pull request only for a Broken property that the pull request affects."
+scope = ["crates/proob-core/src/policy.rs"]
+severity = "high"
+rationale = "ASSERTIONS.md, Verdict precedence and policy, and requirement R10: whatever the configured table says, every row but broken_affected is capped at Warn. A drifted, unbound, or re-approval-pending property can warn but never block."
+kind = "proof"

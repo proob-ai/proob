@@ -1,0 +1,300 @@
+diff --git a/Cargo.lock b/Cargo.lock
+index dc0d6fe..8c40906 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -970,6 +970,7 @@ dependencies = [
+  "foldhash 0.2.0",
+  "indexmap 2.14.2",
+  "itertools",
++ "proptest",
+  "serde",
+  "serde-untagged",
+  "serde_core",
+diff --git a/crates/toml/Cargo.toml b/crates/toml/Cargo.toml
+index c3481f6..dde64db 100644
+--- a/crates/toml/Cargo.toml
++++ b/crates/toml/Cargo.toml
+@@ -69,6 +69,7 @@ snapbox = "1.1.0"
+ walkdir = "2.5.0"
+ itertools = "0.15.0"
+ serde-untagged = "0.1.9"
++proptest = "1.10.0"
+ 
+ [[test]]
+ name = "decoder_compliance"
+diff --git a/crates/toml/tests/serde/de_errors.rs b/crates/toml/tests/serde/de_errors.rs
+index dffb8c3..59641eb 100644
+--- a/crates/toml/tests/serde/de_errors.rs
++++ b/crates/toml/tests/serde/de_errors.rs
+@@ -421,3 +421,24 @@ invalid type: integer `1`, expected a string
+ "#]],
+     );
+ }
++
++mod props {
++    use proptest::prelude::*;
++    use toml_writer::ToTomlKey as _;
++
++    proptest! {
++        // proob:01M62JKH9FKC6J3RT2DFC4DW2Q
++        #[test]
++        fn the_same_key_twice_in_one_table_is_rejected(name in any::<String>(), shape in 0..4u8) {
++            let k = name.as_str().to_toml_key();
++            let toml = match shape {
++                0 => format!("{k} = 1\n{k} = 2\n"),
++                1 => format!("t = {{ {k} = 1, {k} = 2 }}\n"),
++                2 => format!("[{k}]\na = 1\n[{k}]\nb = 2\n"),
++                _ => format!("{k} = 1\n[{k}]\nb = 2\n"),
++            };
++            let result = crate::from_str::<crate::SerdeTable>(&toml);
++            prop_assert!(result.is_err(), "name {:?} accepted:\n{}\n{:?}", name, toml, result);
++        }
++    }
++}
+diff --git a/crates/toml/tests/serde/ser_key.rs b/crates/toml/tests/serde/ser_key.rs
+index 26a07da..4231979 100644
+--- a/crates/toml/tests/serde/ser_key.rs
++++ b/crates/toml/tests/serde/ser_key.rs
+@@ -556,3 +556,190 @@ k = "value"
+         assert_eq!(json, input);
+     }
+ }
++
++mod props {
++    use super::*;
++
++    use proptest::prelude::*;
++    use serde::ser::SerializeStruct as _;
++
++    #[derive(Debug, Serialize)]
++    struct Inner {
++        value: String,
++    }
++
++    /// The three shapes a struct field takes in a document: a plain value, a table header, and an
++    /// array-of-tables header
++    #[derive(Debug, Clone, Copy)]
++    enum Shape {
++        Value,
++        Table,
++        ArrayOfTables,
++    }
++
++    /// A struct whose single field name is chosen at runtime, as `#[serde(rename)]` does
++    struct Field {
++        name: &'static str,
++        shape: Shape,
++    }
++
++    impl Serialize for Field {
++        fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
++            let inner = || Inner {
++                value: "v".to_owned(),
++            };
++            let mut st = s.serialize_struct("Field", 1)?;
++            match self.shape {
++                Shape::Value => st.serialize_field(self.name, "v")?,
++                Shape::Table => st.serialize_field(self.name, &inner())?,
++                Shape::ArrayOfTables => st.serialize_field(self.name, &[inner()])?,
++            }
++            st.end()
++        }
++    }
++
++    fn shape() -> impl Strategy<Value = Shape> {
++        prop_oneof![
++            Just(Shape::Value),
++            Just(Shape::Table),
++            Just(Shape::ArrayOfTables)
++        ]
++    }
++
++    proptest! {
++        // proob:01M62JKH4VY9E2Z4WQMMEPM14Q
++        #[test]
++        fn written_keys_read_back_as_the_same_key(name in any::<String>(), shape in shape(), map in any::<bool>()) {
++            let toml = if map {
++                let mut m = BTreeMap::new();
++                m.insert(name.clone(), Field { name: "x", shape }.to_value());
++                crate::to_string(&m)
++            } else {
++                let field = Field { name: String::leak(name.clone()), shape };
++                crate::to_string(&field)
++            };
++            let toml = toml.unwrap_or_else(|e| panic!("name {name:?} shape {shape:?}: serialize failed: {e}"));
++            let table = crate::from_str::<crate::SerdeTable>(&toml)
++                .unwrap_or_else(|e| panic!("name {name:?} shape {shape:?}: output does not parse:\n{toml}\n{e}"));
++            let keys = table.keys().collect::<Vec<_>>();
++            prop_assert_eq!(keys, vec![&name], "shape {:?} output:\n{}", shape, toml);
++        }
++    }
++
++    impl Field {
++        fn to_value(&self) -> crate::SerdeValue {
++            match self.shape {
++                Shape::Value => crate::SerdeValue::String("v".to_owned()),
++                Shape::Table => {
++                    let mut t = crate::SerdeTable::new();
++                    t.insert("value".to_owned(), "v".into());
++                    crate::SerdeValue::Table(t)
++                }
++                Shape::ArrayOfTables => {
++                    let mut t = crate::SerdeTable::new();
++                    t.insert("value".to_owned(), "v".into());
++                    crate::SerdeValue::Array(vec![crate::SerdeValue::Table(t)])
++                }
++            }
++        }
++    }
++
++    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
++    enum Unit {
++        Alpha,
++        #[serde(rename = "with space.and.dots")]
++        Beta,
++        #[serde(rename = "")]
++        Empty,
++    }
++
++    #[track_caller]
++    fn roundtrip<K>(key: K) -> Result<(), TestCaseError>
++    where
++        K: Ord + Clone + fmt::Debug + Serialize + serde::de::DeserializeOwned,
++    {
++        let input = Document {
++            map: Map::from([(key.clone(), "v".to_owned())]),
++        };
++        let toml = crate::to_string(&input)
++            .unwrap_or_else(|e| panic!("key {key:?}: serialize failed: {e}"));
++        let output = crate::from_str::<Document<K>>(&toml)
++            .unwrap_or_else(|e| panic!("key {key:?}: does not read back:\n{toml}\n{e}"));
++        prop_assert_eq!(output, input, "key {:?} output:\n{}", key, toml);
++        Ok(())
++    }
++
++    #[track_caller]
++    fn rejected<K: Serialize + fmt::Debug>(key: K) -> Result<(), TestCaseError> {
++        let input = BTreeMap::from([("map", BTreeMap::from([(OrdKey(key), "v")]))]);
++        let result = crate::to_string(&input);
++        prop_assert!(result.is_err(), "key {:?} was written: {:?}", input, result);
++        Ok(())
++    }
++
++    /// Lets keys without `Ord` (floats) sit in a one-entry map
++    #[derive(Debug, Serialize)]
++    #[serde(transparent)]
++    struct OrdKey<K>(K);
++    impl<K> PartialEq for OrdKey<K> {
++        fn eq(&self, _: &Self) -> bool {
++            true
++        }
++    }
++    impl<K> Eq for OrdKey<K> {}
++    impl<K> PartialOrd for OrdKey<K> {
++        fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
++            Some(self.cmp(other))
++        }
++    }
++    impl<K> Ord for OrdKey<K> {
++        fn cmp(&self, _: &Self) -> std::cmp::Ordering {
++            std::cmp::Ordering::Equal
++        }
++    }
++
++    proptest! {
++        // proob:01M62JKH88WHMN5BF1CSC9XPX4
++        #[test]
++        fn non_string_map_keys_round_trip_or_are_rejected(
++            b in any::<bool>(),
++            i8_ in any::<i8>(),
++            i64_ in any::<i64>(),
++            u64_ in any::<u64>(),
++            c in any::<char>(),
++            unit in prop_oneof![Just(Unit::Alpha), Just(Unit::Beta), Just(Unit::Empty)],
++            f in any::<f64>(),
++            bytes in any::<Vec<u8>>(),
++            pair in any::<(i32, i32)>(),
++        ) {
++            roundtrip(b)?;
++            roundtrip(i8_)?;
++            roundtrip(i64_)?;
++            roundtrip(u64_)?;
++            roundtrip(c)?;
++            roundtrip(unit)?;
++            rejected(f)?;
++            rejected(serde_bytes_like(bytes))?;
++            rejected(Option::<i32>::None)?;
++            rejected(pair)?;
++        }
++    }
++
++    /// Serializes through `serialize_bytes`, as `serde_bytes` does
++    struct Bytes(Vec<u8>);
++    impl fmt::Debug for Bytes {
++        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
++            write!(f, "bytes{:?}", self.0)
++        }
++    }
++    impl Serialize for Bytes {
++        fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
++            s.serialize_bytes(&self.0)
++        }
++    }
++    fn serde_bytes_like(v: Vec<u8>) -> Bytes {
++        Bytes(v)
++    }
++
++    use std::fmt;
++}
+diff --git a/crates/toml_edit/src/encode.rs b/crates/toml_edit/src/encode.rs
+index ba45129..da5003a 100644
+--- a/crates/toml_edit/src/encode.rs
++++ b/crates/toml_edit/src/encode.rs
+@@ -401,6 +401,20 @@ value:
+         }
+     }
+ 
++    proptest! {
++        // proob:01M62JKH73GHBMNPDHRD85M991
++        #[test]
++        #[cfg(all(feature = "parse", feature = "display"))]
++        fn key_display_parses_back_to_the_same_key(string in any::<String>()) {
++            let key = Key::new(string.clone());
++            let encoded = key.to_string();
++            let parsed: Key = encoded
++                .parse()
++                .unwrap_or_else(|err| panic!("key {string:?} displayed as {encoded:?} does not parse: {err}"));
++            prop_assert_eq!(parsed.get(), string.as_str(), "displayed as {:?}", encoded);
++        }
++    }
++
+     proptest! {
+         #[test]
+         #[cfg(feature = "parse")]
+diff --git a/crates/toml_writer/tests/string.rs b/crates/toml_writer/tests/string.rs
+index 2e68f01..a9a58e3 100644
+--- a/crates/toml_writer/tests/string.rs
++++ b/crates/toml_writer/tests/string.rs
+@@ -703,3 +703,22 @@ proptest! {
+         assert_eq!(value.as_str().unwrap(), decoded);
+     }
+ }
++
++proptest! {
++    // proob:01M62JKH5ZGJ9S1DX6N2R36VM8
++    #[test]
++    fn default_encodings_parse_back_to_the_original_text(decoded in any::<String>()) {
++        let key_default = TomlKeyBuilder::new(&decoded).as_default().to_toml_key();
++        let string_default = TomlStringBuilder::new(&decoded).as_default().to_toml_value();
++
++        let toml = format!("{key_default} = {string_default}");
++        let value = toml
++            .parse::<toml_old::Value>()
++            .unwrap_or_else(|err| panic!("text {decoded:?} encoded as {toml:?} does not parse: {err}"));
++        let table = value.as_table().unwrap();
++        prop_assert_eq!(table.len(), 1, "text {:?} encoded as {:?}", decoded, toml);
++        let (key, value) = table.iter().next().unwrap();
++        prop_assert_eq!(key, &decoded, "key: encoded as {:?}", toml);
++        prop_assert_eq!(value.as_str(), Some(decoded.as_str()), "string: encoded as {:?}", toml);
++    }
++}

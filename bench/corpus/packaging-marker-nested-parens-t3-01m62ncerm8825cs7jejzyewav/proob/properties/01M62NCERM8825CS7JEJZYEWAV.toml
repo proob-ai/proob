@@ -1,0 +1,6 @@
+id = "01M62NCERM8825CS7JEJZYEWAV"
+title = "Marker text round-trip keeps meaning"
+statement = "Printing an environment marker and reading the printed text back gives a marker that evaluates the same in every environment."
+scope = ["src/packaging/markers.py", "src/packaging/_parser.py"]
+severity = "high"
+rationale = "The marker formatter in src/packaging/markers.py (lines 195-200) drops parentheses when a group is wrapped twice, so ((A or B)) and C prints as A or B and C, which groups differently. Equality, hashing and pickling (markers.py 398-425) all go through the printed text, so a lost group changes which platforms install a dependency. tests/test_markers.py 248-259 cover one level of grouping only; CHANGELOG.rst 307 records earlier round-trip parser fixes."

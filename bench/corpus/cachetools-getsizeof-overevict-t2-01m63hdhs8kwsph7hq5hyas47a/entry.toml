@@ -1,0 +1,15 @@
+kind = "catch"
+bug = "cachetools-getsizeof-overevict"
+trial = "t2"
+language = "python"
+repo = "https://github.com/tkem/cachetools"
+buggy_commit = "16e88894ef7d79b25a68f5a3b5411ed881342725"
+fix_commit = "39b31bc9b63abe98497409945e9d382d8918c8fb"
+fix_paths = ["src/cachetools/__init__.py"]
+install = ["uv venv --python 3.13 .venv", "uv pip install --python .venv/bin/python -e . pytest"]
+python = "3.13"
+property = "01M63HDHS8KWSPH7HQ5HYAS47A"
+seed = "1793441890166262592"
+expect_buggy = "counterexample"
+expect_fixed = "no_counterexample"
+flaky = false

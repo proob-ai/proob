@@ -1,0 +1,6 @@
+id = "01M6343Q05Q5HQKC9Y44MKPNR2"
+title = "File size never shows a full next unit"
+statement = "A file size never shows a number that has already reached the next unit, such as 1000.0 kB or 1024.0 KiB, except in the largest unit."
+scope = ["src/humanize/filesize.py"]
+severity = "medium"
+rationale = "The unit is chosen from the logarithm before rounding and the rounded number is never rechecked (src/humanize/filesize.py:99-101), so 999950 bytes likely renders 1000.0 kB; the large-number word formatter already guards this case (src/humanize/number.py:256-259, tests/test_number.py:104). tests/test_filesize.py has no case near a unit boundary."

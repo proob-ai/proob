@@ -1,0 +1,78 @@
+diff --git a/tests/test_seekable_properties.py b/tests/test_seekable_properties.py
+new file mode 100644
+index 0000000..8082897
+--- /dev/null
++++ b/tests/test_seekable_properties.py
+@@ -0,0 +1,72 @@
++"""Property-based checks for seekable, bound to proob properties."""
++
++from hypothesis import given, strategies as st
++
++from more_itertools import seekable
++
++sources = st.lists(st.integers())
++maxlens = st.none() | st.integers(min_value=0, max_value=20)
++
++
++def remembered(src, read, maxlen):
++    """The items a cache of size maxlen keeps after reading `read` items."""
++    start = 0 if maxlen is None else max(read - maxlen, 0)
++    return src[start:read]
++
++
++# proob:01M62JS9F0WQHNDV1DCQVBS8E9
++@given(sources, maxlens, st.lists(st.booleans()))
++def test_peek_never_changes_next_item(src, maxlen, peeks):
++    it = seekable(src, maxlen)
++    for i, expected in enumerate(src):
++        if i < len(peeks) and peeks[i]:
++            peeked = it.peek()
++            assert peeked == expected, (src, maxlen, i, peeked)
++        got = next(it)
++        assert got == expected, (src, maxlen, i, got)
++
++
++# proob:01M62JS9G7DK6HNMPRTCAKW4T8
++@given(sources, maxlens, st.lists(st.booleans()))
++def test_truth_test_never_consumes(src, maxlen, checks):
++    it = seekable(src, maxlen)
++    got = []
++    for i in range(len(src) + 1):
++        if i < len(checks) and checks[i]:
++            truth = bool(it)
++            assert truth == (i < len(src)), (src, maxlen, i, truth)
++        if i < len(src):
++            got.append(next(it))
++    assert got == src, (src, maxlen, got)
++
++
++# proob:01M62JS9H7N349V5WE58TBCREV
++@given(sources, maxlens)
++def test_full_iteration_yields_source(src, maxlen):
++    got = list(seekable(src, maxlen))
++    assert got == src, (src, maxlen, got)
++
++
++# proob:01M62JS9JBV4JS7HDA4TN7BD6F
++@given(sources, st.integers(min_value=0, max_value=20), st.data())
++def test_cache_keeps_most_recent_within_limit(src, maxlen, data):
++    read = data.draw(st.integers(min_value=0, max_value=len(src)))
++    it = seekable(src, maxlen)
++    for _ in range(read):
++        next(it)
++    cache = list(it.elements())
++    assert len(cache) <= maxlen, (src, maxlen, read, cache)
++    assert cache == remembered(src, read, maxlen), (src, maxlen, read, cache)
++
++
++# proob:01M62JS9KFV6STPQ1925Z7QC2N
++@given(sources, maxlens, st.data())
++def test_rewind_replays_then_continues(src, maxlen, data):
++    read = data.draw(st.integers(min_value=0, max_value=len(src)))
++    it = seekable(src, maxlen)
++    for _ in range(read):
++        next(it)
++    it.seek(0)
++    got = list(it)
++    expected = remembered(src, read, maxlen) + src[read:]
++    assert got == expected, (src, maxlen, read, got)

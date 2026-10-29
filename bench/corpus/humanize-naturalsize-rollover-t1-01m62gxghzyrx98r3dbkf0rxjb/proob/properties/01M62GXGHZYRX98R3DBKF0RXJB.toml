@@ -1,0 +1,6 @@
+id = "01M62GXGHZYRX98R3DBKF0RXJB"
+title = "No rollover to the next unit"
+statement = "A file size is never shown as a number that has rounded up to a full step of the next unit, such as 1000.0 kB where 1.0 MB exists, except at the largest unit."
+scope = ["src/humanize/filesize.py"]
+severity = "medium"
+rationale = "The unit is chosen before the number is rounded and never re-checked (src/humanize/filesize.py:99-101). The sibling formatters intword and metric both promote after rounding (src/humanize/number.py:257, src/humanize/number.py:549). The docstring example 30000.0 QB (src/humanize/filesize.py:64-65) shows four-digit numbers are expected only at the top unit."

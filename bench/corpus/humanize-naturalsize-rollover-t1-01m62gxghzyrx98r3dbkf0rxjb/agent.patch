@@ -1,0 +1,100 @@
+diff --git a/tests/test_filesize.py b/tests/test_filesize.py
+index 04774d9..853b7f3 100644
+--- a/tests/test_filesize.py
++++ b/tests/test_filesize.py
+@@ -94,3 +94,95 @@ def test_naturalsize(test_args: list[int] | list[int | bool], expected: str) ->
+         test_args[0] = f"-{test_args[0]}"
+ 
+     assert humanize.naturalsize(*test_args) == "-" + expected
++
++
++# Property-based checks bound to proob properties. Sizes are whole byte counts
++# spanning past the largest unit (10**30 decimal, 2**100 binary).
++from hypothesis import given  # noqa: E402
++from hypothesis import strategies as st  # noqa: E402
++
++_POWERS = st.builds(pow, st.sampled_from([1000, 1024]), st.integers(min_value=1, max_value=11))
++_NEAR_UNIT = st.builds(
++    lambda near, sign: sign * near,
++    _POWERS.flatmap(lambda p: st.integers(p - p // 500, p + p // 500)),
++    st.sampled_from([1, -1]),
++)
++# Rounding edges sit within a few hundredths of each power, so draw there too.
++_SIZES = st.one_of(st.integers(min_value=-(2**110), max_value=2**110), _NEAR_UNIT)
++_MODES = st.sampled_from([(False, False), (True, False), (False, True), (True, True)])
++_UNITS = {
++    "decimal": ["kB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB", "RB", "QB"],
++    "binary": ["KiB", "MiB", "GiB", "TiB", "PiB", "EiB", "ZiB", "YiB", "RiB", "QiB"],
++    "gnu": ["K", "M", "G", "T", "P", "E", "Z", "Y", "R", "Q"],
++}
++
++
++def _parse(text: str, binary: bool, gnu: bool) -> tuple[float, int, int]:
++    """Split output into (number, base, exponent); exponent 0 means bytes."""
++    table = "gnu" if gnu else "binary" if binary else "decimal"
++    base = 1024 if (gnu or binary) else 1000
++    for exp, unit in enumerate(_UNITS[table], start=1):
++        tail = unit if gnu else " " + unit
++        if text.endswith(tail):
++            return float(text[: -len(tail)]), base, exp
++    number = text.removesuffix("B") if gnu else text.split(" ")[0]
++    return float(number), base, 0
++
++
++# proob:01M62GXGHZYRX98R3DBKF0RXJB
++@given(_SIZES, _MODES)
++def test_naturalsize_never_rolls_over_to_next_unit(value: int, mode) -> None:
++    binary, gnu = mode
++    text = humanize.naturalsize(value, binary, gnu)
++    number, base, exp = _parse(text, binary, gnu)
++    assert exp == 10 or abs(number) < base, (value, binary, gnu, text)
++
++
++# proob:01M62GXGK3NV7NQZ72CZR1XW6R
++@given(_SIZES, _MODES)
++def test_naturalsize_shown_size_matches_input(value: int, mode) -> None:
++    binary, gnu = mode
++    text = humanize.naturalsize(value, binary, gnu)
++    number, base, exp = _parse(text, binary, gnu)
++    unit = base**exp
++    # "%.1f" rounds to half a tenth; bytes truncate to a whole number.
++    tolerance = 0.05 * unit * (1 + 1e-9) if exp else 0
++    assert abs(number * unit - value) <= tolerance, (value, binary, gnu, text)
++
++
++# proob:01M62GXGM8Z48FS5J9XEX80444
++@given(_SIZES)
++def test_naturalsize_gnu_is_base_1024(value: int) -> None:
++    text = humanize.naturalsize(value, False, True)
++    assert humanize.naturalsize(value, True, True) == text, (value, text)
++    number, _base, exp = _parse(text, False, True)
++    suffix = text[len(text.rstrip("BKMGTPEZYRQ")) :]
++    assert suffix in ["B", *_UNITS["gnu"]], (value, text)
++    assert abs(number * 1024**exp - value) <= (0.05 * 1024**exp * (1 + 1e-9) if exp else 0), (
++        value,
++        text,
++    )
++
++
++# proob:01M62GXGNPMYTE1DXPKG197DNA
++@given(st.integers(min_value=1, max_value=2**110), _MODES)
++def test_naturalsize_negation_adds_minus_sign(value: int, mode) -> None:
++    binary, gnu = mode
++    positive = humanize.naturalsize(value, binary, gnu)
++    negative = humanize.naturalsize(-value, binary, gnu)
++    assert negative == "-" + positive, (value, binary, gnu, positive, negative)
++
++
++# proob:01M62GXGPTTEWB5M939ADY2284
++@given(st.integers(min_value=-1023, max_value=1023), _MODES)
++def test_naturalsize_below_one_unit_is_whole_bytes(value: int, mode) -> None:
++    binary, gnu = mode
++    base = 1024 if (gnu or binary) else 1000
++    if abs(value) >= base:
++        return
++    text = humanize.naturalsize(value, binary, gnu)
++    if gnu:
++        expected = f"{value}B"
++    else:
++        expected = f"{value} Byte" if abs(value) == 1 else f"{value} Bytes"
++    assert text == expected, (value, binary, gnu, text)

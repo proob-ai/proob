@@ -1,0 +1,7 @@
+id = "01K8V5NQ4A0F3R7Y2M9D6P1XPD"
+title = "Covering counts are exact"
+statement = "Counting the intervals that cover a point reports exactly how many do, boundaries included."
+scope = ["interval/count.py"]
+severity = "low"
+rationale = "Bound to a test that never looks at the code, so its score shows a check that cannot fail."
+kind = "test"

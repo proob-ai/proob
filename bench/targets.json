@@ -1,0 +1,73 @@
+{
+  "version": 1,
+  "rule": "Targets and commits change only with a new benchmark version.",
+  "targets": [
+    {
+      "id": "attrs",
+      "repo": "https://github.com/python-attrs/attrs",
+      "commit": "c8bb9bfaa2843e7844b5bb13bed4370b51feec4f",
+      "tier": "<10k",
+      "source_lines": 6200,
+      "language": "python",
+      "python_version": "3.13",
+      "install": [
+        "uv venv -q --python 3.13 <venv>",
+        "uv pip install -q . --group tests -r <proob>/tools/python-tools.txt"
+      ],
+      "env": {
+        "SETUPTOOLS_SCM_PRETEND_VERSION": "26.1.1.dev82"
+      },
+      "shadow_pythonpath": "src",
+      "notes": "Test deps are the `tests` dependency group in pyproject.toml. Version comes from hatch-vcs; the fresh history has no tags, so the version is pretended, as attrs' own tox.ini allows. Suite at this commit: 1405 passed, 6 skipped, 1 xfailed. src/ layout: an install of the user's copy makes the shadow's checks import the user's files, not the shadow's (product finding), so the harness installs attrs non-editable, for its metadata, and puts the shadow's src/ first on PYTHONPATH."
+    },
+    {
+      "id": "indexmap",
+      "repo": "https://github.com/indexmap-rs/indexmap",
+      "commit": "41a870887c4c77adf665886e63df08f406bfe37a",
+      "tier": "<10k",
+      "source_lines": 9200,
+      "language": "rust",
+      "toolchain": "1.99.1",
+      "install": [],
+      "env": {
+        "RUSTUP_TOOLCHAIN": "1.99.1"
+      },
+      "notes": "No toolchain file (rust-version 1.85), so the benchmark's 1.99.1. Default features. Suite at this commit: 183 passed (cargo nextest run)."
+    },
+    {
+      "id": "rich",
+      "repo": "https://github.com/Textualize/rich",
+      "commit": "9d8f9a372cc5916fd4781fec207ced7ddac2f08f",
+      "tier": "<50k",
+      "source_lines": 36000,
+      "language": "python",
+      "python_version": "3.13",
+      "install": [
+        "uv venv -q --python 3.13 <venv>",
+        "uv pip install -q -e . attrs pygments==2.19.2 -r <proob>/tools/python-tools.txt"
+      ],
+      "env": {},
+      "notes": "Test deps from [tool.poetry.dev-dependencies]: pytest (pinned by proob) and attrs; the rest are lint and coverage tools. Pygments is pinned to poetry.lock's 2.19.2: with the newest (2.21.0) 8 syntax-highlighting snapshot tests fail at this commit; with 2.19.2 the suite passes (956 passed, 25 skipped)."
+    },
+    {
+      "id": "vaultwarden",
+      "repo": "https://github.com/dani-garcia/vaultwarden",
+      "commit": "64ae55ceb2e33aa08e7291d50ca010c679064842",
+      "tier": "<50k",
+      "source_lines": 28600,
+      "language": "rust",
+      "toolchain": "1.99.1",
+      "install": [],
+      "env": {
+        "RUSTUP_TOOLCHAIN": "1.99.1"
+      },
+      "cargo_features": [
+        "sqlite"
+      ],
+      "system_deps": [
+        "openssl 3 (Homebrew openssl@3; openssl-sys finds it without pkg-config)"
+      ],
+      "notes": "rust-toolchain.toml pins 1.99.1. build.rs refuses to compile without a DB backend feature; `sqlite` bundles SQLite (libsqlite3-sys/bundled), so OpenSSL is the only system library. proob's Rust adapter has no way to pass cargo features, so the harness passes none: enabling the feature is left to the agent, inside the shadow, as a new user would have to."
+    }
+  ]
+}

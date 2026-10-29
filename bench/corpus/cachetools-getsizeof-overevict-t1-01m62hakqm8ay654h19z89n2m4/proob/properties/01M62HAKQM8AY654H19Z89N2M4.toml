@@ -1,0 +1,6 @@
+id = "01M62HAKQM8AY654H19Z89N2M4"
+title = "Updates evict only what is needed"
+statement = "Replacing a stored value with a larger one evicts only as many other items as are needed to make room for the difference."
+scope = ["src/cachetools/__init__.py", "tests/__init__.py"]
+severity = "medium"
+rationale = "The eviction loop in src/cachetools/__init__.py compares the current size plus the new size against the maximum, still counting the old value that the update is about to free; docs/index.rst promises eviction only until there is enough room. The only update-with-larger-size case in tests/__init__.py needs the eviction anyway, so no test separates the two behaviors. Over-eviction drops entries needlessly and may evict the key being written."

@@ -1,0 +1,6 @@
+id = "01M62P1DF4W2B5RQ895M7MXCPN"
+title = "Serde write then read gives the same value"
+statement = "Writing a value as a TOML document and reading it back gives an equal value, whatever its field and variant names contain."
+scope = ["crates/toml/src/ser/**"]
+severity = "high"
+rationale = "Struct field and enum variant names enter table headers raw (crates/toml/src/ser/document/map.rs:128 and :134, crates/toml/src/ser/document/mod.rs:205 and :262), while map keys are quoted (map.rs:48-52). The test attr_key in crates/toml/tests/serde/general.rs expects a field renamed to cfg(target_os = 'linux') to produce a document that fails to read back; the twin test in crates/toml_edit/tests/serde/general.rs reads it back equal. Every test in crates/toml/tests/serde/ser_key.rs asserts write-then-read equality. Renamed fields such as Cargo cfg targets are common, so a file that will not parse or parses with a different shape corrupts user data."

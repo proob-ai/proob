@@ -1,0 +1,12 @@
+kind = "live"
+bug = "url-control-host-roundtrip"
+trial = "t3"
+language = "rust"
+repo = "https://github.com/servo/rust-url"
+buggy_commit = "22b925f93ad505a830f1089538a9ed6f5fd90612"
+install = ["rustup run 1.99.1 cargo build -p url --tests"]
+toolchain = "1.99.1"
+property = "01M62NX22E7YD3EPS9BH6CD04F"
+seed = "1793156476681009728"
+expect_buggy = "counterexample"
+flaky = false

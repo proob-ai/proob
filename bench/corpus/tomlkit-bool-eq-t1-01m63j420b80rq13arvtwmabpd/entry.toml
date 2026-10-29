@@ -1,0 +1,15 @@
+kind = "catch"
+bug = "tomlkit-bool-eq"
+trial = "t1"
+language = "python"
+repo = "https://github.com/python-poetry/tomlkit"
+buggy_commit = "19edc23b0244e1546abbf3b7890c3d8a0deeaf81"
+fix_commit = "18e7f98252f18db5c973435453cd25e1c7bd4c61"
+fix_paths = ["tomlkit/items.py"]
+install = ["git submodule update --init --recursive", "uv venv --python 3.13 .venv", "uv pip install --python .venv/bin/python -e . pytest PyYAML"]
+python = "3.13"
+property = "01M63J420B80RQ13ARVTWMABPD"
+seed = "1793185224792867896"
+expect_buggy = "counterexample"
+expect_fixed = "no_counterexample"
+flaky = false

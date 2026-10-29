@@ -1,0 +1,6 @@
+id = "01M62MQX7VC8JC874FFV21S7BE"
+title = "Peeking never loses an item"
+statement = "Looking at the next item, or asking whether any items remain, never consumes or drops an item, whatever cache limit was chosen."
+scope = ["more_itertools/more.py", "tests/test_more.py"]
+severity = "high"
+rationale = "Silent data loss otherwise. Evidence: test_simple_peeking in tests/test_more.py (lines 249-258) says next advances and peek does not, but runs only with an unlimited cache; truth testing calls peek (more_itertools/more.py lines 3120-3125), and peek steps the read position back to the last cached item (lines 3134-3136), which with a zero-length cache points at nothing, so the peeked item appears to be skipped on the next read."

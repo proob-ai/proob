@@ -1,0 +1,316 @@
+diff --git a/pyproject.toml b/pyproject.toml
+index ee29442..06ba27b 100644
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -28,6 +28,7 @@ include = [
+ dev = [
+     "pytest~=7.2",
+     "pytest-cov~=4.0",
++    "hypothesis>=6.100",
+     "PyYAML~=6.0",
+     "pre-commit~=2.20",
+     "mypy==1.19.1",
+diff --git a/tests/strategies.py b/tests/strategies.py
+new file mode 100644
+index 0000000..9b97c26
+--- /dev/null
++++ b/tests/strategies.py
+@@ -0,0 +1,83 @@
++"""Hypothesis strategies that build TOML text with varied, valid formatting."""
++
++from __future__ import annotations
++
++import json
++
++from hypothesis import strategies as st
++
++
++keys = st.from_regex(r"[a-z_][a-z0-9_-]{0,7}", fullmatch=True)
++integers = st.integers(min_value=-(2**63), max_value=2**63 - 1)
++
++# Control characters and DEL must be escaped in basic strings; json.dumps
++# escapes the former, so DEL and surrogates are excluded from the alphabet.
++_text = st.text(
++    alphabet=st.characters(blacklist_categories=("Cs",), blacklist_characters="\x7f"),
++    max_size=8,
++)
++_literal = st.text(
++    alphabet=st.characters(
++        blacklist_categories=("Cs", "Cc"), blacklist_characters="'\x7f"
++    ),
++    max_size=8,
++)
++
++scalars = st.one_of(
++    integers.map(str),
++    st.sampled_from(["true", "false", "1.5", "-0.25", "1e3", "inf", "nan"]),
++    _text.map(lambda s: json.dumps(s, ensure_ascii=False)),
++    _literal.map(lambda s: f"'{s}'"),
++    st.sampled_from(["1979-05-27", "07:32:00", "1979-05-27T07:32:00Z"]),
++)
++
++# Whitespace allowed between array elements and commas, comments included.
++array_ws = st.sampled_from(["", " ", "  ", "\t", "\n", "\n    ", " # note\n  "])
++line_ws = st.sampled_from(["", " ", "  ", "\t"])
++
++
++@st.composite
++def array_text(draw, elements=scalars, max_size=8) -> str:
++    """An array literal of `elements`, in any mix of inline, multiline,
++    comma-last, comma-first, and trailing-comma styles."""
++    items = draw(st.lists(elements, max_size=max_size))
++    parts = ["["]
++    for i, item in enumerate(items):
++        parts.append(draw(array_ws) + item + draw(array_ws))
++        if i < len(items) - 1 or draw(st.booleans()):
++            parts.append(",")
++    parts.append(draw(array_ws) + "]")
++    return "".join(parts)
++
++
++@st.composite
++def inline_table_text(draw) -> str:
++    names = draw(st.lists(keys, unique=True, max_size=3))
++    pairs = [f"{k}{draw(line_ws)}={draw(line_ws)}{draw(scalars)}" for k in names]
++    return "{" + draw(line_ws) + ", ".join(pairs) + draw(line_ws) + "}"
++
++
++values = st.one_of(scalars, array_text(), inline_table_text())
++
++
++@st.composite
++def _section(draw) -> list[str]:
++    lines = []
++    for k in draw(st.lists(keys, unique=True, max_size=5)):
++        comment = draw(st.sampled_from(["", " # c", "  #"]))
++        lines.append(
++            f"{draw(line_ws)}{k}{draw(line_ws)}={draw(line_ws)}{draw(values)}{comment}"
++        )
++        if draw(st.booleans()):
++            lines.append(draw(st.sampled_from(["", "# comment", "  "])))
++    return lines
++
++
++@st.composite
++def document_text(draw) -> str:
++    """A whole document: top-level pairs, then uniquely named tables."""
++    lines = draw(_section())
++    for name in draw(st.lists(keys, unique=True, max_size=3)):
++        lines.append(f"[tbl-{name}]")
++        lines.extend(draw(_section()))
++    return "\n".join(lines) + draw(st.sampled_from(["", "\n"]))
+diff --git a/tests/test_items.py b/tests/test_items.py
+index 8284029..b9e3d86 100644
+--- a/tests/test_items.py
++++ b/tests/test_items.py
+@@ -17,6 +17,13 @@ from typing import Any
+ 
+ import pytest
+ 
++from hypothesis import given
++from hypothesis import strategies as st
++
++from tests.strategies import array_text
++from tests.strategies import document_text
++from tests.strategies import integers
++from tests.strategies import keys
+ from tests.util import assert_is_ppo
+ from tests.util import elementary_test
+ from tomlkit import api
+@@ -38,6 +45,7 @@ from tomlkit.items import StringType
+ from tomlkit.items import Table
+ from tomlkit.items import Time
+ from tomlkit.items import Trivia
++from tomlkit.toml_document import TOMLDocument
+ from tomlkit.items import item
+ from tomlkit.parser import Parser
+ 
+@@ -1637,3 +1645,70 @@ def test_out_of_order_table_proxy_membership() -> None:
+         _ = 123 in table
+     # membership must not resolve values or mutate the document
+     assert doc.as_string() == content
++
++
++def _plain(value: Any) -> Any:
++    """Unwrapped value with NaN made comparable."""
++    if isinstance(value, float) and math.isnan(value):
++        return "nan"
++    if isinstance(value, dict):
++        return {k: _plain(v) for k, v in value.items()}
++    if isinstance(value, list):
++        return [_plain(v) for v in value]
++    return value
++
++
++def _array_keys(n: int) -> st.SearchStrategy[int | slice]:
++    bound = st.one_of(st.none(), st.integers(-n - 2, n + 2))
++    step = st.one_of(st.none(), st.integers(-3, 3).filter(bool))
++    slices = st.builds(slice, bound, bound, step)
++    return st.one_of(st.integers(-n, n - 1), slices) if n else slices
++
++
++# proob:01M62JXS1NVVMQ1PGN0JK81RAH
++@given(text=array_text(elements=integers.map(str)), data=st.data())
++def test_array_delete_keeps_rendered_text_in_step(text: str, data: st.DataObject):
++    doc = parse(f"a = {text}\n")
++    expected = doc["a"].unwrap()
++    for _ in range(data.draw(st.integers(1, 3), label="deletions")):
++        key = data.draw(_array_keys(len(expected)), label="key")
++        del expected[key]
++        del doc["a"][key]
++        rendered = doc.as_string()
++        assert parse(rendered)["a"] == expected, (text, key, rendered)
++
++
++def _edit(doc: TOMLDocument, data: st.DataObject) -> None:
++    tables = [doc] + [v for v in doc.values() if isinstance(v, dict)]
++    target = data.draw(st.sampled_from(tables), label="target")
++    arrays = [k for k, v in target.items() if isinstance(v, list)]
++    ops = ["set"] + (["del"] if target else []) + (["array"] if arrays else [])
++    op = data.draw(st.sampled_from(ops), label="op")
++    if op == "set":
++        new = st.one_of(
++            integers, st.text(max_size=5), st.lists(integers, max_size=3),
++            st.dictionaries(keys, integers, max_size=2),
++        )
++        target[data.draw(keys, label="key")] = data.draw(new, label="value")
++    elif op == "del":
++        del target[data.draw(st.sampled_from(list(target)), label="key")]
++    else:
++        arr = target[data.draw(st.sampled_from(arrays), label="array")]
++        how = data.draw(st.sampled_from(["append", "insert", "del"]), label="how")
++        n = len(arr)
++        if how == "append":
++            arr.append(data.draw(integers, label="item"))
++        elif how == "insert":
++            arr.insert(data.draw(st.integers(-n - 1, n + 1)), data.draw(integers))
++        elif n:
++            del arr[data.draw(_array_keys(n), label="index")]
++
++
++# proob:01M62JXS3NQPYTVABWWFM5TBM1
++@given(text=document_text(), data=st.data())
++def test_edited_document_reparses_to_same_values(text: str, data: st.DataObject):
++    doc = parse(text)
++    for _ in range(data.draw(st.integers(1, 4), label="edits")):
++        _edit(doc, data)
++        rendered = doc.as_string()
++        assert _plain(parse(rendered).unwrap()) == _plain(doc.unwrap()), rendered
+diff --git a/tests/test_parser.py b/tests/test_parser.py
+index 44d5cd6..447f656 100644
+--- a/tests/test_parser.py
++++ b/tests/test_parser.py
+@@ -2,6 +2,10 @@ import sys
+ 
+ import pytest
+ 
++from hypothesis import given
++from hypothesis import strategies as st
++
++from tomlkit import parse
+ from tomlkit.exceptions import EmptyTableNameError
+ from tomlkit.exceptions import InternalParserError
+ from tomlkit.exceptions import InvalidNumberError
+@@ -246,3 +250,25 @@ def test_parser_accepts_uppercase_exponent_after_leading_zero() -> None:
+         value = Parser(f"a = {raw}").parse()["a"]
+         assert isinstance(value, Float)
+         assert value == float(raw)
++
++
++_OPENERS = {"[": "]", "{x = ": "}"}
++
++
++@st.composite
++def _too_deep(draw) -> str:
++    depth = draw(st.integers(Parser.MAX_NESTING_DEPTH + 1, 3000), label="depth")
++    form = draw(st.sampled_from(["value", "key", "table"]), label="form")
++    if form == "key":
++        return ".".join(["k"] * depth) + " = 1"
++    if form == "table":
++        return "[" + ".".join(["k"] * depth) + "]"
++    opens = draw(st.lists(st.sampled_from(list(_OPENERS)), min_size=depth, max_size=depth))
++    return "a = " + "".join(opens) + "".join(_OPENERS[o] for o in reversed(opens))
++
++
++# proob:01M62JXS4RXE7M8MVQ61SW3YRZ
++@given(_too_deep())
++def test_too_deep_input_is_a_parse_error(text: str) -> None:
++    with pytest.raises(ParseError):
++        parse(text)
+diff --git a/tests/test_toml_document.py b/tests/test_toml_document.py
+index 116de35..626e5b5 100644
+--- a/tests/test_toml_document.py
++++ b/tests/test_toml_document.py
+@@ -9,8 +9,11 @@ from typing import Any
+ 
+ import pytest
+ 
++from hypothesis import given
++
+ import tomlkit
+ 
++from tests.strategies import document_text
+ from tests.util import assert_is_ppo
+ from tomlkit import parse
+ from tomlkit import ws
+@@ -1687,3 +1690,11 @@ a.b = 1
+     doc["z"] = 2
+ 
+     assert doc.as_string() == "a.b = 1\nz = 2\n"
++
++
++# proob:01M62JXS2Q91ER0GQ1FQC577E4
++@given(document_text())
++def test_unedited_round_trip_is_byte_for_byte(text: str) -> None:
++    doc = parse(text)
++    assert doc.as_string() == text, repr(doc.as_string())
++    assert tomlkit.dumps(doc) == text
+diff --git a/tests/test_toml_file.py b/tests/test_toml_file.py
+index 586cf8a..236a66a 100644
+--- a/tests/test_toml_file.py
++++ b/tests/test_toml_file.py
+@@ -1,8 +1,17 @@
++from __future__ import annotations
++
+ import os
++import tempfile
+ 
+ from collections.abc import Callable
+ from pathlib import Path
+ 
++from hypothesis import given
++from hypothesis import strategies as st
++
++from tests.strategies import document_text
++from tests.strategies import integers
++
+ from tomlkit.toml_document import TOMLDocument
+ from tomlkit.toml_file import TOMLFile
+ 
+@@ -118,3 +127,26 @@ def test_readwrite_eol_windows(tmp_path: Path) -> None:
+     toml_f.write(doc)
+     readback = toml_f.read()
+     assert doc.as_string() == readback.as_string()
++
++
++# proob:01M62JXS5QZ1TE9E71Z7R7QEJ9
++@given(
++    # A file with no line ending has none to keep.
++    text=document_text().filter(lambda t: "\n" in t),
++    eol=st.sampled_from(["\n", "\r\n"]),
++    edit=st.one_of(st.none(), integers),
++)
++def test_write_keeps_line_endings(text: str, eol: str, edit: int | None) -> None:
++    with tempfile.TemporaryDirectory() as d:
++        path = os.path.join(d, "f.toml")
++        with open(path, "wb") as fh:
++            fh.write(text.replace("\n", eol).encode())
++        toml_f = TOMLFile(path)
++        doc = toml_f.read()
++        if edit is not None:
++            doc["proob-new"] = edit
++        toml_f.write(doc)
++        with open(path, "rb") as fh:
++            out = fh.read().decode()
++    stray = "\n" in out.replace("\r\n", "") if eol == "\r\n" else "\r" in out
++    assert not stray, (eol, out)

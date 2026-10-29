@@ -1,0 +1,6 @@
+id = "01M62HMD8JE3T3RTTN882GZ245"
+title = "Marker meaning survives printing"
+statement = "Printing a marker and parsing the printed text again never changes what the marker evaluates to in any environment."
+scope = ["src/packaging/markers.py", "src/packaging/_parser.py", "src/packaging/requirements.py"]
+severity = "high"
+rationale = "Formatting a one-item nested group (src/packaging/markers.py:195-200) appears to drop its brackets, so a doubled-bracket group such as ((A or B)) and C may print as A or B and C, which means something else. Pickling stores the printed text and parses it on load (markers.py:413-423), and str of a Requirement writes it into metadata (requirements.py:97). tests/test_markers.py:248-259 covers only single brackets. Installers act on this text."

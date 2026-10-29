@@ -1,0 +1,113 @@
+---
+name: try
+description: Try proob on this repository without changing it. proob makes a private shadow copy, then senses the code, proposes up to five properties, writes and runs their tests, and reports each result with the exact steps to bring them into the real pipeline. Use when someone wants to evaluate proob, see what it would find, or try it before adopting it. Nothing in the repository, its branches, or its git history changes until the user runs proob shadow adopt themselves.
+argument-hint: "[path or focus]"
+allowed-tools: Read Glob Grep Bash Write Edit
+---
+
+# /proob:try
+
+The one entry point for someone evaluating proob. Everything happens in a shadow: a private clone
+of the repository under `~/.proob/shadow/`. The user's working tree, index, branches, and `.git`
+stay exactly as they are. `$ARGUMENTS` is an optional path or focus (a directory, a module, a
+concern).
+
+## Shadow rules
+
+These override anything in the skills this one follows.
+
+- Never branch, commit, push, or open a pull request, in the shadow or in the repository.
+- Never write outside `$work` (set in step 1). Every file you create or edit is under it.
+- Write files only in `$work`. proob captures them into the shadow's overlay by itself; never
+  copy them anywhere else.
+- At most 5 properties.
+- Run every check and score as `"$proob" --shadow run check <id> --json` and
+  `"$proob" --shadow run score <id> --json`. Shadow records every run; the report reads them.
+- In your own sentences never use "holds", "verified", "guaranteed", "proven", or say anything is
+  approved. In shadow every property is `Proposed`: no one has approved it, and the results are
+  local.
+
+## 1. Open the shadow
+
+From the repository the user is in:
+
+```sh
+proob="${CLAUDE_PLUGIN_ROOT}/scripts/proob"; [ -x "$proob" ] || proob="${PROOB_BIN:-proob}"
+"$proob" shadow open; rc=$?
+work=$("$proob" shadow path)
+```
+
+Show the lines `shadow open` printed, verbatim. If it exits 2, show its one `shadow:` line and
+stop: the line names the fix. From here on, every command runs with `$work` as its working
+directory (`cd "$work"` first, every time), and every file path you read or write is under
+`$work`.
+
+## 2. Sense, declare, falsify, in the shadow
+
+Read each skill's SKILL.md and follow it in `$work`, under the shadow rules above. They are
+`${CLAUDE_PLUGIN_ROOT}/skills/sense/SKILL.md`, then `declare` and `falsify` in the same
+directory (and `verify` in step 4). Read the files rather than invoking the skills, so that everything stays in
+`$work`.
+
+1. **sense**, with `$ARGUMENTS` as its focus. It writes `$work/proob/.cache/sense/picture.md`.
+2. **declare**: at most 5 proposals, written under `$work/proob/properties/`. `proob shadow open`
+   has already run `proob init` in the shadow, so skip init. Use its full-repository mode (its
+   step 2) whatever its step 0 would pick: in a shadow there is no feature branch to review
+   with, and `$ARGUMENTS` is a focus, not a requirement. Skip its step 6 (commit, PR).
+   If `gh` cannot read past pull requests, skip the rejected-statements check without comment.
+   Run `"$proob" validate` in `$work` until it prints `proob validate: ok`.
+3. **falsify**: one property-based test per proposal, in the team's own test layout under
+   `$work`, each with its `proob:<ULID>` token. Run each with
+   `"$proob" --shadow run check <id> --json`. A counterexample is a finding. Keep it, and never
+   weaken the test or edit the property to make it pass. Skip its step 6 (pull request).
+   Run every property's check before any score.
+
+## 3. Show the checks, before any score
+
+```sh
+cd "$work" && "$proob" shadow report
+```
+
+Show its terminal output verbatim, in a code block, and add nothing to it. A row whose check
+passed and has no score yet says `not scored yet`; that is the honest state, not a gap to fill.
+The user sees what passed and what failed now, before the slower scores start.
+
+## 4. Score
+
+**verify**: for each property whose check passed, run `"$proob" --shadow run score <id> --json`
+once, so the report can say whether the test can fail. A score runs at most `max_mutants`
+mutants of the scope (default 30 for rust and python), a sample fixed by the property id; when it
+sampled, its JSON has `unsampled` > 0 and the report says how many were not run. Never call a
+sampled score exhaustive.
+
+## 5. Report
+
+```sh
+cd "$work" && "$proob" shadow report
+```
+
+Show its terminal output verbatim, in a code block, and add nothing to it. Then say in one
+sentence what the next step to make it real is: step 0 when the report has one (fix the code or
+drop the failing property), otherwise `proob shadow adopt`, which puts everything on a new branch
+of their repository without switching their checkout. Before that sentence, if any property fails, list the failures that use realistic inputs first and those that fail only on an extreme input (see falsify's step 5) after them, each in one line; never drop either kind.
+
+For a summary in your own words, read `"$proob" shadow report --json` (also saved as
+`report.json` beside `$work`), schema_version 1:
+
+| field | meaning |
+|---|---|
+| `headline` | the first line of the terminal report |
+| `verdict` | `{ "word": "Proposed", "why": "no one has approved it: shadow results are local" }` |
+| `counts` | `tried`, `fails`, `passes`, `not_run`, `errored` |
+| `properties[]` | `id`, `title`, `statement`, `verdict` (`Proposed`), `result`, `strength`, `line` |
+| `properties[].result.state` | `no_test`, `not_run`, `passes` (`cases`, `seed`), `checks`, `fails` (`input`, `seed`), `errored` (`reason`) |
+| `properties[].strength.state` | `not_scored`, `can_fail` (`killed`, `mutants`, `unsampled` when sampled), `cannot_fail` (`mutants`, `unsampled` when sampled), `nothing_to_mutate`, `errored` (`reason`) |
+| `make_it_real[]` | the numbered steps, as printed |
+| `adopted_branch` | the branch `proob shadow adopt` made, or null |
+
+## Never
+
+- Run `proob shadow adopt`, `git push`, or `gh pr create`. Those are the user's decisions; the
+  report tells them how.
+- Run `proob shadow clean` unless the user asks.
+- Write to, stage in, or commit in the user's repository.

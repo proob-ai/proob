@@ -1,0 +1,6 @@
+id = "01M63J420B80RQ13ARVTWMABPD"
+title = "Boolean equality"
+statement = "Two boolean values with the same truth value always compare equal to each other and to the plain truth value, wherever they sit in a document, and equal values always hash alike."
+scope = ["tomlkit/items.py", "tomlkit/container.py"]
+severity = "high"
+rationale = "Bool.__eq__ at tomlkit/items.py:1044-1048 only handles plain bool, while Bool.__hash__ at items.py:1050 hashes by value; arrays hand back Bool items (items.py:1631) unlike tables (container.py:893); CHANGELOG.md:386 records an earlier boolean comparison fix; tests/test_items.py:1303 covers only truthiness."

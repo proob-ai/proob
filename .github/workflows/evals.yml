@@ -1,0 +1,107 @@
+# proob evals: every skill's `claude plugin eval` cases, run against a build
+# of this commit (R17).
+#
+# NOT a required check, on purpose. The evals drive a live model through each
+# skill, so they need ANTHROPIC_API_KEY (a secret, unavailable to fork pull
+# requests) and their scores are non-deterministic: the same case can score
+# differently on two runs. They run on every push to master and on demand;
+# the threshold below turns a clear regression into a red run without making
+# a flaky one block a merge. The required check is `verify` in ci.yml.
+#
+# Third-party actions are pinned to full commit SHAs; the comment names the tag.
+name: evals
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: evals-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_NET_RETRY: 10
+  RUSTUP_MAX_RETRIES: 10
+  # The eval runner refuses a plugin directory that holds a hard link, and
+  # cargo hard-links its build artifacts under target/, so the build goes
+  # outside the checkout and only the one binary is copied back in. (The
+  # `runner` context is not available here; `github.workspace` is.)
+  CARGO_TARGET_DIR: ${{ github.workspace }}/../proob-target
+
+jobs:
+  key:
+    # Evals need ANTHROPIC_API_KEY. Without the secret (a fresh repository, a
+    # fork) the evals job is skipped instead of failing every push.
+    name: is ANTHROPIC_API_KEY set
+    runs-on: ubuntu-latest
+    outputs:
+      present: ${{ steps.k.outputs.present }}
+    steps:
+      - id: k
+        env:
+          KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: echo "present=${KEY:+yes}" >> "$GITHUB_OUTPUT"
+
+  evals:
+    needs: key
+    if: needs.key.outputs.present == 'yes'
+    name: claude plugin eval (not required; needs a key, non-deterministic)
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install the toolchain pinned in rust-toolchain.toml
+        # The Rust fixture the scaffolds copy carries this pin too, so the eval
+        # sandbox resolves the same toolchain from the operator's ~/.rustup.
+        run: rustup toolchain install && rustup show active-toolchain
+      - uses: taiki-e/install-action@1168f6810a3cb30a3514bf5756a3b7f0422c6df8 # v2.87.28
+        with:
+          # What the falsify and verify cases drive on the Rust fixture.
+          tool: cargo-nextest@0.9.150,cargo-mutants@27.1.0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+      - name: Install the Python adapter's pinned tools
+        # pytest, hypothesis, and mutmut at the versions the adapter is built for.
+        run: python -m pip install -r tools/python-tools.txt
+      - name: Build proob from this commit (outside the checkout)
+        run: |
+          cargo build --locked -p proob
+          "$CARGO_TARGET_DIR/debug/proob" --version
+      - name: Put the binary where the eval scaffolds look
+        # evals/.bin/ is gitignored; every scaffold tries it first.
+        run: |
+          mkdir -p evals/.bin
+          cp "$CARGO_TARGET_DIR/debug/proob" evals/.bin/proob
+          evals/.bin/proob --version
+      - name: Install Claude Code
+        run: curl -fsSL https://claude.ai/install.sh | bash
+      - name: Run the eval cases
+        # --scaffold runs each case's scaffold.sh (ours); --trust-plugin answers
+        # the first-run confirmation; --no-publish keeps the HTML report in
+        # evals/results/; --runs 1 and --ablation none keep one model run per
+        # case; --threshold fails the job when any case scores below 0.8.
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          "$HOME/.local/bin/claude" plugin eval . \
+            --scaffold --trust-plugin --no-publish \
+            --runs 1 --ablation none \
+            --model claude-sonnet-5-5 \
+            --json evals-results.json \
+            --threshold 0.8
+      - name: Upload the results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: evals-results
+          path: |
+            evals-results.json
+            evals/results/
+          if-no-files-found: warn
+          retention-days: 30

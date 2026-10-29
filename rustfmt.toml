@@ -1,0 +1,5 @@
+# The width and the one-line struct literals the codebase was written with.
+# rustfmt leaves the bodies of `verus! { ... }` alone; Verus code keeps its
+# hand layout.
+max_width = 120
+use_small_heuristics = "Max"

@@ -1,0 +1,43 @@
+name: New adapter request
+description: Support for a new language, property-based test runner, verifier, or mutation tool.
+labels: ["new-adapter", "type: feature", "status: needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        An adapter needs three things: a way to run a check bound to a property, a way to find a counterexample with a replayable seed,
+        and a way to measure strength (usually mutation testing). CONTRIBUTING.md, "Adding an adapter", describes the contract.
+  - type: input
+    id: language
+    attributes:
+      label: Language
+      placeholder: TypeScript, Go, Java, Lean, TLA+, ...
+    validations:
+      required: true
+  - type: textarea
+    id: check
+    attributes:
+      label: Check
+      description: The property-based testing library or verifier, and the runner that executes it (with versions).
+      placeholder: fast-check 4 through vitest 3
+    validations:
+      required: true
+  - type: textarea
+    id: strength
+    attributes:
+      label: Strength
+      description: The mutation testing tool (or other measure) that can show the check is able to fail.
+      placeholder: StrykerJS 9
+  - type: textarea
+    id: repositories
+    attributes:
+      label: Repositories to try it on
+      description: Public repositories in this language whose real bugs could join the benchmark.
+  - type: dropdown
+    id: contribute
+    attributes:
+      label: Would you build it?
+      options:
+        - "Yes"
+        - With guidance
+        - "No"

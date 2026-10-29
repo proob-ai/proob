@@ -1,0 +1,6 @@
+id = "01M63HZNJ0TFNH94T72D9RARPN"
+title = "Barrel list reverse slicing"
+statement = "Slicing a barrel list backwards, with any start and stop, gives exactly the items the same slice gives on a plain list."
+scope = ["boltons/listutils.py"]
+severity = "high"
+rationale = "The class documents an identical API to list, including slicing (boltons/listutils.py docstring). The negative-step path in iter_slice remaps start and stop by reading (boltons/listutils.py:188-198) in a way that looks off by one; tests/test_listutils.py:36 covers only a slice with the start omitted."

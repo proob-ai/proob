@@ -1,0 +1,6 @@
+id = "01M6342HN38MEJA0EJH1XNX320"
+title = "Seekable peek never loses an item"
+statement = "Peeking at a seekable never changes which items later iteration returns, whatever cache size limit it has."
+scope = ["more_itertools/more.py"]
+severity = "high"
+rationale = "more_itertools/more.py lines 3134-3136 rewind a peek by pointing at the last cache slot, which does not exist when the cache limit is zero (line 3100); the peek docstring at lines 3032-3051 promises looking ahead without advancing; tests/test_more.py test_simple_peeking covers only the unbounded cache and test_maxlen_zero never peeks."

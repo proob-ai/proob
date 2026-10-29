@@ -1,0 +1,19 @@
+# The Verus fixture proob's proof adapter is tested against: a standalone
+# workspace (the proob workspace excludes this directory) with one verified
+# crate, `clamp`. vstd is pinned here at the workspace root, exactly as proob
+# pins its own, which is why the root manifest is a member of every binding
+# set in the workspace. rust-toolchain.toml is a copy of proob's.
+[workspace]
+resolver = "2"
+members = ["clamp"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace.dependencies]
+vstd = "=0.0.0-2026-10-25-0158"
+
+[workspace.lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(verus_only)'] }

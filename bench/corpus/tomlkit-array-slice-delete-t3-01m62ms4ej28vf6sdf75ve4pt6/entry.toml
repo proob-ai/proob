@@ -1,0 +1,12 @@
+kind = "live"
+bug = "tomlkit-array-slice-delete"
+trial = "t3"
+language = "python"
+repo = "https://github.com/python-poetry/tomlkit"
+buggy_commit = "88aa4b1c1128587b8c8ee92d0db11db7bfbdc0ed"
+install = ["git submodule update --init --recursive", "uv venv --python 3.13 .venv", "uv pip install --python .venv/bin/python -e . pytest PyYAML"]
+python = "3.13"
+property = "01M62MS4EJ28VF6SDF75VE4PT6"
+seed = "1793187331153802128"
+expect_buggy = "counterexample"
+flaky = false

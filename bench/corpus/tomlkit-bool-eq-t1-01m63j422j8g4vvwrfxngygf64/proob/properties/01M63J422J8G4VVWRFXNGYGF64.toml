@@ -1,0 +1,6 @@
+id = "01M63J422J8G4VVWRFXNGYGF64"
+title = "Copies equal the original"
+statement = "A document is equal to its shallow copy, its deep copy and its pickle round-trip, and all of them print the same text."
+scope = ["tomlkit/container.py", "tomlkit/items.py", "tomlkit/toml_document.py"]
+severity = "high"
+rationale = "tests/test_toml_document.py:947 asserts copy equality on one document without booleans or arrays; tests/test_items.py:1042-1062 cover pickling; CHANGELOG.md:316,409,450 record data lost on copy and pickle errors."

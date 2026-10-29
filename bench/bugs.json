@@ -1,0 +1,478 @@
+[
+  {
+    "id": "more-itertools-seekable-maxlen0",
+    "language": "python",
+    "repo": "https://github.com/more-itertools/more-itertools",
+    "buggy_sha": "ca711220a6657a22655f6fa497524d006a735c5f",
+    "fix_sha": "6b1907de293a655fb77881bf81948f95fd15bd7c",
+    "issue_url": "https://github.com/more-itertools/more-itertools/issues/1268 (PR https://github.com/more-itertools/more-itertools/pull/1269)",
+    "summary": "seekable(it, maxlen=0).peek() and bool(seekable) consume an item from the source that the zero-length cache cannot hold, so it is silently dropped from later iteration.",
+    "module_paths": [
+      "more_itertools/more.py"
+    ],
+    "regression_test": {
+      "tests": [
+        "tests/test_more.py::SeekableTest::test_maxlen_zero_peek_does_not_drop_items",
+        "tests/test_more.py::SeekableTest::test_maxlen_zero_bool_does_not_drop_items"
+      ],
+      "files": [
+        "tests/test_more.py"
+      ]
+    },
+    "install": [
+      "uv venv --python 3.13 .venv",
+      "uv pip install --python .venv/bin/python -e . pytest"
+    ],
+    "suite_cmd": ".venv/bin/python -m pytest -q -p no:cacheprovider tests",
+    "suite_result_buggy": {
+      "passed": 747,
+      "failed": 0,
+      "subtests_passed": 21165,
+      "seconds": 9
+    },
+    "regression_fails_on_buggy": {
+      "value": true,
+      "failure": "2 failed; AssertionError: 20 != 10 / Lists differ: [20, 30] != [10, 20, 30]"
+    },
+    "regression_passes_on_fix": true,
+    "python_version": "3.13",
+    "difficulty_guess": {
+      "level": "medium",
+      "reason": "stateful (peek then iterate) plus the rare parameter maxlen=0; a 'peek never changes the remaining sequence' property finds it only if maxlen=0 is in the generator's range"
+    },
+    "split": "dev"
+  },
+  {
+    "id": "tomlkit-array-slice-delete",
+    "language": "python",
+    "repo": "https://github.com/python-poetry/tomlkit",
+    "buggy_sha": "88aa4b1c1128587b8c8ee92d0db11db7bfbdc0ed",
+    "fix_sha": "8c30fc17d91aee7469c0287e509300e78aa15227",
+    "issue_url": "https://github.com/python-poetry/tomlkit/pull/599",
+    "summary": "Array.__delitem__ with a slice computes the removed indices with `key.stop or length`, so del a[:0] or negative-bound slices desynchronise the rendered TOML (as_string) from the list contents (e.g. del a[:0] renders '[]').",
+    "module_paths": [
+      "tomlkit/items.py"
+    ],
+    "regression_test": {
+      "tests": [
+        "tests/test_items.py::test_array_slice_deletion_keeps_render_in_sync"
+      ],
+      "files": [
+        "tests/test_items.py"
+      ]
+    },
+    "install": [
+      "git submodule update --init --recursive",
+      "uv venv --python 3.13 .venv",
+      "uv pip install --python .venv/bin/python -e . pytest PyYAML"
+    ],
+    "suite_cmd": ".venv/bin/python -m pytest -q -p no:cacheprovider tests",
+    "suite_result_buggy": {
+      "passed": 1113,
+      "failed": 0,
+      "seconds": 1
+    },
+    "regression_fails_on_buggy": {
+      "value": true,
+      "failure": "AssertionError: assert '[]' == '[1, 2, 3]'"
+    },
+    "regression_passes_on_fix": true,
+    "python_version": "3.13",
+    "difficulty_guess": {
+      "level": "easy",
+      "reason": "property 'parse(as_string(a)) == list(a) after del a[slice]' with random slices hits stop==0 / negative bounds quickly"
+    },
+    "split": "held-out"
+  },
+  {
+    "id": "humanize-naturalsize-rollover",
+    "language": "python",
+    "repo": "https://github.com/python-humanize/humanize",
+    "buggy_sha": "7574e0cc377d80db0d2756fc2c5e0b8799a6f8b4",
+    "fix_sha": "823ad6096e1e5ba82ea876ce761fc2efebd76157",
+    "issue_url": "https://github.com/python-humanize/humanize/pull/329",
+    "summary": "naturalsize() picks the unit from the unrounded value, so values just below a unit boundary render as '1000.0 kB' / '1024.0 KiB' instead of '1.0 MB' / '1.0 MiB'.",
+    "module_paths": [
+      "src/humanize/filesize.py"
+    ],
+    "regression_test": {
+      "tests": [
+        "tests/test_filesize.py::test_naturalsize (6 new params: 999999, 999999999, 999999999999, 1024**2-1 binary, 1024**3-1 binary, 1024**2-1 gnu)"
+      ],
+      "files": [
+        "tests/test_filesize.py"
+      ]
+    },
+    "install": [
+      "uv venv --python 3.13 .venv",
+      "uv pip install --python .venv/bin/python -e . pytest freezegun"
+    ],
+    "suite_cmd": ".venv/bin/python -m pytest -q -p no:cacheprovider tests --ignore=tests/test_benchmarks.py",
+    "suite_result_buggy": {
+      "passed": 693,
+      "failed": 0,
+      "skipped": 69,
+      "seconds": 1,
+      "note": "tests/test_benchmarks.py excluded: it needs pytest-benchmark/pytest-codspeed, and with those installed it errors at setup (AttributeError '_nodeid', plugin incompatibility), not a test failure"
+    },
+    "regression_fails_on_buggy": {
+      "value": true,
+      "failure": "6 failed; AssertionError: assert '1000.0 kB' == '1.0 MB'"
+    },
+    "regression_passes_on_fix": true,
+    "python_version": "3.13",
+    "difficulty_guess": {
+      "level": "medium",
+      "reason": "property 'mantissa < base' or 'monotone in input' needs values in a narrow band just below each power of 1000/1024; uniform random ints rarely land there unless the generator biases towards boundaries"
+    },
+    "split": "dev"
+  },
+  {
+    "id": "cachetools-getsizeof-overevict",
+    "language": "python",
+    "repo": "https://github.com/tkem/cachetools",
+    "buggy_sha": "16e88894ef7d79b25a68f5a3b5411ed881342725",
+    "fix_sha": "39b31bc9b63abe98497409945e9d382d8918c8fb",
+    "issue_url": "https://github.com/tkem/cachetools/issues/405",
+    "summary": "With getsizeof set, replacing an existing key with a larger value reserves the full new size instead of the delta, evicting an unrelated entry even though the updated cache fits within maxsize.",
+    "module_paths": [
+      "src/cachetools/__init__.py"
+    ],
+    "regression_test": {
+      "tests": [
+        "tests/*::*::test_getsizeof_replace_grow (Cache, FIFO, LFU, LRU, TLRU, TTL)",
+        "test_getsizeof_replace_same_size",
+        "test_getsizeof_replace_shrink"
+      ],
+      "files": [
+        "tests/__init__.py"
+      ],
+      "run": ".venv/bin/python -m pytest tests -k getsizeof_replace"
+    },
+    "install": [
+      "uv venv --python 3.13 .venv",
+      "uv pip install --python .venv/bin/python -e . pytest"
+    ],
+    "suite_cmd": ".venv/bin/python -m pytest -q -p no:cacheprovider tests",
+    "suite_result_buggy": {
+      "passed": 291,
+      "failed": 0,
+      "seconds": 4
+    },
+    "regression_fails_on_buggy": {
+      "value": true,
+      "failure": "6 failed (all test_getsizeof_replace_grow), 15 passed; AssertionError: 2 != 1"
+    },
+    "regression_passes_on_fix": true,
+    "python_version": "3.13",
+    "difficulty_guess": {
+      "level": "hard",
+      "reason": "needs a stateful sequence (fill near maxsize, then overwrite an existing key with a bigger value) and a model-based oracle of what must remain; plain random calls with no custom getsizeof never trigger it"
+    },
+    "split": "held-out"
+  },
+  {
+    "id": "semver-prerelease-token-order",
+    "language": "python",
+    "repo": "https://github.com/python-semver/python-semver",
+    "buggy_sha": "94debf9d3e714ccb08ca7c0199b5bce96cfd7687",
+    "fix_sha": "bcd151fa63df3053b9f30e698e9ae1020187be1a",
+    "issue_url": "https://github.com/python-semver/python-semver/issues/497 (PR https://github.com/python-semver/python-semver/pull/498)",
+    "summary": "Version.next_version('prerelease', token) with a token that sorts below the current prerelease (e.g. 1.2.3-rc.1 -> 'alpha') returns 1.2.3-alpha.1, which is older than the input.",
+    "module_paths": [
+      "src/semver/version.py"
+    ],
+    "regression_test": {
+      "tests": [
+        "tests/test_issue484.py::test_token_switch_preserves_version_order",
+        "tests/test_bump.py::test_next_version_matches_literal_prerelease_token_family"
+      ],
+      "files": [
+        "tests/test_issue484.py",
+        "tests/test_bump.py"
+      ]
+    },
+    "install": [
+      "uv venv --python 3.13 .venv",
+      "uv pip install --python .venv/bin/python -e . pytest pytest-cov"
+    ],
+    "suite_cmd": ".venv/bin/python -m pytest -q -p no:cacheprovider tests",
+    "suite_result_buggy": {
+      "passed": 471,
+      "failed": 0,
+      "skipped": 1,
+      "seconds": 2
+    },
+    "regression_fails_on_buggy": {
+      "value": true,
+      "failure": "6 failed, 51 passed; AssertionError: assert '1.2.3-alpha.1' == '1.2.4-alpha.1'"
+    },
+    "regression_passes_on_fix": true,
+    "python_version": "3.13",
+    "difficulty_guess": {
+      "level": "easy",
+      "reason": "the obvious property 'next_version(v, part, token) > v' fails for any prerelease version with a lexically smaller token"
+    },
+    "split": "dev"
+  },
+  {
+    "id": "packaging-marker-nested-parens",
+    "language": "python",
+    "repo": "https://github.com/pypa/packaging",
+    "buggy_sha": "c4fb81ff6eba16fdd24d50e9d9d002fdbece6dd4",
+    "fix_sha": "0a85b41e24c9b55b83f05ae696d73e8294a5b094",
+    "issue_url": "https://github.com/pypa/packaging/pull/1316",
+    "summary": "str(Marker) drops the parentheses of a doubly-parenthesised group, so 'a and ((b or c))' serialises as 'a and b or c' and re-parses with different and/or precedence.",
+    "module_paths": [
+      "src/packaging/markers.py"
+    ],
+    "regression_test": {
+      "tests": [
+        "tests/test_markers.py::test_str_preserves_nested_group_precedence"
+      ],
+      "files": [
+        "tests/test_markers.py"
+      ]
+    },
+    "install": [
+      "uv venv --python 3.13 .venv",
+      "uv pip install --python .venv/bin/python -e . pytest hypothesis pretend pip tomli_w"
+    ],
+    "suite_cmd": ".venv/bin/python -m pytest -q -p no:cacheprovider tests",
+    "suite_result_buggy": {
+      "passed": 62017,
+      "failed": 0,
+      "skipped": 1,
+      "deselected": 413,
+      "seconds": 23
+    },
+    "regression_fails_on_buggy": {
+      "value": true,
+      "failure": "assert True == False (Marker('python_version < \"3.10\" and sys_platform == \"linux\" or sys_platform == \"darwin\"').evaluate(...))"
+    },
+    "regression_passes_on_fix": true,
+    "python_version": "3.13",
+    "difficulty_guess": {
+      "level": "medium",
+      "reason": "round-trip 'evaluate(Marker(str(m))) == evaluate(m)' is natural, but the generator must emit redundant double parentheses around an 'or' group inside an 'and'"
+    },
+    "split": "held-out"
+  },
+  {
+    "id": "bidict-values-order",
+    "language": "python",
+    "repo": "https://github.com/jab/bidict",
+    "buggy_sha": "43eec62f08f8af2943c101fa63b176133f274409",
+    "fix_sha": "74294f14ea9391fce1018d325620b69878f800ce",
+    "issue_url": "https://github.com/jab/bidict/commit/74294f14ea9391fce1018d325620b69878f800ce (no PR/issue; commit message documents the bug)",
+    "summary": "For non-ordered bidicts, values() iterates the inverse's keys, whose order diverges from keys() after an overwrite, so zip(b.keys(), b.values()) pairs wrong keys and values.",
+    "module_paths": [
+      "bidict/_base.py",
+      "bidict/_orderedbase.py"
+    ],
+    "regression_test": {
+      "tests": [
+        "tests/test_bidict.py::BidictStateMachineTest::runTest (new invariant assert_values_correspond_to_keys)",
+        "tests/test_bidict.py::test_values_view_reversibility_matches_bidict (passes on buggy too)"
+      ],
+      "files": [
+        "tests/test_bidict.py"
+      ]
+    },
+    "install": [
+      "uv venv --python 3.13 .venv",
+      "uv pip install --python .venv/bin/python -e . pytest pytest-xdist hypothesis pytest-benchmark sortedcollections sortedcontainers typing_extensions"
+    ],
+    "suite_cmd": ".venv/bin/python -m pytest -q -p no:cacheprovider tests",
+    "suite_result_buggy": {
+      "passed": 185,
+      "failed": 0,
+      "seconds": 5
+    },
+    "regression_fails_on_buggy": {
+      "value": true,
+      "failure": "FAILED BidictStateMachineTest::runTest - assert [-2, -3] == [-3, -2]"
+    },
+    "regression_passes_on_fix": true,
+    "python_version": "3.13",
+    "difficulty_guess": {
+      "level": "easy",
+      "reason": "one overwrite plus the Mapping invariant list(zip(keys(), values())) == list(items()) exposes it; note the fix's own regression test is a Hypothesis state machine"
+    },
+    "split": "dev"
+  },
+  {
+    "id": "chrono-naivedate-iter-rev",
+    "language": "rust",
+    "repo": "https://github.com/chronotope/chrono",
+    "buggy_sha": "7fa24eac9514db65eb8bddf7fadeca71b68e414a",
+    "fix_sha": "7b6436f65e0c7ec2f9a7cdea88af1f3851a01f6f",
+    "issue_url": "https://github.com/chronotope/chrono/issues/1757 (PR https://github.com/chronotope/chrono/pull/1809)",
+    "summary": "NaiveDate::iter_days()/iter_weeks() implement next_back by walking backwards from the start, so iter_days().take(n).rev() yields dates far outside [start, start+n) instead of the forward sequence reversed.",
+    "module_paths": [
+      "src/naive/date/mod.rs"
+    ],
+    "regression_test": {
+      "tests": [
+        "naive::date::tests::test_iterator_reverse_matches_forward",
+        "naive::date::tests::test_day_iterator_limit",
+        "naive::date::tests::test_week_iterator_limit"
+      ],
+      "files": [
+        "src/naive/date/tests.rs"
+      ],
+      "run": "rustup run 1.99.1 cargo test --lib -- naive::date::tests::test_iterator_reverse_matches_forward naive::date::tests::test_day_iterator_limit naive::date::tests::test_week_iterator_limit"
+    },
+    "install": [
+      "rustup run 1.99.1 cargo build --tests"
+    ],
+    "suite_cmd": "rustup run 1.99.1 cargo test --lib --tests",
+    "suite_result_buggy": {
+      "passed": 293,
+      "failed": 0,
+      "seconds": 9,
+      "note": "seconds with build cached. Full `cargo test` incl. doctests: 570 passed, 3 failed (doctests checked_sub_months/checked_add_months fail under #![deny(warnings)] because Rust 1.99 deprecates core::i32::MAX; toolchain lint, unrelated to the bug), 172 s"
+    },
+    "regression_fails_on_buggy": {
+      "value": true,
+      "failure": "3 failed; test_iterator_reverse_matches_forward: left: [-258092-07-31] right: [2025-10-19, ..., 2025-10-10]"
+    },
+    "regression_passes_on_fix": true,
+    "toolchain": "1.99.1 (no rust-toolchain file)",
+    "difficulty_guess": {
+      "level": "easy",
+      "reason": "generic DoubleEndedIterator law 'it.take(n).rev() == reverse(it.take(n))' fails for any start date and n >= 1"
+    },
+    "split": "dev"
+  },
+  {
+    "id": "unicode-segmentation-zwj-midletter",
+    "language": "rust",
+    "repo": "https://github.com/unicode-rs/unicode-segmentation",
+    "buggy_sha": "e445e101b129862148127c9e41ab4486b0125232",
+    "fix_sha": "2ff73ccf19c47d411f12b1686d0724618ea27cf7",
+    "issue_url": "https://github.com/unicode-rs/unicode-segmentation/pull/187",
+    "summary": "Forward split_word_bounds treats letter + MidLetter/MidNum + ZWJ + Extended_Pictographic (e.g. \"a.\\u{200d}\\u{1f44d}\") as one segment, disagreeing with the reverse iterator and UAX #29, which give [\"a\", \".\\u{200d}\\u{1f44d}\"].",
+    "module_paths": [
+      "src/word.rs"
+    ],
+    "regression_test": {
+      "tests": [
+        "tests/test.rs::test_words"
+      ],
+      "files": [
+        "tests/test.rs"
+      ],
+      "run": "rustup run 1.99.1 cargo test --test test test_words"
+    },
+    "install": [
+      "rustup run 1.99.1 cargo build --tests"
+    ],
+    "suite_cmd": "rustup run 1.99.1 cargo test",
+    "suite_result_buggy": {
+      "passed": 56,
+      "failed": 0,
+      "seconds": 51,
+      "note": "seconds include compilation"
+    },
+    "regression_fails_on_buggy": {
+      "value": true,
+      "failure": "Forward word boundaries test for testcase (\"a.\\u{200d}\ud83d\udc4d\", [\"a\", \".\\u{200d}\ud83d\udc4d\"]) failed. left: [\"a.\\u{200d}\ud83d\udc4d\"]"
+    },
+    "regression_passes_on_fix": true,
+    "toolchain": "1.99.1 (no rust-toolchain file)",
+    "difficulty_guess": {
+      "level": "hard",
+      "reason": "a forward-vs-reverse agreement property exists, but random strings must contain the exact 4-codepoint pattern letter/digit, MidLetter/MidNum, U+200D, Extended_Pictographic; very unlikely without a Unicode-class-aware generator"
+    },
+    "split": "held-out"
+  },
+  {
+    "id": "url-control-host-roundtrip",
+    "language": "rust",
+    "repo": "https://github.com/servo/rust-url",
+    "buggy_sha": "22b925f93ad505a830f1089538a9ed6f5fd90612",
+    "fix_sha": "9771ab51f0aaa02ca1884f88c577260e9b86f9b6",
+    "issue_url": "https://github.com/servo/rust-url/pull/1079",
+    "summary": "For a non-special URL whose opaque host is a single control byte (\"l://\\x01:\"), the host is serialised unescaped, so Url::parse(url.as_str()) yields a different URL (host None instead of Domain(\"\\u{1}\")).",
+    "module_paths": [
+      "url/src/host.rs"
+    ],
+    "regression_test": {
+      "tests": [
+        "url/tests/unit.rs::test_parse_url_with_single_byte_control_host"
+      ],
+      "files": [
+        "url/tests/unit.rs"
+      ],
+      "run": "rustup run 1.99.1 cargo test -p url --test unit test_parse_url_with_single_byte_control_host"
+    },
+    "install": [
+      "rustup run 1.99.1 cargo build -p url --tests"
+    ],
+    "suite_cmd": "rustup run 1.99.1 cargo test -p url",
+    "suite_result_buggy": {
+      "passed": 133,
+      "failed": 0,
+      "seconds": 71,
+      "note": "seconds include compilation"
+    },
+    "regression_fails_on_buggy": {
+      "value": true,
+      "failure": "assertion `left == right` failed; left: Url{.. host: None ..} right: Url{.. host: Some(Domain(\"\\u{1}\")) ..}"
+    },
+    "regression_passes_on_fix": true,
+    "toolchain": "1.99.1 (no rust-toolchain file)",
+    "difficulty_guess": {
+      "level": "hard",
+      "reason": "round-trip parse(serialize(parse(s))) is the obvious property, but it needs a non-special scheme, an opaque host made of a control byte, and a trailing ':'; random printable strings rarely get there"
+    },
+    "split": "dev"
+  },
+  {
+    "id": "toml-serde-key-quoting",
+    "language": "rust",
+    "repo": "https://github.com/toml-rs/toml",
+    "buggy_sha": "711b1ba1ecb11e61df9a1609e24fa3b17d11d961",
+    "fix_sha": "76484d005a0e68e8c1876f8a3417b71a3921623f",
+    "issue_url": "https://github.com/toml-rs/toml/issues/1242 (PR https://github.com/toml-rs/toml/pull/1245)",
+    "summary": "toml::to_string emits table-header keys that need quoting (e.g. serde-renamed field 'cfg(target_os = \"linux\")' or 'io.containerd.grpc.v1.cri') unquoted, producing invalid TOML or a different key path, so from_str(to_string(x)) != x.",
+    "module_paths": [
+      "crates/toml/src/ser/document/array_of_tables.rs",
+      "crates/toml/src/ser/document/map.rs",
+      "crates/toml/src/ser/document/mod.rs"
+    ],
+    "regression_test": {
+      "tests": [
+        "crates/toml/tests/serde/general.rs::attr_key"
+      ],
+      "files": [
+        "crates/toml/tests/serde/general.rs"
+      ],
+      "run": "rustup run 1.99.1 cargo test -p toml --test serde attr_key",
+      "note": "at the buggy SHA attr_key exists and snapshots the buggy output (added in 4f73ebdc to reproduce the bug); the fix rewrites its expectation to the round-trip"
+    },
+    "install": [
+      "rustup run 1.99.1 cargo build -p toml --tests"
+    ],
+    "suite_cmd": "rustup run 1.99.1 cargo test -p toml",
+    "suite_result_buggy": {
+      "passed": 1445,
+      "failed": 0,
+      "ignored": 177,
+      "seconds": 76,
+      "note": "seconds include compilation"
+    },
+    "regression_fails_on_buggy": {
+      "value": true,
+      "failure": "general::attr_key panicked at crates/toml/tests/serde/general.rs:2210:5 (snapshot: got [cfg(target_os = \"linux\")], expected ['cfg(target_os = \"linux\")'])"
+    },
+    "regression_passes_on_fix": true,
+    "toolchain": "1.99.1 (no rust-toolchain file)",
+    "difficulty_guess": {
+      "level": "medium",
+      "reason": "serde round-trip with arbitrary map keys exposes it as soon as a key with '.', space or '(' becomes a table header (value must be a table); struct-only generators with plain field names miss it"
+    },
+    "split": "held-out"
+  }
+]

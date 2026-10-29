@@ -1,0 +1,173 @@
+{
+  "description": "Three accepted runs; the newest two carry records for another property (and a kind this proob does not know); the record for ours is two runs back.",
+  "default_branch": "main",
+  "workflow_runs": [
+    {
+      "id": 103,
+      "path": ".github/workflows/proob-evidence.yml",
+      "head_branch": "main",
+      "head_sha": "2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f",
+      "event": "push",
+      "conclusion": "success",
+      "created_at": "2026-10-27T12:00:00Z"
+    },
+    {
+      "id": 102,
+      "path": ".github/workflows/proob-evidence.yml",
+      "head_branch": "main",
+      "head_sha": "1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f",
+      "event": "push",
+      "conclusion": "success",
+      "created_at": "2026-10-27T06:00:00Z"
+    },
+    {
+      "id": 101,
+      "path": ".github/workflows/proob-evidence.yml",
+      "head_branch": "main",
+      "head_sha": "ffffffffffffffffffffffffffffffffffffffff",
+      "event": "push",
+      "conclusion": "success",
+      "created_at": "2026-10-27T00:00:00Z"
+    }
+  ],
+  "blobs": {
+    "ffffffffffffffffffffffffffffffffffffffff:.github/workflows/proob-evidence.yml": "8888888888888888888888888888888888888888",
+    "1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f:.github/workflows/proob-evidence.yml": "8888888888888888888888888888888888888888",
+    "2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f:.github/workflows/proob-evidence.yml": "8888888888888888888888888888888888888888"
+  },
+  "artifacts": {
+    "103": [
+      {
+        "id": 9003,
+        "name": "proob-evidence",
+        "size_in_bytes": 1,
+        "expired": false
+      }
+    ],
+    "102": [
+      {
+        "id": 9002,
+        "name": "proob-evidence",
+        "size_in_bytes": 1,
+        "expired": false
+      }
+    ],
+    "101": [
+      {
+        "id": 9001,
+        "name": "proob-evidence",
+        "size_in_bytes": 1,
+        "expired": false
+      }
+    ]
+  },
+  "artifact_lines": {
+    "9003": [
+      {
+        "schema_version": 1,
+        "id": "01J9Z3W1V8Q4K7N2M5R8T1X4C8",
+        "kind": "check",
+        "algo": "sha256",
+        "content_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "binding_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "scope_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "outcome": {
+          "result": "no_counterexample",
+          "budget": 256
+        },
+        "tool_versions": {
+          "proptest": "1.12.0"
+        },
+        "run_id": 103,
+        "head_sha": "2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f",
+        "workflow_blob": "8888888888888888888888888888888888888888",
+        "at": 1761523200,
+        "replay": {
+          "seed": "7"
+        }
+      },
+      {
+        "schema_version": 1,
+        "id": "01J9Z3W1V8Q4K7N2M5R8T1X4C6",
+        "kind": "fuzz",
+        "note": "a kind from a newer proob"
+      }
+    ],
+    "9002": [
+      {
+        "schema_version": 1,
+        "id": "01J9Z3W1V8Q4K7N2M5R8T1X4C8",
+        "kind": "check",
+        "algo": "sha256",
+        "content_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "binding_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "scope_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "outcome": {
+          "result": "no_counterexample",
+          "budget": 256
+        },
+        "tool_versions": {
+          "proptest": "1.12.0"
+        },
+        "run_id": 102,
+        "head_sha": "1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f",
+        "workflow_blob": "8888888888888888888888888888888888888888",
+        "at": 1761523200,
+        "replay": {
+          "seed": "7"
+        }
+      }
+    ],
+    "9001": [
+      {
+        "schema_version": 1,
+        "id": "01J9Z3W1V8Q4K7N2M5R8T1X4C6",
+        "kind": "check",
+        "algo": "sha256",
+        "content_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "binding_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "scope_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "outcome": {
+          "result": "no_counterexample",
+          "budget": 256
+        },
+        "tool_versions": {
+          "proptest": "1.12.0"
+        },
+        "run_id": 101,
+        "head_sha": "ffffffffffffffffffffffffffffffffffffffff",
+        "workflow_blob": "8888888888888888888888888888888888888888",
+        "at": 1761523200,
+        "replay": {
+          "seed": "7"
+        }
+      },
+      {
+        "schema_version": 1,
+        "id": "01J9Z3W1V8Q4K7N2M5R8T1X4C6",
+        "kind": "score",
+        "algo": "sha256",
+        "content_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "binding_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "scope_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "outcome": {
+          "result": "scored",
+          "killed": 2,
+          "survived": 0,
+          "timeout": 0,
+          "unviable": 0
+        },
+        "tool_versions": {
+          "proptest": "1.12.0"
+        },
+        "run_id": 101,
+        "head_sha": "ffffffffffffffffffffffffffffffffffffffff",
+        "workflow_blob": "8888888888888888888888888888888888888888",
+        "at": 1761523200
+      }
+    ]
+  },
+  "heads": {
+    "origin/main": "2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f"
+  }
+}

@@ -1,0 +1,41 @@
+#!/bin/sh
+# proob shim: find or fetch the pinned proob binary, verify it, exec it.
+#
+# Resolution order:
+#   1. $PROOB_BIN                         a developer override (target/debug/proob, a dist build)
+#   2. $PROOB_HOME/proob-<version>        the cache; PROOB_HOME defaults to
+#                                         ${CLAUDE_PLUGIN_DATA:-$HOME/.proob}/bin
+#   3. download the release asset for this platform plus its .sha256, verify, cache
+#      (refused when PROOB_NO_FETCH is set: the hooks set it, so a download
+#      never runs inside a hook's timeout; the first skill run fetches instead)
+#
+# Any failure prints one line starting with "proob:" and exits 1. Hooks that call
+# this fail open: a missing binary never blocks normal work.
+PROOB_VERSION="0.1.0"
+set -u
+
+here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd) || { printf 'proob: cannot locate the plugin scripts directory\n' >&2; exit 1; }
+[ -r "$here/lib/fetch.sh" ] || { printf 'proob: missing %s/lib/fetch.sh\n' "$here" >&2; exit 1; }
+. "$here/lib/fetch.sh"
+
+if [ -n "${PROOB_BIN:-}" ]; then
+  [ -x "$PROOB_BIN" ] || { printf 'proob: PROOB_BIN=%s is not an executable file\n' "$PROOB_BIN" >&2; exit 1; }
+  exec "$PROOB_BIN" "$@"
+fi
+
+data_root="${CLAUDE_PLUGIN_DATA:-}"
+if [ -z "$data_root" ]; then
+  [ -n "${HOME:-}" ] || { printf 'proob: neither CLAUDE_PLUGIN_DATA nor HOME is set; set PROOB_HOME or PROOB_BIN\n' >&2; exit 1; }
+  data_root="$HOME/.proob"
+fi
+home="${PROOB_HOME:-$data_root/bin}"
+bin="$home/proob-$PROOB_VERSION"
+
+if [ ! -x "$bin" ]; then
+  if [ -n "${PROOB_NO_FETCH:-}" ]; then
+    printf 'proob: proob %s is not installed yet; run /proob:guard once to download it, or set PROOB_BIN to a local build\n' "$PROOB_VERSION" >&2
+    exit 1
+  fi
+  bin=$(proob_fetch "$PROOB_VERSION" "$home") || exit 1
+fi
+exec "$bin" "$@"

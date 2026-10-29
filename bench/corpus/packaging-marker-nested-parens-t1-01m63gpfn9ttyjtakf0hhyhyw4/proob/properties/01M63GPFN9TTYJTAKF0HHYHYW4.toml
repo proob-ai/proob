@@ -1,0 +1,6 @@
+id = "01M63GPFN9TTYJTAKF0HHYHYW4"
+title = "Marker text round-trip keeps its meaning"
+statement = "Writing an environment marker out as text and reading that text back gives a marker that makes the same decision in every environment, however deeply its parentheses nest and however it was combined."
+scope = ["src/packaging/markers.py", "src/packaging/_parser.py"]
+severity = "high"
+rationale = "The text form is what pickles store (src/packaging/markers.py __getstate__) and what requirement strings embed (src/packaging/requirements.py __str__), so a lost grouping silently changes which platforms install a dependency. The formatter in src/packaging/markers.py around line 195 recurses into a single-element group without its parentheses; locally, a marker written with doubly nested parentheses printed as a and b or c. tests/test_markers.py covers only one level of grouping."

@@ -1,0 +1,130 @@
+name: proob
+description: >-
+  Team-approved, machine-checked, continuously guarded properties. Downloads the
+  pinned proob release for this runner, verifies its SHA-256 checksum (and its
+  GitHub attestation when gh is authenticated), then runs the requested job.
+branding:
+  icon: shield
+  color: green
+
+# Two jobs per mode, by design (see templates/workflows/). `execute` runs your
+# checks through proob's adapters: it executes repository code, so it must hold
+# no token, and `proob action` refuses to start an execute job that finds
+# GITHUB_TOKEN or GH_TOKEN in its environment. `judge` derives approvals from
+# GitHub's review records and evidence from default-branch runs with the
+# read-only token (`env: GITHUB_TOKEN: ${{ github.token }}` on the judge step
+# only) and runs no repository code. Fork pull requests need nothing more:
+# no step here needs a write permission.
+inputs:
+  mode:
+    description: "`check` for the pull-request gate, `evidence` for the default-branch evidence run."
+    required: false
+    default: check
+  job:
+    description: "`execute` runs the adapters and holds no token; `judge` derives verdicts with the read-only token and runs no repository code."
+    required: false
+    default: execute
+  version:
+    description: "The proob release to download and verify. Ignored when `binary` is given."
+    required: false
+    default: "0.1.0"
+  binary:
+    description: >-
+      A path to an already-built proob binary, relative to the workspace. Skips the
+      download-and-verify step. For proob's own CI, which tests the action with the
+      binary built from the same commit; a customer workflow leaves it unset.
+    required: false
+    default: ""
+
+outputs:
+  verdict:
+    description: "Judge jobs: `pass`, `warn`, or `block`."
+    value: ${{ steps.run.outputs.verdict }}
+  blocked:
+    description: "Judge jobs: `true` when an affected property is Broken (the job exits 1)."
+    value: ${{ steps.run.outputs.blocked }}
+  mode:
+    description: "Judge jobs: `check`, `bootstrap`, `status`, or `none` (no proob/ directory)."
+    value: ${{ steps.run.outputs.mode }}
+  headline:
+    description: "The one-line summary, the same words as the job summary's heading."
+    value: ${{ steps.run.outputs.headline }}
+  holds:
+    description: "Judge jobs: properties rendering Holds."
+    value: ${{ steps.run.outputs.holds }}
+  broken:
+    description: "Judge jobs: properties rendering Broken."
+    value: ${{ steps.run.outputs.broken }}
+  attempted:
+    description: "Execute jobs: runs made."
+    value: ${{ steps.run.outputs.attempted }}
+  records:
+    description: "Evidence judge jobs: evidence records packaged."
+    value: ${{ steps.run.outputs.records }}
+
+runs:
+  using: composite
+  steps:
+    - name: Download and verify proob
+      if: inputs.binary == ''
+      # Same code path as the local shim: scripts/lib/fetch.sh downloads
+      # proob-<target>.tar.xz (or .zip on Windows) plus its .sha256 from the
+      # GitHub release and refuses to install anything whose checksum differs.
+      shell: bash
+      env:
+        PROOB_VERSION_INPUT: ${{ inputs.version }}
+      run: |
+        set -euo pipefail
+        case "$PROOB_VERSION_INPUT" in
+          [0-9]*.[0-9]*.[0-9]*) ;;
+          *) echo "proob: version must look like 0.0.1, got '$PROOB_VERSION_INPUT'" >&2; exit 1 ;;
+        esac
+        . "${GITHUB_ACTION_PATH}/scripts/lib/fetch.sh"
+        dest="${RUNNER_TEMP}/proob-bin"
+        bin=$(proob_fetch "$PROOB_VERSION_INPUT" "$dest")
+        case "$bin" in
+          *.exe) cp "$bin" "$dest/proob.exe" ;;
+          *)     cp "$bin" "$dest/proob" ;;
+        esac
+        echo "$dest" >> "$GITHUB_PATH"
+        echo "proob: installed $bin"
+
+    - name: Use the given proob binary
+      if: inputs.binary != ''
+      # The download-free path: no network, no checksum (the binary was built
+      # from this very checkout). Only proob's own CI uses it.
+      shell: bash
+      env:
+        PROOB_BINARY_INPUT: ${{ inputs.binary }}
+      run: |
+        set -euo pipefail
+        case "$PROOB_BINARY_INPUT" in
+          /*) bin="$PROOB_BINARY_INPUT" ;;
+          *)  bin="${GITHUB_WORKSPACE}/${PROOB_BINARY_INPUT}" ;;
+        esac
+        [ -x "$bin" ] || { echo "proob: binary input '$PROOB_BINARY_INPUT' is not an executable file" >&2; exit 1; }
+        dest="${RUNNER_TEMP}/proob-bin"
+        mkdir -p "$dest"
+        case "$bin" in
+          *.exe) cp "$bin" "$dest/proob.exe" ;;
+          *)     cp "$bin" "$dest/proob" ;;
+        esac
+        echo "$dest" >> "$GITHUB_PATH"
+        echo "proob: using $bin"
+
+    - name: Run proob
+      id: run
+      shell: bash
+      env:
+        PROOB_MODE: ${{ inputs.mode }}
+        PROOB_JOB: ${{ inputs.job }}
+      # The binary reads the rest from the Actions environment (event payload,
+      # run id, commit, summary and output files). It writes the job summary,
+      # the annotations, and the step outputs itself; the job's exit code is
+      # the gate's: 0 pass, 1 block, 2 the job could not be carried out.
+      run: |
+        set -euo pipefail
+        case "$PROOB_MODE" in check|evidence) ;; *) echo "proob: mode must be check or evidence, got '$PROOB_MODE'" >&2; exit 1 ;; esac
+        case "$PROOB_JOB" in execute|judge) ;; *) echo "proob: job must be execute or judge, got '$PROOB_JOB'" >&2; exit 1 ;; esac
+        proob --version
+        proob action --mode "$PROOB_MODE" --job "$PROOB_JOB"

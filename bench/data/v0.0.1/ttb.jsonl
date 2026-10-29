@@ -1,0 +1,11 @@
+{"bug": "more-itertools-seekable-maxlen0", "property": "01M62GYGDNAWBSGC2V5C81X14R", "seeds": 30, "found": 30, "median_s": 2.9, "ci95_s": [2.6, 3.5]}
+{"bug": "tomlkit-array-slice-delete", "property": "01M62H14F5F2BAFDN37JZFSM0M", "seeds": 30, "found": 30, "median_s": 8.3, "ci95_s": [5.0, 12.0]}
+{"bug": "humanize-naturalsize-rollover", "property": "01M62GXGHZYRX98R3DBKF0RXJB", "seeds": 30, "found": 10, "median_s": 1.0, "ci95_s": [1.0, 1.1]}
+{"bug": "cachetools-getsizeof-overevict", "property": "01M62HAKQM8AY654H19Z89N2M4", "seeds": 30, "found": 30, "median_s": 0.7, "ci95_s": [0.7, 0.7]}
+{"bug": "semver-prerelease-token-order", "property": "01M62GJ3NT92CB5S1099T1NBKK", "seeds": 30, "found": 30, "median_s": 3.2, "ci95_s": [3.0, 3.5]}
+{"bug": "packaging-marker-nested-parens", "property": "01M62HMD8JE3T3RTTN882GZ245", "seeds": 30, "found": 30, "median_s": 2.9, "ci95_s": [2.7, 3.1]}
+{"bug": "bidict-values-order", "caught": false}
+{"bug": "chrono-naivedate-iter-rev", "property": "01M62KZ45214Z9V3XYPMSJZSZT", "seeds": 30, "found": 30, "median_s": 0.3, "ci95_s": [0.3, 0.3]}
+{"bug": "unicode-segmentation-zwj-midletter", "property": "01M62J45SM2BT9HYCCSHM8Y4GA", "seeds": 30, "found": 26, "median_s": 0.4, "ci95_s": [0.4, 0.4]}
+{"bug": "url-control-host-roundtrip", "property": "01M62MDT1XX6100RW2KWJEGMCN", "seeds": 30, "found": 30, "median_s": 0.3, "ci95_s": [0.3, 0.3]}
+{"bug": "toml-serde-key-quoting", "property": "01M62JKH4VY9E2Z4WQMMEPM14Q", "seeds": 30, "found": 30, "median_s": 0.4, "ci95_s": [0.4, 0.4]}

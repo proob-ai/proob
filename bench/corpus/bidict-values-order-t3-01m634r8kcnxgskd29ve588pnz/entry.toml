@@ -1,0 +1,15 @@
+kind = "catch"
+bug = "bidict-values-order"
+trial = "t3"
+language = "python"
+repo = "https://github.com/jab/bidict"
+buggy_commit = "43eec62f08f8af2943c101fa63b176133f274409"
+fix_commit = "74294f14ea9391fce1018d325620b69878f800ce"
+fix_paths = ["bidict/_base.py", "bidict/_orderedbase.py"]
+install = ["uv venv --python 3.13 .venv", "uv pip install --python .venv/bin/python -e . pytest pytest-xdist hypothesis pytest-benchmark sortedcollections sortedcontainers typing_extensions"]
+python = "3.13"
+property = "01M634R8KCNXGSKD29VE588PNZ"
+seed = "1793003329895966936"
+expect_buggy = "counterexample"
+expect_fixed = "no_counterexample"
+flaky = false

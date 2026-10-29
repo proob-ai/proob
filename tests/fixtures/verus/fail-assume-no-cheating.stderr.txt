@@ -1,0 +1,8 @@
+    Checking proob-core v0.0.1 (<workspace>/crates/proob-core)
+error: `assume`/`admit` not allowed with `--no-cheating`
+   --> crates/proob-core/src/scope_hash.rs:174:5
+    |
+174 |     assume(false);
+    |     ^^^^^^
+
+error: could not compile `proob-core` (lib) due to 1 previous error

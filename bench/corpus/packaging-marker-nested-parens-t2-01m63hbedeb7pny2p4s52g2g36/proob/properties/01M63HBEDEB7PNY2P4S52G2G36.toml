@@ -1,0 +1,6 @@
+id = "01M63HBEDEB7PNY2P4S52G2G36"
+title = "Marker text round-trip keeps meaning"
+statement = "Writing an environment marker as text and reading that text back gives a marker that decides the same way in every environment, however deeply its groups are bracketed."
+scope = ["src/packaging/markers.py", "src/packaging/_parser.py"]
+severity = "high"
+rationale = "Marker text is what metadata, lock files, and pickles store (src/packaging/markers.py:413-440). The printer at src/packaging/markers.py:191-200 drops the brackets of a doubly bracketed group, so ((a or b)) and c reads back as a or b and c. tests/test_markers.py:249-259 cover single-level brackets only; CHANGELOG.rst:551 records an earlier rendering fix."

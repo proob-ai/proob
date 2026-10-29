@@ -1,0 +1,6 @@
+id = "01M63GPFPF0SVHHX9N7WTDREMF"
+title = "Equal markers decide alike"
+statement = "Two environment markers that compare equal always make the same decision in every environment."
+scope = ["src/packaging/markers.py"]
+severity = "high"
+rationale = "Marker equality and hashing compare the printed text (src/packaging/markers.py around line 404), so a printing error can make markers with different precedence compare equal and be merged by deduplication or caching. tests/test_markers.py asserts that markers with different precedence hash differently."

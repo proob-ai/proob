@@ -1,0 +1,151 @@
+diff --git a/tests/test_more_properties.py b/tests/test_more_properties.py
+new file mode 100644
+index 0000000..c6e8f6b
+--- /dev/null
++++ b/tests/test_more_properties.py
+@@ -0,0 +1,145 @@
++"""Property-based checks bound to proob properties (see proob/properties/)."""
++
++from threading import Thread
++from time import sleep
++
++from hypothesis import given, strategies as st
++
++from more_itertools import seekable, serialize
++
++sources = st.lists(st.integers(), max_size=30)
++maxlens = st.one_of(st.none(), st.integers(min_value=0, max_value=10))
++
++
++def counting(items, counter):
++    for item in items:
++        counter[0] += 1
++        yield item
++
++
++def kept(read, maxlen):
++    """How many of the `read` source items a cache of `maxlen` keeps."""
++    return read if maxlen is None else min(read, maxlen)
++
++
++# proob:01M62MQX6QDC76ZA658MHFA6BD
++@given(sources, maxlens, st.integers(0, 40), st.integers(0, 40))
++def test_seek_replays_source_in_order(src, maxlen, k, i):
++    s = seekable(src, maxlen=maxlen)
++    read = [next(s) for _ in range(min(k, len(src)))]
++    base = len(read) - kept(len(read), maxlen)  # source offset of cache[0]
++    s.seek(i)
++    got = list(s)
++    assert got == src[base + i :], (src, maxlen, len(read), i, got)
++
++
++ops = st.lists(st.sampled_from(['next', 'peek', 'bool']), max_size=40)
++
++
++# proob:01M62MQX7VC8JC874FFV21S7BE
++@given(sources, maxlens, ops)
++def test_peek_never_loses_an_item(src, maxlen, actions):
++    s = seekable(src, maxlen=maxlen)
++    p = 0
++    for n, action in enumerate(actions):
++        expected = src[p] if p < len(src) else None
++        if action == 'bool':
++            got = bool(s)
++            assert got == (p < len(src)), (src, maxlen, actions[: n + 1], got)
++            continue
++        got = s.peek(None) if action == 'peek' else next(s, None)
++        assert got == expected, (src, maxlen, actions[: n + 1], got)
++        if action == 'next' and p < len(src):
++            p += 1
++
++
++cache_ops = st.lists(
++    st.one_of(
++        st.just(('next',)),
++        st.just(('peek',)),
++        st.tuples(st.just('seek'), st.integers(0, 40)),
++    ),
++    max_size=40,
++)
++
++
++# proob:01M62MQX8Y3K9Z83PQEX2RWP55
++@given(sources, maxlens, cache_ops)
++def test_cache_stays_within_limit(src, maxlen, actions):
++    counter = [0]
++    s = seekable(counting(src, counter), maxlen=maxlen)
++    for n, op in enumerate(actions):
++        match op:
++            case ('next',):
++                next(s, None)
++            case ('peek',):
++                s.peek(None)
++            case ('seek', i):
++                s.seek(i)
++        q = counter[0]
++        cache = list(s.elements())
++        assert len(cache) == kept(q, maxlen), (src, maxlen, actions[: n + 1], cache)
++        assert cache == src[q - len(cache) : q], (
++            src,
++            maxlen,
++            actions[: n + 1],
++            cache,
++        )
++
++
++rel_ops = st.lists(
++    st.one_of(
++        st.just(('next',)),
++        st.tuples(st.just('rel'), st.integers(-40, 40)),
++    ),
++    max_size=40,
++)
++
++
++# proob:01M62MQXA14M6CBMVT26QTEFJD
++@given(sources, maxlens, rel_ops)
++def test_relative_seek_moves_from_current_position(src, maxlen, actions):
++    s = seekable(src, maxlen=maxlen)
++    p = q = 0  # read position and items pulled from the source
++    for n, op in enumerate(actions):
++        match op:
++            case ('next',):
++                got = next(s, None)
++                expected = src[p] if p < len(src) else None
++                assert got == expected, (src, maxlen, actions[: n + 1], got)
++                p = min(p + 1, len(src))
++                q = max(q, p)
++            case ('rel', c):
++                s.relative_seek(c)
++                p = max(p + c, q - kept(q, maxlen))
++                if p > q:  # seeking past the cache reads ahead in the source
++                    p = q = min(p, len(src))
++
++
++def slow(items):
++    for item in items:
++        sleep(0)  # yield the GIL so unguarded threads would collide
++        yield item
++
++
++# proob:01M62MQXB56AGH22CC7M5J0Q2G
++@given(st.lists(st.integers(), max_size=200), st.integers(2, 8))
++def test_shared_iterator_hands_each_item_to_one_thread(src, threads):
++    it = serialize(slow(src))
++    seen = [[] for _ in range(threads)]
++    errors = []
++
++    def consume(out):
++        try:
++            out.extend(it)
++        except Exception as e:  # a collision inside the generator
++            errors.append(e)
++
++    workers = [Thread(target=consume, args=(out,)) for out in seen]
++    for w in workers:
++        w.start()
++    for w in workers:
++        w.join()
++    got = sorted(x for out in seen for x in out)
++    assert not errors, (src, threads, errors)
++    assert got == sorted(src), (src, threads, got)

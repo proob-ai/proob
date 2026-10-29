@@ -1,0 +1,6 @@
+id = "01M63H6WKPW8HC8YXV0X52NEB7"
+title = "Serde round trip with keys that need quoting"
+statement = "Serializing a value to TOML text and reading that text back gives an equal value, whatever characters its field names and map keys contain."
+scope = ["crates/toml/src/ser/**", "crates/toml/src/de/**"]
+severity = "high"
+rationale = "A field whose name needs quoting (dots, spaces, parentheses, quotes) and that holds a table or array of tables is written as a bare header at crates/toml/src/ser/document/map.rs:124-134, while the plain-value branch (:115) and the map path (:48-51) quote it. The test attr_key in crates/toml/tests/serde/general.rs:2185 records the unquoted header and asserts the read-back fails; its twin in crates/toml_edit/tests/serde/general.rs:2050 round-trips. A dotted name silently becomes nested tables."

@@ -1,0 +1,190 @@
+diff --git a/tests/test_cache.py b/tests/test_cache.py
+index afcb196..3f78fef 100644
+--- a/tests/test_cache.py
++++ b/tests/test_cache.py
+@@ -1,3 +1,4 @@
++import math
+ import unittest
+ 
+ import cachetools
+@@ -7,3 +8,130 @@ from . import CacheTestMixin
+ 
+ class CacheTest(unittest.TestCase, CacheTestMixin):
+     Cache = cachetools.Cache
++
++
++# Property-based checks over every size-aware policy, values are their own sizes.
++from hypothesis import given
++from hypothesis import strategies as st
++
++POLICIES = [
++    cachetools.Cache,
++    cachetools.FIFOCache,
++    cachetools.LFUCache,
++    cachetools.LRUCache,
++    cachetools.RRCache,
++    lambda maxsize, getsizeof: cachetools.TTLCache(
++        maxsize, math.inf, getsizeof=getsizeof
++    ),
++    lambda maxsize, getsizeof: cachetools.TLRUCache(
++        maxsize, lambda _k, _v, _t: math.inf, getsizeof=getsizeof
++    ),
++]
++
++caches = st.builds(
++    lambda make, maxsize: make(maxsize, getsizeof=lambda v: v),
++    st.sampled_from(POLICIES),
++    st.integers(min_value=0, max_value=20),
++)
++keys = st.integers(min_value=0, max_value=7)
++
++
++def stored_size(cache):
++    return sum(cache[k] for k in list(cache))
++
++
++def fill(cache, writes):
++    for key, size in writes:
++        if 0 <= size <= cache.maxsize:
++            cache[key] = size
++
++
++# proob:01M62HAKP0JGSS1J63YA5N0KYY
++@given(caches, st.lists(st.tuples(keys, st.integers(min_value=-3, max_value=25))))
++def test_size_never_exceeds_maximum(cache, writes):
++    for key, size in writes:
++        try:
++            cache[key] = size
++        except ValueError:
++            assert size < 0 or size > cache.maxsize, (key, size, cache)
++        assert cache.currsize <= cache.maxsize, (key, size, cache)
++        assert stored_size(cache) <= cache.maxsize, (key, size, cache)
++
++
++ops = st.one_of(
++    st.tuples(st.just("set"), keys, st.integers(min_value=0, max_value=20)),
++    st.tuples(st.sampled_from(["del", "pop", "get"]), keys, st.just(0)),
++    st.tuples(st.sampled_from(["popitem", "clear"]), st.just(0), st.just(0)),
++)
++
++
++# proob:01M62HAKPJCX6N0VG8XHEAW44J
++@given(caches, st.lists(ops))
++def test_currsize_matches_stored_items(cache, steps):
++    for op, key, size in steps:
++        if op == "set" and size <= cache.maxsize:
++            cache[key] = size
++        elif op == "del" and key in cache:
++            del cache[key]
++        elif op == "pop":
++            cache.pop(key, None)
++        elif op == "get":
++            cache.get(key)
++        elif op == "popitem" and len(cache):
++            cache.popitem()
++        elif op == "clear":
++            cache.clear()
++        assert cache.currsize == stored_size(cache), (op, key, size, cache)
++
++
++writes = st.lists(st.tuples(keys, st.integers(min_value=0, max_value=20)))
++
++
++# proob:01M62HAKQM8AY654H19Z89N2M4
++@given(
++    st.sampled_from(POLICIES),
++    st.lists(st.integers(min_value=0, max_value=6), min_size=1, max_size=6),
++    st.integers(min_value=0, max_value=3),
++    st.data(),
++)
++def test_update_evicts_only_what_is_needed(make, sizes, slack, data):
++    # Every item fits up front; one stored key then grows by up to the whole maximum.
++    cache = make(sum(sizes) + slack, getsizeof=lambda v: v)
++    for k, size in enumerate(sizes):
++        cache[k] = size
++    key = data.draw(st.integers(min_value=0, max_value=len(sizes) - 1), "key")
++    old = sizes[key]
++    new = old + data.draw(
++        st.integers(min_value=1, max_value=max(1, cache.maxsize - old)), "grow"
++    )
++    if new > cache.maxsize:
++        return
++    before = {k: cache[k] for k in list(cache)}
++    excess = cache.currsize - old + new - cache.maxsize
++    cache[key] = new
++    evicted = [before[k] for k in before if k != key and k not in cache]
++    assert cache.get(key) == new, (before, key, new, cache)
++    # The last item evicted is at most the largest; without it the excess must remain.
++    assert not evicted or sum(evicted) - max(evicted) < excess, (
++        before,
++        key,
++        new,
++        cache.maxsize,
++        evicted,
++    )
++
++
++# proob:01M62HAKR52VF9MPEMSC16JNDF
++@given(caches, writes, keys, st.booleans(), st.integers(min_value=1))
++def test_rejected_value_leaves_cache_unchanged(cache, initial, key, negative, offset):
++    fill(cache, initial)
++    size = -offset if negative else cache.maxsize + offset
++    before, currsize = {k: cache[k] for k in list(cache)}, cache.currsize
++    try:
++        cache[key] = size
++    except ValueError:
++        pass
++    else:
++        raise AssertionError(f"size {size} accepted with maxsize {cache.maxsize}")
++    assert {k: cache[k] for k in list(cache)} == before, (key, size, before, cache)
++    assert cache.currsize == currsize, (key, size, currsize, cache)
+diff --git a/tests/test_ttl.py b/tests/test_ttl.py
+index e023173..013cb5f 100644
+--- a/tests/test_ttl.py
++++ b/tests/test_ttl.py
+@@ -245,3 +245,45 @@ class TTLCacheTest(unittest.TestCase, CacheTestMixin):
+         cache.timer.tick()
+         cache.timer.tick()  # past TTL
+         self.assertNotIn(42, cache)
++
++
++# Property-based check of expiry visibility across both timed caches.
++from hypothesis import given
++from hypothesis import strategies as st
++
++from cachetools import TLRUCache
++
++timed_steps = st.lists(
++    st.one_of(
++        st.tuples(st.just("set"), st.integers(0, 5), st.integers(-3, 6)),
++        st.tuples(st.just("tick"), st.just(0), st.integers(1, 4)),
++    )
++)
++
++
++def timed_cache(kind, ttl, timer):
++    if kind == "ttl":
++        return TTLCache(maxsize=4, ttl=ttl, timer=timer)
++    return TLRUCache(maxsize=4, ttu=lambda _k, v, t: t + v, timer=timer)
++
++
++# proob:01M62HAKQ35P0FV5JCV94PWJMA
++@given(st.sampled_from(["ttl", "tlru"]), st.integers(0, 6), timed_steps)
++def test_expired_items_stay_invisible(kind, ttl, steps):
++    timer, expires = Timer(), {}
++    cache = timed_cache(kind, ttl, timer)
++    for op, key, n in steps:
++        if op == "tick":
++            timer.time += n
++            continue
++        if kind == "ttl" and n < 0:
++            continue  # TTLCache lifetimes come from ttl, values are opaque
++        cache[key] = n
++        expires[key] = timer.time + (ttl if kind == "ttl" else n)
++        dead = {k for k, e in expires.items() if not timer.time < e}
++        seen = list(cache)
++        for k in dead:
++            assert k not in cache, (kind, ttl, steps, k)
++            assert cache.get(k) is None, (kind, ttl, steps, k)
++            assert k not in seen, (kind, ttl, steps, k, seen)
++        assert len(cache) == len(seen), (kind, ttl, steps, len(cache), seen)

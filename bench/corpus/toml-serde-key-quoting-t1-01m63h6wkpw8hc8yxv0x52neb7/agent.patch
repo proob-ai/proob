@@ -1,0 +1,297 @@
+diff --git a/Cargo.lock b/Cargo.lock
+index dc0d6fe..8c40906 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -970,6 +970,7 @@ dependencies = [
+  "foldhash 0.2.0",
+  "indexmap 2.14.2",
+  "itertools",
++ "proptest",
+  "serde",
+  "serde-untagged",
+  "serde_core",
+diff --git a/crates/toml/Cargo.toml b/crates/toml/Cargo.toml
+index c3481f6..dde64db 100644
+--- a/crates/toml/Cargo.toml
++++ b/crates/toml/Cargo.toml
+@@ -69,6 +69,7 @@ snapbox = "1.1.0"
+ walkdir = "2.5.0"
+ itertools = "0.15.0"
+ serde-untagged = "0.1.9"
++proptest = "1.10.0"
+ 
+ [[test]]
+ name = "decoder_compliance"
+diff --git a/crates/toml/tests/serde/main.rs b/crates/toml/tests/serde/main.rs
+index 5cb4778..6f19a82 100644
+--- a/crates/toml/tests/serde/main.rs
++++ b/crates/toml/tests/serde/main.rs
+@@ -14,6 +14,7 @@ mod de_enum;
+ mod de_errors;
+ mod de_key;
+ mod general;
++mod roundtrip;
+ mod ser_enum;
+ mod ser_key;
+ mod ser_tables_last;
+diff --git a/crates/toml/tests/serde/roundtrip.rs b/crates/toml/tests/serde/roundtrip.rs
+new file mode 100644
+index 0000000..e21801f
+--- /dev/null
++++ b/crates/toml/tests/serde/roundtrip.rs
+@@ -0,0 +1,117 @@
++use std::collections::BTreeMap;
++
++use proptest::prelude::*;
++use serde::ser::SerializeStruct;
++use toml_writer::ToTomlKey;
++use toml_writer::TomlKeyBuilder;
++
++use crate::SerdeTable;
++use crate::SerdeValue;
++
++#[derive(Debug, Clone)]
++enum Field {
++    Integer(i64),
++    Table(BTreeMap<String, i64>),
++    ArrayOfTables(Vec<BTreeMap<String, i64>>),
++}
++
++impl serde::Serialize for Field {
++    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
++        match self {
++            Field::Integer(i) => i.serialize(serializer),
++            Field::Table(t) => t.serialize(serializer),
++            Field::ArrayOfTables(a) => a.serialize(serializer),
++        }
++    }
++}
++
++/// A struct whose field names are chosen at run time, as `#[serde(rename)]` chooses them at
++/// compile time
++#[derive(Debug)]
++struct Struct(BTreeMap<String, Field>);
++
++impl serde::Serialize for Struct {
++    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
++        let mut s = serializer.serialize_struct("Struct", self.0.len())?;
++        for (name, field) in &self.0 {
++            let name: &'static str = Box::leak(name.clone().into_boxed_str());
++            s.serialize_field(name, field)?;
++        }
++        s.end()
++    }
++}
++
++fn table_of(map: &BTreeMap<String, i64>) -> SerdeValue {
++    SerdeValue::Table(map.iter().map(|(k, v)| (k.clone(), SerdeValue::Integer(*v))).collect())
++}
++
++fn expected(s: &Struct) -> SerdeTable {
++    let value_of = |field: &Field| match field {
++        Field::Integer(i) => SerdeValue::Integer(*i),
++        Field::Table(t) => table_of(t),
++        Field::ArrayOfTables(a) => SerdeValue::Array(a.iter().map(table_of).collect()),
++    };
++    s.0.iter().map(|(k, f)| (k.clone(), value_of(f))).collect()
++}
++
++fn name() -> impl Strategy<Value = String> {
++    prop_oneof![any::<String>(), "[a-z0-9 ._=()\"'\\\\-]{0,8}"]
++}
++
++fn field() -> impl Strategy<Value = Field> {
++    let table = || prop::collection::btree_map(name(), any::<i64>(), 0..3);
++    prop_oneof![
++        any::<i64>().prop_map(Field::Integer),
++        table().prop_map(Field::Table),
++        prop::collection::vec(table(), 0..3).prop_map(Field::ArrayOfTables),
++    ]
++}
++
++proptest! {
++    // proob:01M63H6WKPW8HC8YXV0X52NEB7
++    #[test]
++    fn serialized_value_reads_back_equal(fields in prop::collection::btree_map(name(), field(), 0..4)) {
++        let value = Struct(fields);
++        for pretty in [false, true] {
++            let toml = if pretty { crate::to_string_pretty(&value) } else { crate::to_string(&value) };
++            let toml = toml.unwrap_or_else(|err| panic!("{value:?} did not serialize: {err}"));
++            let read = crate::from_str::<SerdeTable>(&toml);
++            prop_assert!(read.is_ok(), "{:?} serialized (pretty={}) as\n{}\ndid not read back: {}", value, pretty, toml, read.unwrap_err());
++            prop_assert_eq!(read.unwrap(), expected(&value), "{:?} serialized (pretty={}) as\n{}", value, pretty, toml);
++        }
++    }
++}
++
++/// Ways a document can define one key twice in the same table; `{k}` is the key as written
++const DUPLICATES: &[&str] = &[
++    "{k} = 1\n{k} = 2\n",
++    "{k} = 1\n[{k}]\n",
++    "[{k}]\n[{k}]\n",
++    "[t]\n{k} = 1\n{k} = 2\n",
++    "t.{k} = 1\nt.{k} = 2\n",
++    "t = { {k} = 1, {k} = 2 }\n",
++    "[t]\n{k} = 1\n[t.{k}]\n",
++    "{k}.a = 1\n{k} = 2\n",
++    "{k} = []\n[[{k}]]\n",
++];
++
++proptest! {
++    // proob:01M63H6WQ2HQCE539VWXQDX2YC
++    #[test]
++    fn same_key_twice_is_rejected(
++        decoded in name(),
++        spellings in (0usize..3, 0usize..3),
++        shape in 0..DUPLICATES.len(),
++    ) {
++        let builder = TomlKeyBuilder::new(&decoded);
++        let written = [builder.as_default(), builder.as_basic(), builder.as_literal().unwrap_or(builder.as_basic())];
++        let (first, second) = (written[spellings.0].to_toml_key(), written[spellings.1].to_toml_key());
++        // the first occurrence of {k} gets one spelling, the rest the other
++        let parts: Vec<&str> = DUPLICATES[shape].split("{k}").collect();
++        let doc = format!("{}{}{}{}", parts[0], first, parts[1], parts[2..].join(&second));
++        let as_table = crate::from_str::<SerdeTable>(&doc);
++        prop_assert!(as_table.is_err(), "duplicate {:?} accepted as a table:\n{}\n{:?}", decoded, doc, as_table);
++        let as_any = crate::from_str::<serde::de::IgnoredAny>(&doc);
++        prop_assert!(as_any.is_err(), "duplicate {:?} accepted when ignored:\n{}", decoded, doc);
++    }
++}
+diff --git a/crates/toml_edit/Cargo.toml b/crates/toml_edit/Cargo.toml
+index 910be36..52dec3d 100644
+--- a/crates/toml_edit/Cargo.toml
++++ b/crates/toml_edit/Cargo.toml
+@@ -63,6 +63,7 @@ serde-untagged = "0.1.9"
+ 
+ [[test]]
+ name = "testsuite"
++path = "tests/testsuite/main.rs"
+ required-features = ["parse", "display"]
+ 
+ [[test]]
+diff --git a/crates/toml_edit/tests/testsuite/key.rs b/crates/toml_edit/tests/testsuite/key.rs
+new file mode 100644
+index 0000000..43709fe
+--- /dev/null
++++ b/crates/toml_edit/tests/testsuite/key.rs
+@@ -0,0 +1,50 @@
++use std::collections::hash_map::DefaultHasher;
++use std::hash::Hash;
++use std::hash::Hasher;
++
++use proptest::prelude::*;
++use toml_edit::Key;
++use toml_writer::ToTomlKey;
++use toml_writer::TomlKeyBuilder;
++
++fn hash_of(key: &Key) -> u64 {
++    let mut hasher = DefaultHasher::new();
++    key.hash(&mut hasher);
++    hasher.finish()
++}
++
++/// The same decoded key in every quoting the writer offers, parsed back
++fn spellings(decoded: &str) -> Vec<Key> {
++    let builder = TomlKeyBuilder::new(decoded);
++    let mut keys = vec![Key::new(decoded)];
++    let written = [
++        Some(builder.as_default()),
++        builder.as_unquoted(),
++        builder.as_literal(),
++        builder.as_basic_pretty(),
++        Some(builder.as_basic()),
++    ];
++    for encoded in written.into_iter().flatten().map(|k| k.to_toml_key()) {
++        let parsed = encoded.parse::<Key>();
++        keys.push(parsed.unwrap_or_else(|err| panic!("{encoded:?} did not parse: {err}")));
++    }
++    keys
++}
++
++proptest! {
++    // proob:01M63H6WR6CFPS0PA4WG9XHRZV
++    #[test]
++    fn key_equality_hashing_and_ordering_agree(a in any::<String>(), b in prop_oneof![any::<String>(), "[a-c]{0,2}"]) {
++        let left = spellings(&a);
++        let right = spellings(&b);
++        for (x, y) in left.iter().flat_map(|x| left.iter().chain(&right).map(move |y| (x, y))) {
++            let eq = x == y;
++            prop_assert_eq!(eq, x.cmp(y) == std::cmp::Ordering::Equal, "eq vs cmp for {:?} and {:?}", x, y);
++            prop_assert_eq!(Some(x.cmp(y)), x.partial_cmp(y), "cmp vs partial_cmp for {:?} and {:?}", x, y);
++            prop_assert_eq!(eq, x.get() == y.get(), "eq vs decoded text for {:?} and {:?}", x, y);
++            if eq {
++                prop_assert_eq!(hash_of(x), hash_of(y), "hash of equal keys {:?} and {:?}", x, y);
++            }
++        }
++    }
++}
+diff --git a/crates/toml_edit/tests/testsuite/main.rs b/crates/toml_edit/tests/testsuite/main.rs
+index 81d3678..0c848eb 100644
+--- a/crates/toml_edit/tests/testsuite/main.rs
++++ b/crates/toml_edit/tests/testsuite/main.rs
+@@ -2,3 +2,4 @@
+ #![allow(clippy::dbg_macro)]
+ 
+ mod edit;
++mod key;
+diff --git a/crates/toml_writer/tests/string.rs b/crates/toml_writer/tests/string.rs
+index 2e68f01..2dc6b1a 100644
+--- a/crates/toml_writer/tests/string.rs
++++ b/crates/toml_writer/tests/string.rs
+@@ -703,3 +703,56 @@ proptest! {
+         assert_eq!(value.as_str().unwrap(), decoded);
+     }
+ }
++
++fn parse_single_pair(toml: &str) -> (String, toml_old::Value) {
++    let value = match toml.parse::<toml_old::Value>() {
++        Ok(value) => value,
++        Err(err) => panic!("could not parse {toml:?}: {err}"),
++    };
++    let table = value.as_table().unwrap();
++    assert_eq!(table.len(), 1, "{toml:?} parsed to {table:?}");
++    let (key, value) = table.iter().next().unwrap();
++    (key.clone(), value.clone())
++}
++
++proptest! {
++    // proob:01M63H6WMTSNJ6D5YVE7DJQ4Z7
++    #[test]
++    fn every_written_key_parses_back_as_one_key(decoded in any::<String>()) {
++        let key = TomlKeyBuilder::new(&decoded);
++        let written = [
++            Some(key.as_default()),
++            key.as_unquoted(),
++            key.as_literal(),
++            key.as_basic_pretty(),
++            Some(key.as_basic()),
++        ];
++        for encoded in written.into_iter().flatten().map(|k| k.to_toml_key()) {
++            let toml = format!("{encoded} = 1");
++            let (parsed, _) = parse_single_pair(&toml);
++            prop_assert_eq!(&parsed, &decoded, "key {:?} written as {:?}", decoded, encoded);
++        }
++    }
++}
++
++proptest! {
++    // proob:01M63H6WNZ6Z3YE9CN81PAXBBM
++    #[test]
++    fn every_written_string_parses_back_unchanged(decoded in any::<String>()) {
++        let string = TomlStringBuilder::new(&decoded);
++        let written = [
++            Some(string.as_default()),
++            string.as_literal(),
++            string.as_ml_literal(),
++            string.as_basic_pretty(),
++            string.as_ml_basic_pretty(),
++            Some(string.as_basic()),
++            Some(string.as_ml_basic()),
++        ];
++        for encoded in written.into_iter().flatten().map(|s| s.to_toml_value()) {
++            let toml = format!("k = {encoded}");
++            let (_, parsed) = parse_single_pair(&toml);
++            prop_assert_eq!(parsed.as_str(), Some(decoded.as_str()), "string {:?} written as {:?}", decoded, encoded);
++        }
++    }
++}

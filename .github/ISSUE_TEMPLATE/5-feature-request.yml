@@ -1,0 +1,33 @@
+name: Feature request
+description: Something proob should do that it does not.
+labels: ["type: feature", "status: needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: For a new language or tool, use **New adapter request** instead. Open-ended ideas fit [Discussions](https://github.com/proob-ai/proob/discussions) better.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What you were trying to do, and what got in the way.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: What you would like proob to do. Commands, output, or config you have in mind are welcome.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: dropdown
+    id: contribute
+    attributes:
+      label: Would you open a pull request for it?
+      options:
+        - "Yes"
+        - With guidance
+        - "No"

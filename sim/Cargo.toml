@@ -1,0 +1,26 @@
+[package]
+name = "sim"
+description = "cargo xtask sim: proob end to end against local stand-ins for GitHub, the release server, and the Actions runner"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[[bin]]
+name = "sim"
+path = "src/main.rs"
+
+# Only crates already in the lockfile. No proob crate: the simulation drives the
+# built `proob` binary, so it exercises what users run, and the crate-graph rules
+# (tools/crate-graph-check.sh) have nothing here to police.
+[dependencies]
+serde_json.workspace = true
+tempfile.workspace = true
+
+[lints]
+workspace = true
+
+# A developer tool, never a release artifact (the `release` scenario checks it).
+[package.metadata.dist]
+dist = false

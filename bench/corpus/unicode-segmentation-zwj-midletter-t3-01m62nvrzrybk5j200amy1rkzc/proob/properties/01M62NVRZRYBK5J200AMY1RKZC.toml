@@ -1,0 +1,6 @@
+id = "01M62NVRZRYBK5J200AMY1RKZC"
+title = "Word boundaries follow Unicode rules"
+statement = "Word boundaries match the official Unicode word-break rules, including when a zero-width joiner and an emoji follow a mid-word punctuation mark."
+scope = ["src/word.rs", "src/tables.rs"]
+severity = "high"
+rationale = "Evidence: test_words in tests/test.rs runs the UCD 18.0 WordBreakTest data; its TODO asks for more tests with interspersed Extend chars and ZWJ; the forward emoji-after-joiner shortcut in src/word.rs appears to bypass the rewind for a pending mid-letter or mid-number character."

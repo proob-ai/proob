@@ -1,0 +1,6 @@
+id = "01M62K0VE2ZGKRTGZK8H0C9G4M"
+title = "Word-form number rolls over"
+statement = "When rounding pushes a number in words up to the next power, it is named with the next power, such as 1.0 billion and never 1000.0 million."
+scope = ["src/humanize/number.py"]
+severity = "low"
+rationale = "The guard commented After rounding, we end up just at the next power in src/humanize/number.py:256-259, with tests/test_number.py:104-112 and :135-136."

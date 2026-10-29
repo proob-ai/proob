@@ -1,0 +1,25 @@
+{
+ "source": "agent session transcripts (tool-call timestamps) and cargo-mutants outcomes.json of each scoring run; macOS arm64, 12 cores, one Rust trial at a time alongside other builds",
+ "mutation_tool_invocation": "cargo mutants --workspace --test-tool nextest --no-shuffle --cap-lints true --timeout-multiplier 5 --file <scope files> -- <one test>; no --jobs, so cargo-mutants' default of 1: every mutant builds and tests serially",
+ "indexmap-1": {
+  "wall_s": 7386,
+  "sense_declare_bind_and_test_build_s": 150,
+  "five_checks_s": 12,
+  "scoring_s": 7200,
+  "scoring_stopped_by": "Claude Code's 2-hour limit on one background command; the agent ran all five scores in one loop and did not restart it",
+  "scores_finished": 2,
+  "mutants_per_property": {"src/map.rs + src/inner.rs": 396, "third property's scope": 228},
+  "per_property_scoring_s": {"396 mutants": "about 2400 (35-40 min)", "228 mutants": 1376},
+  "baseline_build_s": 10, "baseline_test_s": 1,
+  "per_mutant_median_s": {"build": 5.2, "test": 1.0, "total": 6.3},
+  "unviable_share": "99 of 396 (25%) do not build"
+ },
+ "vaultwarden-1 (killed by the disk guard at 1649 s)": {
+  "sqlite_feature_enabled_at_s": 140,
+  "scoring_started_at_s": 340,
+  "first_score_s": "about 480 (30 mutants)",
+  "second_score": {"mutants": 47, "baseline_build_s": 63, "baseline_test_s": 7, "per_mutant_median_s": {"build": 7.7, "test": 7.3, "total": 15.3}, "mutant_time_sum_s": 738},
+  "disk_at_kill": {"shadow_target_gb": 2.0, "cargo_mutants_copy_gb": 2.3}
+ },
+ "python_trials_wall_s": {"attrs": [616, 794, 804], "rich": [134, 152, 165]}
+}

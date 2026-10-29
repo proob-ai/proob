@@ -1,0 +1,113 @@
+diff --git a/tests/test_properties.py b/tests/test_properties.py
+new file mode 100644
+index 0000000..48f95db
+--- /dev/null
++++ b/tests/test_properties.py
+@@ -0,0 +1,107 @@
++"""Property-based tests bound to proob properties (proob/properties/)."""
++
++from hypothesis import given, strategies as st
++
++from semver import Version
++
++numbers = st.integers(min_value=0, max_value=10**30)
++numeric_id = numbers.map(str)
++alnum_id = st.from_regex(r"\A[0-9a-zA-Z-]*[a-zA-Z-][0-9a-zA-Z-]*\Z")
++prerelease_id = st.one_of(
++    numeric_id, alnum_id, st.sampled_from(["rc", "alpha", "beta", "dev"])
++)
++build_id = st.from_regex(r"\A[0-9a-zA-Z-]+\Z")
++# Legacy counters such as rc9 are part of the domain next_version reads.
++legacy_prerelease = st.builds(
++    "{}{}".format, st.sampled_from(["rc", "alpha", "beta"]), numbers
++)
++prerelease = st.one_of(
++    st.lists(prerelease_id, min_size=1, max_size=4).map(".".join),
++    legacy_prerelease,
++)
++build = st.lists(build_id, min_size=1, max_size=3).map(".".join)
++
++
++@st.composite
++def version_strings(draw):
++    text = ".".join(str(draw(numbers)) for _ in range(3))
++    if draw(st.booleans()):
++        text += "-" + draw(prerelease)
++    if draw(st.booleans()):
++        text += "+" + draw(build)
++    return text
++
++
++versions = version_strings().map(Version.parse)
++tokens = st.one_of(st.sampled_from(["rc", "alpha", "beta"]), prerelease_id)
++
++
++# proob:01M634FKC4AKFM32CFXKJF4DNQ
++@given(versions, tokens)
++def test_next_prerelease_never_sorts_lower(v, token):
++    result = v.next_version("prerelease", token)
++    assert not result < v, f"{v} -> {result} with token {token!r}"
++
++
++# proob:01M634FKE5AP8THX4330KBT03W
++@given(versions, tokens, st.one_of(st.none(), build_id))
++def test_print_and_bump_results_parse_back(v, token, build_token):
++    results = [
++        v,
++        v.bump_major(),
++        v.bump_minor(),
++        v.bump_patch(),
++        v.bump_prerelease(token),
++        v.bump_build(build_token),
++        *(v.next_version(part, token) for part in Version.NAMES[:4]),
++    ]
++    for r in results:
++        assert Version.parse(str(r)).to_tuple() == r.to_tuple(), f"{v} -> {r}"
++
++
++# proob:01M634FKG125H674VHTK5J6D3G
++@given(versions, versions, versions, build)
++def test_order_is_total_and_ignores_build(a, b, c, other_build):
++    for x, y in ((a, b), (b, c), (a, c)):
++        outcomes = [x < y, x == y, x > y]
++        assert outcomes.count(True) == 1, f"{x} vs {y}: {outcomes}"
++    if a <= b and b <= c:
++        assert a <= c, f"{a} <= {b} <= {c} but not {a} <= {c}"
++    assert a.replace(build=other_build).compare(b) == a.compare(b), (a, b)
++    if a.prerelease is not None:
++        release = a.replace(prerelease=None, build=None)
++        assert release > a, f"{release} not above {a}"
++
++
++@st.composite
++def equal_pairs(draw):
++    # A noncanonical twin: zero-padded numeric identifiers, or "" for none.
++    v = draw(versions)
++    if v.prerelease is None:
++        return v, v.replace(prerelease=draw(st.sampled_from([None, ""])))
++    pads = [
++        "0" * draw(st.integers(0, 3)) + part if part.isdigit() else part
++        for part in v.prerelease.split(".")
++    ]
++    return v, Version(v.major, v.minor, v.patch, ".".join(pads), v.build)
++
++
++# proob:01M634FKHZ2KEP9W6SPH7AVV23
++@given(equal_pairs())
++def test_equal_versions_hash_equally(pair):
++    a, b = pair
++    if a == b:
++        assert hash(a) == hash(b), f"{a!r} == {b!r} but hashes differ"
++
++
++# proob:01M634FKKQ1NJYW1BBGQRHEC80
++@given(versions, st.one_of(st.none(), build_id))
++def test_bumping_raises_the_version(v, build_token):
++    for name in ("bump_major", "bump_minor", "bump_patch"):
++        r = getattr(v, name)()
++        assert r > v, f"{v}.{name}() -> {r}"
++    if v.prerelease is not None:
++        r = v.bump_prerelease()
++        assert r > v, f"{v}.bump_prerelease() -> {r}"
++    r = v.bump_build(build_token)
++    assert not r < v, f"{v}.bump_build({build_token!r}) -> {r}"

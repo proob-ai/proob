@@ -1,0 +1,7 @@
+id = "01M622RQ73XGJ3PRRVCY53FECA"
+title = "Stale evidence never holds"
+statement = "No property is ever shown as holding on evidence older than the code or the check it covers."
+scope = ["crates/proob-core/src/derive.rs", "crates/proob-core/src/specs.rs"]
+severity = "high"
+rationale = "ASSERTIONS.md rows 3 and 4, the derive half: the only producer of fresh primary and score evidence requires the record to carry the current scope and binding hashes (and, for a score, to be inside the freshness window)."
+kind = "proof"

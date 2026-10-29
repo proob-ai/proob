@@ -1,0 +1,161 @@
+diff --git a/Cargo.toml b/Cargo.toml
+index 81ef046..bdec80d 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -33,6 +33,7 @@ speedy     = { version = "0.8.3", optional = true, default-features = false }
+ 
+ [dev-dependencies]
+ serde_test = "1.0"
++proptest = "1.0.0"
+ 
+ [features]
+ default  = ["std"]
+diff --git a/tests/properties.rs b/tests/properties.rs
+new file mode 100644
+index 0000000..f2074d3
+--- /dev/null
++++ b/tests/properties.rs
+@@ -0,0 +1,143 @@
++//! Property-based tests bound to the declarations under proob/properties/.
++
++use ordered_float::{NotNan, OrderedFloat};
++use proptest::prelude::*;
++use std::cmp::Ordering;
++use std::collections::hash_map::DefaultHasher;
++use std::convert::TryFrom;
++use std::hash::{Hash, Hasher};
++use std::panic::catch_unwind;
++
++/// Every f64: random values, every bit pattern (so many NaN payloads), and the edge values.
++fn any_f64() -> impl Strategy<Value = f64> {
++    prop_oneof![
++        any::<f64>(),
++        any::<u64>().prop_map(f64::from_bits),
++        prop::sample::select(vec![
++            f64::NAN,
++            -f64::NAN,
++            0.0,
++            -0.0,
++            f64::INFINITY,
++            f64::NEG_INFINITY,
++            f64::MAX,
++            f64::MIN,
++            f64::MIN_POSITIVE,
++            1.0,
++            -1.0,
++        ]),
++    ]
++}
++
++fn not_nan_f64() -> impl Strategy<Value = NotNan<f64>> {
++    any_f64().prop_filter_map("NaN", |x| NotNan::new(x).ok())
++}
++
++fn hash_of<T: Hash>(v: &T) -> u64 {
++    let mut h = DefaultHasher::new();
++    v.hash(&mut h);
++    h.finish()
++}
++
++proptest! {
++    // proob:01M63JR828N5FH5BXSWCWXP8BB
++    #[test]
++    fn not_nan_never_holds_nan(x in any_f64(), a in not_nan_f64(), b in not_nan_f64()) {
++        prop_assert_eq!(NotNan::new(x).is_ok(), !x.is_nan(), "NotNan::new({:?})", x);
++        prop_assert_eq!(NotNan::try_from(x).is_ok(), !x.is_nan(), "try_from({:?})", x);
++        if let Ok(n) = x.to_string().parse::<NotNan<f64>>() {
++            prop_assert!(!n.into_inner().is_nan(), "parse({:?}) gave {:?}", x, n);
++        }
++        let made: Vec<(&str, std::thread::Result<NotNan<f64>>)> = vec![
++            ("neg", Ok(-a)),
++            ("add", catch_unwind(|| a + b)),
++            ("sub", catch_unwind(|| a - b)),
++            ("mul", catch_unwind(|| a * b)),
++            ("div", catch_unwind(|| a / b)),
++            ("rem", catch_unwind(|| a % b)),
++            ("sum", catch_unwind(|| [a, b].iter().sum())),
++            ("product", catch_unwind(|| [a, b].iter().product())),
++        ];
++        for (op, r) in made {
++            if let Ok(n) = r {
++                prop_assert!(!n.into_inner().is_nan(), "{} of {:?}, {:?} gave {:?}", op, a, b, n);
++            }
++        }
++    }
++
++    // proob:01M63JR83F3FP8RCCMDSMKKNZ9
++    #[test]
++    fn mixed_equality_matches_wrapped_equality(a in any_f64(), b in any_f64()) {
++        let mixed = OrderedFloat(a) == b;
++        let wrapped = OrderedFloat(a) == OrderedFloat(b);
++        prop_assert_eq!(mixed, wrapped, "a = {:?}, b = {:?}", a, b);
++        let aa = OrderedFloat(a) == a;
++        prop_assert!(aa, "OrderedFloat({:?}) == {:?} is false", a, a);
++    }
++
++    // proob:01M63JR84PT155SGZ0743R1EBC
++    #[test]
++    fn equal_ordered_floats_hash_equally(
++        a in any_f64(),
++        pick in 0u8..4,
++        other in any_f64(),
++    ) {
++        let b = match pick {
++            0 => a,
++            1 => -a,
++            2 => f64::from_bits(a.to_bits() ^ 1),
++            _ => other,
++        };
++        let (x, y) = (OrderedFloat(a), OrderedFloat(b));
++        if x == y {
++            prop_assert_eq!(hash_of(&x), hash_of(&y), "a = {:?}, b = {:?}", a, b);
++        }
++        let (x32, y32) = (OrderedFloat(a as f32), OrderedFloat(b as f32));
++        if x32 == y32 {
++            prop_assert_eq!(hash_of(&x32), hash_of(&y32), "a = {:?}, b = {:?} as f32", a, b);
++        }
++    }
++
++    // proob:01M63JR85S2B1EQWN5MVS09DS6
++    #[test]
++    fn ordered_floats_total_order(a in any_f64(), b in any_f64(), c in any_f64()) {
++        let (x, y, z) = (OrderedFloat(a), OrderedFloat(b), OrderedFloat(c));
++        let o = x.cmp(&y);
++        prop_assert_eq!(x.partial_cmp(&y), Some(o), "a = {:?}, b = {:?}", a, b);
++        prop_assert_eq!(y.cmp(&x), o.reverse(), "a = {:?}, b = {:?}", a, b);
++        prop_assert_eq!(o == Ordering::Equal, x == y, "a = {:?}, b = {:?}", a, b);
++        prop_assert_eq!(x < y, o == Ordering::Less, "a = {:?}, b = {:?}", a, b);
++        prop_assert_eq!(x <= y, o != Ordering::Greater, "a = {:?}, b = {:?}", a, b);
++        prop_assert_eq!(x > y, o == Ordering::Greater, "a = {:?}, b = {:?}", a, b);
++        prop_assert_eq!(x >= y, o != Ordering::Less, "a = {:?}, b = {:?}", a, b);
++        if x <= y && y <= z {
++            prop_assert!(x <= z, "a = {:?}, b = {:?}, c = {:?}", a, b, c);
++        }
++        if a.is_nan() && !b.is_nan() {
++            prop_assert_eq!(o, Ordering::Greater, "a = {:?}, b = {:?}", a, b);
++        }
++        prop_assert_eq!(x.cmp(&x), Ordering::Equal, "a = {:?}", a);
++    }
++
++    // proob:01M63JR86YEVHJVJHP2S9822GE
++    #[test]
++    fn not_nan_arithmetic_panics_instead_of_nan(a in not_nan_f64(), b in not_nan_f64()) {
++        let (ra, rb) = (a.into_inner(), b.into_inner());
++        let cases: Vec<(&str, f64, std::thread::Result<NotNan<f64>>)> = vec![
++            ("add", ra + rb, catch_unwind(|| a + b)),
++            ("sub", ra - rb, catch_unwind(|| a - b)),
++            ("mul", ra * rb, catch_unwind(|| a * b)),
++            ("div", ra / rb, catch_unwind(|| a / b)),
++            ("rem", ra % rb, catch_unwind(|| a % b)),
++        ];
++        for (op, raw, r) in cases {
++            match r {
++                Err(_) => prop_assert!(raw.is_nan(), "{} of {:?}, {:?} panicked; raw {:?}", op, a, b, raw),
++                Ok(n) => {
++                    prop_assert!(!raw.is_nan(), "{} of {:?}, {:?} returned {:?}; raw NaN", op, a, b, n);
++                    prop_assert_eq!(n.into_inner().to_bits(), raw.to_bits(), "{} of {:?}, {:?}", op, a, b);
++                }
++            }
++        }
++    }
++}

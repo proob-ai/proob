@@ -1,0 +1,6 @@
+id = "01M62J35ZNX1QC61CE6MVBYTQE"
+title = "URL text round trip"
+statement = "Parsing the text of a parsed URL gives back the same URL, with every part in the same place."
+scope = ["url/src/**"]
+severity = "high"
+rationale = "check_invariants in url/src/lib.rs (lines 683-808) re-parses as_str() and compares the serialization and every offset; the fuzz target url/fuzz/fuzz_targets/parse.rs asserts the same equality; url/tests/unit.rs calls check_invariants after mutations. URL equality, ordering and hashing use only the text, so a mismatch makes one URL unequal to itself and breaks caches and security checks keyed on URLs."

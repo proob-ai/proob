@@ -1,0 +1,63 @@
+{
+  "description": "An accepted run whose artifact has a line that is not a record: refused by line number.",
+  "default_branch": "main",
+  "workflow_runs": [
+    {
+      "id": 104,
+      "path": ".github/workflows/proob-evidence.yml",
+      "head_branch": "main",
+      "head_sha": "3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f",
+      "event": "push",
+      "conclusion": "success",
+      "created_at": "2026-10-27T00:00:00Z"
+    }
+  ],
+  "blobs": {
+    "3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f:.github/workflows/proob-evidence.yml": "8888888888888888888888888888888888888888"
+  },
+  "artifacts": {
+    "104": [
+      {
+        "id": 9004,
+        "name": "proob-evidence",
+        "size_in_bytes": 1,
+        "expired": false
+      }
+    ]
+  },
+  "artifact_lines": {
+    "9004": [
+      {
+        "schema_version": 1,
+        "id": "01J9Z3W1V8Q4K7N2M5R8T1X4C8",
+        "kind": "check",
+        "algo": "sha256",
+        "content_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "binding_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "scope_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "outcome": {
+          "result": "no_counterexample",
+          "budget": 256
+        },
+        "tool_versions": {
+          "proptest": "1.12.0"
+        },
+        "run_id": 104,
+        "head_sha": "3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f",
+        "workflow_blob": "8888888888888888888888888888888888888888",
+        "at": 1761523200,
+        "replay": {
+          "seed": "7"
+        }
+      },
+      {
+        "schema_version": "one",
+        "id": "01J9Z3W1V8Q4K7N2M5R8T1X4C6",
+        "kind": "check"
+      }
+    ]
+  },
+  "heads": {
+    "origin/main": "3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f"
+  }
+}

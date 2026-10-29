@@ -1,0 +1,15 @@
+kind = "catch"
+bug = "funcy-counter-walk"
+trial = "t1"
+language = "python"
+repo = "https://github.com/Suor/funcy"
+buggy_commit = "d3d1463753cafaa83c5b083df8c01ca46e2a91eb"
+fix_commit = "7e5f8a2284ec1562135bba3497a2c54ab3f64056"
+fix_paths = ["funcy/colls.py"]
+install = ["uv venv --python 3.13 .venv", "uv pip install --python .venv/bin/python -e . pytest whatever"]
+python = "3.13"
+property = "01M63JA9X6H9WVS3BK86D2253G"
+seed = "1793198521852812816"
+expect_buggy = "counterexample"
+expect_fixed = "no_counterexample"
+flaky = false

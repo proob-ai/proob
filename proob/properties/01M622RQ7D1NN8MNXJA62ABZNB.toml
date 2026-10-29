@@ -1,0 +1,7 @@
+id = "01M622RQ7D1NN8MNXJA62ABZNB"
+title = "Property-derived arguments follow the separator"
+statement = "Property-derived arguments reach a child process only after the end-of-options separator."
+scope = ["crates/proob-adapters/src/argv.rs", "crates/proob-adapters/src/rust/score.rs", "crates/proob-adapters/src/verus/check.rs"]
+severity = "high"
+rationale = "The plan's adapter contract: a scope glob or test name comes from a property file, so it is checked against a closed grammar and placed after `--`, where no runner can read it as an option. A property file must never be able to steer a tool."
+kind = "test"

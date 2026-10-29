@@ -1,0 +1,7 @@
+id = "01M622RQ76XZBSVRNHW3PC3Z5S"
+title = "Approval comes only from an eligible review"
+statement = "An approval is derived only from an eligible review on the pull request that introduced the content; a direct push is never approved."
+scope = ["crates/proob-core/src/eligibility.rs", "crates/proob-core/src/specs.rs"]
+severity = "high"
+rationale = "ASSERTIONS.md row 6 (eligibility_sound): Team only when some review on the introducing pull request is eligible, SelfSigned only when the repository allows it and no review is, a direct push Unreviewed, and the approval names the pull request and merge it came from."
+kind = "proof"

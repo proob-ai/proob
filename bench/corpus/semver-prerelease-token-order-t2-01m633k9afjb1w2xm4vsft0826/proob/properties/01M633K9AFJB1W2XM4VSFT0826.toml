@@ -1,0 +1,6 @@
+id = "01M633K9AFJB1W2XM4VSFT0826"
+title = "Next prerelease moves forward"
+statement = "Asking for the next prerelease of a version always gives a version that sorts strictly higher than the one asked about."
+scope = ["src/semver/version.py"]
+severity = "high"
+rationale = "The method documents that it determines the next version preserving natural order (src/semver/version.py:506-508). tests/test_issue484.py expects 1.2.3-rc9 to become 1.2.3-rc10, while tests/test_max-min.py:26 asserts rc10 sorts below rc2 because alphanumeric identifiers compare as text (src/semver/version.py:190); a different token family resets to token.1 (src/semver/version.py:561-565). See changelog.d/484.bugfix.rst and changelog.d/pr495.bugfix.rst. Release tooling that publishes a lower next version breaks upgrades."

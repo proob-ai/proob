@@ -1,0 +1,6 @@
+id = "01M62H14KM9026RFS6TTMDX9G2"
+title = "Slice deletion matches saved text"
+statement = "Deleting any range of elements from an array leaves the saved text holding exactly the elements that remain."
+scope = ["tomlkit/items.py"]
+severity = "high"
+rationale = "Array deletion by slice (tomlkit/items.py:1687-1699) removes from the plain list with the slice itself but computes which formatted groups to drop by hand, treating missing or zero bounds as defaults and ignoring negative values, so negative bounds, a zero stop, or out-of-range bounds can drop different elements from the saved text than from the list. tests/test_items.py covers only single-index deletion (around lines 371 and 384); no test deletes a slice."

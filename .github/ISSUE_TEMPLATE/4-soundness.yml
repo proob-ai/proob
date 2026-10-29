@@ -1,0 +1,48 @@
+name: Soundness report
+description: proob rendered Holds (or passed the gate) when the property does not hold.
+labels: ["soundness", "priority: critical", "status: needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A wrong `Holds` is the worst bug proob can have, and every soundness report is treated as critical.
+
+        **If someone could use this on purpose** (for example, to make an unreviewed or broken property read `Holds`,
+        or to let an agent approve its own work), do not file it here: report it privately through
+        [a security advisory](https://github.com/proob-ai/proob/security/advisories/new), as [SECURITY.md](https://github.com/proob-ai/proob/blob/master/SECURITY.md) describes.
+  - type: input
+    id: version
+    attributes:
+      label: proob version
+      description: The output of `proob --version`, and the Action version or SHA if the gate was involved.
+    validations:
+      required: true
+  - type: textarea
+    id: rendered
+    attributes:
+      label: What proob showed
+      description: The word proob rendered (`Holds`, a gate pass, ...) and where (`proob status`, the gate check, the session line).
+    validations:
+      required: true
+  - type: textarea
+    id: truth
+    attributes:
+      label: Why the property does not hold
+      description: The input that breaks it, or the missing approval, stale evidence, or wrong workflow run that should have prevented `Holds`.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: |
+        The steps from a clean checkout to the wrong verdict. A public repository and commit, or a scenario for `cargo xtask sim`, is best.
+    validations:
+      required: true
+  - type: textarea
+    id: status
+    attributes:
+      label: "`proob status --json` excerpt"
+      render: json
+    validations:
+      required: true

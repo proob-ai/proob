@@ -1,0 +1,15 @@
+kind = "catch"
+bug = "portion-intervaldict-combine-drop"
+trial = "t1"
+language = "python"
+repo = "https://github.com/AlexandreDecan/portion"
+buggy_commit = "622e7ca1f3a36a7cb337e6f51abeef0ee5e40c44"
+fix_commit = "da33c974745749f89c2e1787a86839395cc298b2"
+fix_paths = ["portion/dict.py"]
+install = ["uv venv --python 3.13 .venv", "uv pip install --python .venv/bin/python -e . pytest pytest-benchmark"]
+python = "3.13"
+property = "01M63J7B3TX5ZP9Z0ABB01Z03K"
+seed = "1793222323337140832"
+expect_buggy = "counterexample"
+expect_fixed = "no_counterexample"
+flaky = false

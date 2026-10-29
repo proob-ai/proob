@@ -1,0 +1,78 @@
+# Syncs the repository's labels with .github/labels.yml.
+#
+# Each label in the file is created, or updated when its color or description
+# differs. A GitHub default label named in a label's `from_name` is renamed
+# into it, so the issues that carry it keep it; when both already exist, the
+# default is deleted. No other label is ever deleted: one made by hand stays
+# until someone removes it on purpose.
+#
+# Third-party actions are pinned to full commit SHAs; the comment names the tag.
+name: labels
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - .github/labels.yml
+      - .github/workflows/labels.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: labels
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: sync labels with .github/labels.yml
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Convert the label file to JSON
+        # yq (mikefarah, v4) ships on GitHub's Ubuntu runners.
+        run: yq -o=json '.' .github/labels.yml > "$RUNNER_TEMP/labels.json"
+      - name: Create, update, and rename labels
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const fs = require('fs');
+            const wanted = JSON.parse(fs.readFileSync(`${process.env.RUNNER_TEMP}/labels.json`, 'utf8'));
+            const { owner, repo } = context.repo;
+            const existing = await github.paginate(github.rest.issues.listLabelsForRepo, { owner, repo, per_page: 100 });
+            const byName = new Map(existing.map((l) => [l.name.toLowerCase(), l]));
+            // GitHub's default labels: the only ones `from_name` may rename or delete.
+            const defaults = ['bug', 'documentation', 'duplicate', 'enhancement', 'good first issue', 'help wanted', 'invalid', 'question', 'wontfix'];
+            const strays = wanted.filter((l) => l.from_name && !defaults.includes(l.from_name.toLowerCase()));
+            if (strays.length > 0) {
+              core.setFailed(`from_name must be a GitHub default label: ${strays.map((l) => l.from_name).join(', ')}`);
+              return;
+            }
+            for (const label of wanted) {
+              const color = String(label.color).toLowerCase();
+              const description = label.description ?? '';
+              const current = byName.get(label.name.toLowerCase());
+              const old = label.from_name ? byName.get(label.from_name.toLowerCase()) : undefined;
+              if (!current && old) {
+                core.info(`rename: ${old.name} -> ${label.name}`);
+                await github.rest.issues.updateLabel({ owner, repo, name: old.name, new_name: label.name, color, description });
+                continue;
+              }
+              if (current && old) {
+                core.info(`delete: ${old.name} (replaced by ${label.name})`);
+                await github.rest.issues.deleteLabel({ owner, repo, name: old.name });
+              }
+              if (!current) {
+                core.info(`create: ${label.name}`);
+                await github.rest.issues.createLabel({ owner, repo, name: label.name, color, description });
+              } else if (current.name !== label.name || current.color !== color || (current.description ?? '') !== description) {
+                core.info(`update: ${label.name}`);
+                await github.rest.issues.updateLabel({ owner, repo, name: current.name, new_name: label.name, color, description });
+              }
+            }

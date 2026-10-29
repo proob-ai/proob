@@ -1,0 +1,71 @@
+name: Bug report
+description: proob crashed, refused valid input, or did something its documentation says it does not.
+labels: ["type: bug", "status: needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Three other forms may fit better:
+        **False alarm** (a counterexample that is not a bug), **Missed bug** (a real bug proob did not find),
+        and **Soundness** (proob said `Holds` when the property does not hold).
+        If the problem can be exploited, report it privately instead: see [SECURITY.md](https://github.com/proob-ai/proob/blob/master/SECURITY.md).
+  - type: input
+    id: version
+    attributes:
+      label: proob version
+      description: The output of `proob --version`.
+      placeholder: proob 0.1.0
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: macOS 15.5 (arm64), Ubuntu 24.04 (x86_64), Windows 11, ...
+    validations:
+      required: true
+  - type: dropdown
+    id: adapter
+    attributes:
+      label: Language and adapter
+      options:
+        - Rust (proptest, cargo-nextest, cargo-mutants)
+        - Rust under Verus
+        - Python (Hypothesis, pytest, mutmut)
+        - None (no adapter for this language)
+        - Not language-specific
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Command
+      description: The exact command or skill you ran, for example `proob run check <id>` or `/proob:falsify`.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What happened instead, with the full error output.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: status
+    attributes:
+      label: "`proob status --json` excerpt"
+      description: The entries for the properties involved. Remove anything private.
+      render: json
+  - type: textarea
+    id: context
+    attributes:
+      label: Anything else
+      description: A link to a public repository that reproduces it is the most useful thing you can add.

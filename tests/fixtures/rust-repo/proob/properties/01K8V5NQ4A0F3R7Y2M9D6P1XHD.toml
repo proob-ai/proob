@@ -1,0 +1,7 @@
+id = "01K8V5NQ4A0F3R7Y2M9D6P1XHD"
+title = "Evens are counted"
+statement = "Counting evens reports how many values of a list are even."
+scope = ["src/parity.rs"]
+severity = "low"
+rationale = "Bound to a test that never looks at the code, so its score shows a check that cannot fail."
+kind = "test"

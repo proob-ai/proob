@@ -1,0 +1,23 @@
+[package]
+name = "xtask"
+description = "cargo xtask: the one entry point for proob's local and CI exec commands"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[[bin]]
+name = "xtask"
+path = "src/main.rs"
+
+# Deliberately none: std only. The argv parser is a few lines; nothing here is
+# worth a dependency in the lockfile of a verified codebase.
+[dependencies]
+
+[lints]
+workspace = true
+
+# A developer tool, never a release artifact: dist must not build or publish it.
+[package.metadata.dist]
+dist = false

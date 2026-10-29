@@ -1,0 +1,209 @@
+diff --git a/Cargo.lock b/Cargo.lock
+index dc0d6fe..8c40906 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -970,6 +970,7 @@ dependencies = [
+  "foldhash 0.2.0",
+  "indexmap 2.14.2",
+  "itertools",
++ "proptest",
+  "serde",
+  "serde-untagged",
+  "serde_core",
+diff --git a/crates/toml/Cargo.toml b/crates/toml/Cargo.toml
+index c3481f6..8f9b49f 100644
+--- a/crates/toml/Cargo.toml
++++ b/crates/toml/Cargo.toml
+@@ -68,6 +68,7 @@ toml-test-data = "2.14.1"
+ snapbox = "1.1.0"
+ walkdir = "2.5.0"
+ itertools = "0.15.0"
++proptest = "1.10.0"
+ serde-untagged = "0.1.9"
+ 
+ [[test]]
+diff --git a/crates/toml/tests/roundtrip.rs b/crates/toml/tests/roundtrip.rs
+new file mode 100644
+index 0000000..3d8d932
+--- /dev/null
++++ b/crates/toml/tests/roundtrip.rs
+@@ -0,0 +1,146 @@
++#![cfg(all(feature = "parse", feature = "display", feature = "serde"))]
++
++use std::collections::BTreeMap;
++
++use proptest::prelude::*;
++use serde::ser::SerializeStruct as _;
++use toml::Table;
++use toml::Value;
++
++/// A struct with one field whose name is chosen at runtime; its value is a table, so the name
++/// lands in a table header. With `variant`, the value is a newtype enum variant wrapping the table.
++#[derive(Debug)]
++struct Record {
++    field: &'static str,
++    variant: Option<&'static str>,
++    inner: BTreeMap<String, i64>,
++}
++
++struct Variant<'a>(&'static str, &'a BTreeMap<String, i64>);
++
++impl serde::Serialize for Variant<'_> {
++    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
++        s.serialize_newtype_variant("Kind", 0, self.0, self.1)
++    }
++}
++
++impl serde::Serialize for Record {
++    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
++        let mut st = s.serialize_struct("Record", 1)?;
++        match self.variant {
++            None => st.serialize_field(self.field, &self.inner)?,
++            Some(v) => st.serialize_field(self.field, &Variant(v, &self.inner))?,
++        }
++        st.end()
++    }
++}
++
++impl Record {
++    fn expected(&self) -> Table {
++        let inner: Table = self
++            .inner
++            .iter()
++            .map(|(k, v)| (k.clone(), Value::Integer(*v)))
++            .collect();
++        let value = match self.variant {
++            None => inner,
++            Some(v) => Table::from_iter([(v.to_owned(), Value::Table(inner))]),
++        };
++        Table::from_iter([(self.field.to_owned(), Value::Table(value))])
++    }
++}
++
++fn leak(s: String) -> &'static str {
++    Box::leak(s.into_boxed_str())
++}
++
++fn record() -> impl Strategy<Value = Record> {
++    (
++        any::<String>(),
++        proptest::option::of(any::<String>()),
++        proptest::collection::btree_map(any::<String>(), any::<i64>(), 0..4),
++    )
++        .prop_map(|(field, variant, inner)| Record {
++            field: leak(field),
++            variant: variant.map(leak),
++            inner,
++        })
++}
++
++/// Bare keys, quoted forms of the same key, and the shapes in which a key can be defined twice.
++fn duplicate_document() -> impl Strategy<Value = String> {
++    let key = "[A-Za-z0-9_-]{1,8}";
++    let spelling = prop_oneof![Just(0u8), Just(1u8), Just(2u8)];
++    (key, spelling.clone(), spelling, 0u8..6).prop_map(|(k, a, b, shape)| {
++        let spell = |s: u8| match s {
++            0 => k.clone(),
++            1 => format!("\"{k}\""),
++            _ => format!("'{k}'"),
++        };
++        let (a, b) = (spell(a), spell(b));
++        match shape {
++            0 => format!("{a} = 1\n{b} = 2\n"),
++            1 => format!("[{a}]\n[{b}]\n"),
++            2 => format!("{a} = 1\n[{b}]\n"),
++            3 => format!("t = {{ {a} = 1, {b} = 2 }}\n"),
++            4 => format!("[t]\n{a} = 1\n[t.{b}]\n"),
++            _ => format!("t.{a} = 1\nt.{b} = 2\n"),
++        }
++    })
++}
++
++fn leaf() -> impl Strategy<Value = Value> {
++    prop_oneof![
++        any::<i64>().prop_map(Value::Integer),
++        any::<bool>().prop_map(Value::Boolean),
++        any::<String>().prop_map(Value::String),
++        // NaN is never equal to itself, so equality cannot be asked of it
++        any::<f64>()
++            .prop_filter("not NaN", |f| !f.is_nan())
++            .prop_map(Value::Float),
++    ]
++}
++
++fn value() -> impl Strategy<Value = Value> {
++    leaf().prop_recursive(3, 24, 4, |inner| {
++        prop_oneof![
++            proptest::collection::vec(inner.clone(), 0..4).prop_map(Value::Array),
++            proptest::collection::btree_map(any::<String>(), inner, 0..4)
++                .prop_map(|m| Value::Table(m.into_iter().collect())),
++        ]
++    })
++}
++
++fn table() -> impl Strategy<Value = Table> {
++    proptest::collection::btree_map(any::<String>(), value(), 0..4)
++        .prop_map(|m| m.into_iter().collect())
++}
++
++proptest! {
++    // proob:01M63HPCWV340FPWKSE6RZ6PWN
++    #[test]
++    fn struct_document_roundtrips_with_any_field_or_variant_name(r in record()) {
++        let doc = toml::to_string(&r);
++        prop_assert!(doc.is_ok(), "{r:?} failed to serialize: {doc:?}");
++        let doc = doc.unwrap();
++        let parsed = doc.parse::<Table>();
++        prop_assert!(parsed.is_ok(), "{r:?} serialized to {doc:?}, which does not parse: {parsed:?}");
++        prop_assert_eq!(parsed.unwrap(), r.expected(), "{:?} serialized to {:?}", r, doc);
++    }
++
++    // proob:01M63HPD09N9ZBYJYBCQPQEFE1
++    #[test]
++    fn a_key_defined_twice_is_rejected(doc in duplicate_document()) {
++        let parsed = doc.parse::<Table>();
++        prop_assert!(parsed.is_err(), "{doc:?} parsed to {parsed:?}");
++    }
++
++    // proob:01M63HPD1DA773F19J4M21070A
++    #[test]
++    fn table_display_parses_back_equal(t in table()) {
++        let text = t.to_string();
++        let parsed = text.parse::<Table>();
++        prop_assert!(parsed.is_ok(), "{t:?} printed as {text:?}, which does not parse: {parsed:?}");
++        prop_assert_eq!(parsed.unwrap(), t, "printed as {:?}", text);
++    }
++}
+diff --git a/crates/toml_writer/tests/string.rs b/crates/toml_writer/tests/string.rs
+index 2e68f01..adf3a21 100644
+--- a/crates/toml_writer/tests/string.rs
++++ b/crates/toml_writer/tests/string.rs
+@@ -703,3 +703,28 @@ proptest! {
+         assert_eq!(value.as_str().unwrap(), decoded);
+     }
+ }
++
++proptest! {
++    // proob:01M63HPCY06JFS767MQ569YHQ6
++    #[test]
++    fn printed_key_parses_back_unchanged(decoded in any::<String>()) {
++        let key = TomlKeyBuilder::new(&decoded).as_default().to_toml_key();
++        let toml = format!("{key} = 0");
++        let value = toml.parse::<toml_old::Value>();
++        prop_assert!(value.is_ok(), "{decoded:?} printed as {toml:?}, which does not parse: {value:?}");
++        let value = value.unwrap();
++        let keys: Vec<_> = value.as_table().unwrap().keys().collect();
++        prop_assert_eq!(keys, vec![&decoded], "printed as {:?}", toml);
++    }
++
++    // proob:01M63HPCZ49J4PV24ZYQ0S6JQY
++    #[test]
++    fn printed_string_parses_back_unchanged(decoded in any::<String>()) {
++        let string = TomlStringBuilder::new(&decoded).as_default().to_toml_value();
++        let toml = format!("v = {string}");
++        let value = toml.parse::<toml_old::Value>();
++        prop_assert!(value.is_ok(), "{decoded:?} printed as {toml:?}, which does not parse: {value:?}");
++        let value = value.unwrap();
++        prop_assert_eq!(value.get("v").and_then(|v| v.as_str()), Some(decoded.as_str()), "printed as {:?}", toml);
++    }
++}

@@ -1,0 +1,23 @@
+# proob/config.toml for the Verus fixture: one adapter, the proof route.
+schema_version = 1
+allow_self_signed = true
+
+[[adapters]]
+root = "."
+language = "verus"
+runner = "cargo-verus"
+mutation_tool = "mutants-under-proof"
+# Mutation-under-proof verifies at most this many mutants per score run and
+# reports the rest as unsampled. The default is 25.
+max_mutants = 25
+
+[policy]
+holds = "pass"
+checked = "pass"
+proposed = "pass"
+waived = "pass"
+not_checked_within_grace = "pass"
+not_checked_after_grace = "warn"
+re_approve = "warn"
+broken_affected = "block"
+broken_unaffected = "pass"

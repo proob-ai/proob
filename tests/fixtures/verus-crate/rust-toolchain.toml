@@ -1,0 +1,7 @@
+# The channel Verus release/0.2026.10.26.d17fbd0 requires. rustc-dev and llvm-tools
+# are what the `verus` driver links against; plain `cargo build` needs neither but
+# installing them here keeps one toolchain for both. Bump with tools/get-verus.sh
+# and the vstd pin in Cargo.toml, never alone.
+[toolchain]
+channel = "1.99.1"
+components = ["rustc-dev", "llvm-tools"]

@@ -1,0 +1,7 @@
+id = "01M622RQ7AM90T2YNQHJ6P58PW"
+title = "Property files survive a round trip"
+statement = "A property or config file parsed and written back is unchanged."
+scope = ["crates/proob-facts/src/property.rs", "crates/proob-facts/src/config.rs"]
+severity = "medium"
+rationale = "ASSERTIONS.md, the structural half of row 6: approval is by content, and the content hash is over the file's text. A parser that silently changed what it read would make the approved text and the governed text drift apart."
+kind = "test"

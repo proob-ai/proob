@@ -1,0 +1,150 @@
+diff --git a/Cargo.toml b/Cargo.toml
+index 49604ae..39e32a0 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -62,6 +62,7 @@ serde_json = { version = "1" }
+ serde_derive = { version = "1", default-features = false }
+ similar-asserts = { version = "2.0.0" }
+ bincode = { version = "1.3.0" }
++proptest = { version = "1" }
+ windows-bindgen = { version = "0.66" }                     # MSRV is 1.74
+ 
+ [target.'cfg(all(target_family = "wasm", not(any(target_os = "emscripten", target_os = "wasi"))))'.dev-dependencies]
+diff --git a/src/naive/date/tests.rs b/src/naive/date/tests.rs
+index 0b47ca4..73c6c1d 100644
+--- a/src/naive/date/tests.rs
++++ b/src/naive/date/tests.rs
+@@ -918,3 +918,133 @@ const MIN_DAYS_FROM_YEAR_0: i32 = MIN_YEAR * 365 + MIN_YEAR / 4 - MIN_YEAR / 100
+ 
+ // only used for testing, but duplicated in naive::datetime
+ const MAX_BITS: usize = 44;
++
++mod props {
++    use super::super::NaiveDate;
++    use proptest::prelude::*;
++
++    /// Any representable date, MIN and MAX included.
++    fn any_date() -> impl Strategy<Value = NaiveDate> {
++        (NaiveDate::MIN.num_days_from_ce()..=NaiveDate::MAX.num_days_from_ce())
++            .prop_map(|d| NaiveDate::from_num_days_from_ce_opt(d).unwrap())
++    }
++
++    /// Dates within `k` days of either calendar limit, where finite iteration reaches the limit.
++    fn near_limit(k: i64) -> impl Strategy<Value = NaiveDate> {
++        prop_oneof![
++            (0..k).prop_map(|n| NaiveDate::MAX - crate::Days::new(n as u64)),
++            (0..k).prop_map(|n| NaiveDate::MIN + crate::Days::new(n as u64)),
++        ]
++    }
++
++    /// The last item a forward walk from `start` with `step` days yields: forward never returns
++    /// an item whose successor would pass MAX.
++    fn last_forward(start: NaiveDate, step: i64) -> Option<NaiveDate> {
++        let remaining = NaiveDate::MAX.signed_duration_since(start).num_days() / step;
++        (remaining >= 1).then(|| start + crate::Days::new(((remaining - 1) * step) as u64))
++    }
++
++    proptest! {
++        // proob:01M6352CV18JTCGW23WTYBEST6
++        #[test]
++        fn reverse_walk_mirrors_forward_walk(d in prop_oneof![any_date(), near_limit(60)], k in 1usize..8) {
++            for step in [1i64, 7] {
++                let it = || if step == 1 { d.iter_days().collect_dyn() } else { d.iter_weeks().collect_dyn() };
++                // The forward walk's last k items, newest first, computed from its known end.
++                let expected: Vec<NaiveDate> = core::iter::successors(last_forward(d, step), |x| {
++                    x.checked_sub_days(crate::Days::new(step as u64)).filter(|y| *y >= d)
++                })
++                .take(k)
++                .collect();
++                let got: Vec<NaiveDate> = it().rev().take(k).collect();
++                prop_assert_eq!(&got, &expected, "start {} step {} days: reversed walk {:?}, forward walk reversed {:?}", d, step, got, expected);
++            }
++        }
++
++        // proob:01M6352CW13CAV0CR71K0PNP43
++        #[test]
++        fn both_ends_never_repeat_a_date(d in prop_oneof![any_date(), near_limit(60)], ops in prop::collection::vec(any::<bool>(), 0..24)) {
++            for step in [1i64, 7] {
++                let mut it = if step == 1 { d.iter_days().collect_dyn() } else { d.iter_weeks().collect_dyn() };
++                let mut seen = std::vec::Vec::new();
++                for &front in &ops {
++                    if let Some(x) = if front { it.next() } else { it.next_back() } {
++                        prop_assert!(!seen.contains(&x), "start {} step {} ops {:?}: {} returned twice (seen {:?})", d, step, ops, x, seen);
++                        seen.push(x);
++                    }
++                }
++            }
++        }
++
++        // proob:01M6352CX6F1SNST7H5GVTA1NM
++        #[test]
++        fn reported_length_matches_dates_remaining(d in prop_oneof![any_date(), near_limit(400)], ops in prop::collection::vec(any::<bool>(), 0..24)) {
++            for step in [1i64, 7] {
++                let mut it = if step == 1 { d.iter_days().collect_dyn() } else { d.iter_weeks().collect_dyn() };
++                for &front in &ops {
++                    let before = it.len();
++                    let item = if front { it.next() } else { it.next_back() };
++                    let after = it.len();
++                    match item {
++                        Some(x) => prop_assert_eq!(after + 1, before, "start {} step {} ops {:?}: yielded {} but len went {} -> {}", d, step, ops, x, before, after),
++                        None => prop_assert_eq!(before, 0, "start {} step {} ops {:?}: yielded nothing but len was {}", d, step, ops, before),
++                    }
++                }
++                // Near MAX the rest is short enough to count outright.
++                if NaiveDate::MAX.signed_duration_since(d).num_days() < 1000 {
++                    let len = it.len();
++                    let count = it.count();
++                    prop_assert_eq!(len, count, "start {} step {} ops {:?}: len {} but {} items followed", d, step, ops, len, count);
++                }
++            }
++        }
++
++        // proob:01M6352CY4YMENP9HC1AV9B7CP
++        #[test]
++        fn printed_date_parses_back(d in prop_oneof![any_date(), near_limit(60)]) {
++            let text = d.to_string();
++            let back = text.parse::<NaiveDate>();
++            prop_assert_eq!(back, Ok(d), "date {:?} printed as {:?}", d, text);
++        }
++
++        // proob:01M6352CZ5GT589B0HC0MJAM5J
++        #[test]
++        fn sequences_stop_short_of_calendar_limits(d in prop_oneof![near_limit(400), any_date()]) {
++            for step in [1u64, 7] {
++                // Walk at most 500 items each way: enough to exhaust any start within 400 days of a limit.
++                let fwd: Vec<NaiveDate> = if step == 1 { d.iter_days().take(500).collect() } else { d.iter_weeks().take(500).collect() };
++                let back: Vec<NaiveDate> = if step == 1 { d.iter_days().rev().take(500).collect() } else { d.iter_weeks().rev().take(500).collect() };
++                prop_assert!(!fwd.contains(&NaiveDate::MAX), "start {} step {}: forward yielded MAX", d, step);
++                prop_assert!(!back.contains(&NaiveDate::MIN), "start {} step {}: backward yielded MIN", d, step);
++            }
++        }
++    }
++
++    /// Box either iterator behind one double-ended, exact-size type so each test covers both.
++    trait CollectDyn: DoubleEndedIterator<Item = NaiveDate> + ExactSizeIterator + Sized + 'static {
++        fn collect_dyn(self) -> DynIter {
++            DynIter(std::boxed::Box::new(self))
++        }
++    }
++    impl<T: DoubleEndedIterator<Item = NaiveDate> + ExactSizeIterator + 'static> CollectDyn for T {}
++
++    trait Both: DoubleEndedIterator<Item = NaiveDate> + ExactSizeIterator {}
++    impl<T: DoubleEndedIterator<Item = NaiveDate> + ExactSizeIterator> Both for T {}
++
++    struct DynIter(std::boxed::Box<dyn Both>);
++    impl Iterator for DynIter {
++        type Item = NaiveDate;
++        fn next(&mut self) -> Option<NaiveDate> {
++            self.0.next()
++        }
++        fn size_hint(&self) -> (usize, Option<usize>) {
++            self.0.size_hint()
++        }
++    }
++    impl DoubleEndedIterator for DynIter {
++        fn next_back(&mut self) -> Option<NaiveDate> {
++            self.0.next_back()
++        }
++    }
++    impl ExactSizeIterator for DynIter {}
++}

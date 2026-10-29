@@ -1,0 +1,102 @@
+diff --git a/tests/test_proob_properties.py b/tests/test_proob_properties.py
+new file mode 100644
+index 0000000..8d22b9c
+--- /dev/null
++++ b/tests/test_proob_properties.py
+@@ -0,0 +1,96 @@
++from hypothesis import given, strategies as st
++
++from semver import Version
++
++parts = st.integers(min_value=0, max_value=10**6)
++numeric_id = st.integers(min_value=0, max_value=10**30).map(str)
++alnum_id = st.from_regex(r"\A[0-9]*[a-zA-Z-][0-9a-zA-Z-]*\Z").filter(lambda s: len(s) <= 12)
++identifier = st.one_of(numeric_id, alnum_id)
++prerelease = st.lists(identifier, min_size=1, max_size=5).map(".".join)
++build = st.lists(st.from_regex(r"\A[0-9a-zA-Z-]{1,8}\Z"), min_size=1, max_size=3).map(".".join)
++versions = st.builds(
++    Version, parts, parts, parts, st.none() | prerelease, st.none() | build
++)
++
++
++def semver_precedence(a: str, b: str) -> int:
++    """SemVer 2.0.0 section 11.4, written independently of the library."""
++    for x, y in zip(a.split("."), b.split(".")):
++        if x == y:
++            continue
++        if x.isdigit() and y.isdigit():
++            return -1 if int(x) < int(y) else 1
++        if x.isdigit() != y.isdigit():
++            return -1 if x.isdigit() else 1
++        return -1 if x < y else 1
++    na, nb = len(a.split(".")), len(b.split("."))
++    return (na > nb) - (na < nb)
++
++
++# proob:01M633K9AFJB1W2XM4VSFT0826
++@given(versions, identifier)
++def test_next_prerelease_sorts_strictly_higher(version, token):
++    nxt = version.next_version("prerelease", prerelease_token=token)
++    assert nxt > version, f"{version} -> {nxt} with token {token!r}"
++
++
++# proob:01M633K9CSX7NXSA1DZV0ZG75B
++@given(parts, parts, parts, prerelease, prerelease)
++def test_prerelease_precedence_follows_semver(major, minor, patch, a, b):
++    va, vb = Version(major, minor, patch, a), Version(major, minor, patch, b)
++    expected = semver_precedence(a, b)
++    assert va.compare(vb) == expected, f"{va} vs {vb}: got {va.compare(vb)}, want {expected}"
++
++
++# proob:01M633K9EHFA9FRSFWRA045HX4
++@given(parts, parts, parts, prerelease, st.none() | build, st.none() | build)
++def test_prerelease_sorts_below_release(major, minor, patch, pre, build_a, build_b):
++    pre_v = Version(major, minor, patch, pre, build_a)
++    release = Version(major, minor, patch, None, build_b)
++    assert pre_v < release, f"{pre_v} should sort below {release}"
++
++
++# Constructor-only labels (leading zeros, empty) compare equal to their canonical forms.
++loose_numeric = st.tuples(st.integers(0, 3), st.integers(0, 10**6)).map(
++    lambda t: "0" * t[0] + str(t[1])
++)
++loose_prerelease = st.just("") | st.lists(
++    st.one_of(loose_numeric, alnum_id), min_size=1, max_size=4
++).map(".".join)
++
++
++def canonical(label):
++    if not label:
++        return None
++    return ".".join(str(int(x)) if x.isdigit() else x for x in label.split("."))
++
++
++# proob:01M633K9GND24NWYYXZBR384KF
++@given(parts, parts, parts, st.none() | loose_prerelease, st.none() | build, st.none() | build)
++def test_equal_versions_hash_equally(major, minor, patch, pre, build_a, build_b):
++    a = Version(major, minor, patch, pre, build_a)
++    b = Version(major, minor, patch, canonical(pre), build_b)
++    assert a == b, f"precondition: {a!r} should equal {b!r}"
++    assert hash(a) == hash(b), f"{a!r} == {b!r} but hashes differ"
++
++
++bumps = st.sampled_from(
++    [
++        lambda v, t: v,
++        lambda v, t: v.bump_major(),
++        lambda v, t: v.bump_minor(),
++        lambda v, t: v.bump_patch(),
++        lambda v, t: v.bump_prerelease(t),
++        lambda v, t: v.bump_build(t),
++        lambda v, t: v.next_version("prerelease", t),
++        lambda v, t: v.next_version("patch"),
++    ]
++)
++
++
++# proob:01M633K9JS4TFTDBMF4RF5NTS3
++@given(versions, bumps, identifier)
++def test_print_then_parse_round_trips(version, bump, token):
++    v = bump(Version.parse(str(version)), token)
++    again = Version.parse(str(v))
++    assert again == v and str(again) == str(v), f"{v!r} -> {str(v)!r} -> {again!r}"

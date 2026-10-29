@@ -1,0 +1,140 @@
+diff --git a/pyproject.toml b/pyproject.toml
+index b277739..0c62f5f 100644
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -37,6 +37,7 @@ classifiers = [
+ dynamic = [ "version" ]
+ optional-dependencies.tests = [
+   "freezegun",
++  "hypothesis",
+   "pytest>=9",
+   "pytest-benchmark",
+   "pytest-codspeed",
+diff --git a/tests/test_filesize.py b/tests/test_filesize.py
+index 04774d9..eb472fe 100644
+--- a/tests/test_filesize.py
++++ b/tests/test_filesize.py
+@@ -4,6 +4,8 @@
+ 
+ from __future__ import annotations
+ 
++import re
++
+ import pytest
+ 
+ import humanize
+@@ -94,3 +96,114 @@ def test_naturalsize(test_args: list[int] | list[int | bool], expected: str) ->
+         test_args[0] = f"-{test_args[0]}"
+ 
+     assert humanize.naturalsize(*test_args) == "-" + expected
++
++
++# Property-based tests bound to proob properties.
++
++from hypothesis import given  # noqa: E402
++from hypothesis import strategies as st  # noqa: E402
++
++from humanize.filesize import suffixes  # noqa: E402
++
++# (binary, gnu, base, unit names in order); unit 0 is bytes
++MODES = st.sampled_from(
++    [
++        (False, False, 1000, suffixes["decimal"]),
++        (True, False, 1024, suffixes["binary"]),
++        (False, True, 1024, tuple(suffixes["gnu"])),
++    ]
++)
++SIZES = st.one_of(
++    st.integers(min_value=-(10**40), max_value=10**40),
++    st.floats(min_value=-1e40, max_value=1e40, allow_nan=False),
++)
++
++
++def _split(text: str, gnu: bool) -> tuple[float, str]:
++    """Split formatted text into its number and its unit."""
++    number, unit = (
++        (text.rstrip("BKMGTPEZYRQ"), text[len(text.rstrip("BKMGTPEZYRQ")) :])
++        if gnu
++        else text.split(" ")
++    )
++    return float(number), unit
++
++
++def _unit_index(unit: str, units: tuple[str, ...]) -> int:
++    return units.index(unit) + 1 if unit in units else 0
++
++
++# sizes just below a unit boundary, where rounding can reach the next unit
++NEAR_BOUNDARY = st.builds(
++    lambda base, exp, delta, sign: sign * (base**exp - delta),
++    st.sampled_from([1000, 1024]),
++    st.integers(min_value=1, max_value=10),
++    st.integers(min_value=1, max_value=10**6),
++    st.sampled_from([1, -1]),
++)
++
++
++# proob:01M633BQVXA83YKYB61YCBC37S
++@given(MODES, st.one_of(SIZES, NEAR_BOUNDARY))
++def test_naturalsize_rolls_over_to_next_unit(mode, value) -> None:
++    binary, gnu, base, units = mode
++    if not abs(value) < base ** len(units):
++        return  # the largest unit has no larger one to roll into
++    text = humanize.naturalsize(value, binary=binary, gnu=gnu)
++    number, _unit = _split(text, gnu)
++    assert abs(number) < base, (value, binary, gnu, text)
++
++
++# proob:01M633BQY928FHRA09HFFS82ZE
++@given(MODES, SIZES.filter(lambda v: v > 0))
++def test_naturalsize_negative_mirrors_positive(mode, value) -> None:
++    binary, gnu, _base, _units = mode
++    positive = humanize.naturalsize(value, binary=binary, gnu=gnu)
++    negative = humanize.naturalsize(-value, binary=binary, gnu=gnu)
++    assert negative == "-" + positive, (value, binary, gnu, positive, negative)
++
++
++# proob:01M633BR0A65MG06H0ENVYKFCA
++@given(MODES, SIZES, SIZES)
++def test_naturalsize_unit_grows_with_size(mode, a, b) -> None:
++    binary, gnu, base, units = mode
++    small, large = sorted((abs(a), abs(b)))
++    unit_small = _unit_index(
++        _split(humanize.naturalsize(small, binary=binary, gnu=gnu), gnu)[1], units
++    )
++    unit_large = _unit_index(
++        _split(humanize.naturalsize(large, binary=binary, gnu=gnu), gnu)[1], units
++    )
++    assert unit_small <= unit_large, (small, large, binary, gnu)
++    if large >= base ** len(units):
++        assert unit_large == len(units), (large, binary, gnu)
++
++
++# proob:01M633BR2HVYAMM6VK8NNTEQCB
++@given(
++    MODES.flatmap(
++        lambda m: st.tuples(
++            st.just(m),
++            st.one_of(
++                st.integers(min_value=-m[2] + 1, max_value=m[2] - 1),
++                st.floats(min_value=-m[2], max_value=m[2], exclude_min=True, exclude_max=True),
++            ),
++        )
++    )
++)
++def test_naturalsize_below_one_unit_is_whole_bytes(mode_value) -> None:
++    (binary, gnu, _base, _units), value = mode_value
++    text = humanize.naturalsize(value, binary=binary, gnu=gnu)
++    pattern = r"-?\d+B" if gnu else r"-?\d+ Bytes?"
++    assert re.fullmatch(pattern, text), (value, binary, gnu, text)
++
++
++# proob:01M633BR51WGPH629MKYB8VFC6
++@given(SIZES)
++def test_naturalsize_binary_and_gnu_agree_on_number(value) -> None:
++    binary_text = humanize.naturalsize(value, binary=True)
++    gnu_text = humanize.naturalsize(value, gnu=True)
++    number = r"-?\d+(\.\d+)?"
++    assert (
++        re.match(number, binary_text)[0] == re.match(number, gnu_text)[0]
++    ), (value, binary_text, gnu_text)

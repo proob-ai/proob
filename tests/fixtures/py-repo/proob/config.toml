@@ -1,0 +1,25 @@
+# proob/config.toml for the Python fixture. The adapter block names the one
+# adapter the tests exercise; everything else is the built-in default.
+schema_version = 1
+allow_self_signed = true
+grace_days = 7
+freshness_days = 14
+kill_floor = 1
+witness = "full"
+
+[[adapters]]
+root = "."
+language = "python"
+runner = "pytest"
+mutation_tool = "mutmut"
+
+[policy]
+holds = "pass"
+checked = "pass"
+proposed = "pass"
+waived = "pass"
+not_checked_within_grace = "pass"
+not_checked_after_grace = "warn"
+re_approve = "warn"
+broken_affected = "block"
+broken_unaffected = "pass"

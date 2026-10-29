@@ -1,0 +1,151 @@
+diff --git a/requirements/testing.txt b/requirements/testing.txt
+index a975870..6e2c305 100644
+--- a/requirements/testing.txt
++++ b/requirements/testing.txt
+@@ -1,2 +1,3 @@
+ coverage
+ ruff
++hypothesis
+diff --git a/tests/test_more.py b/tests/test_more.py
+index 38345a0..8d27d8a 100644
+--- a/tests/test_more.py
++++ b/tests/test_more.py
+@@ -7238,3 +7238,138 @@ class TestRandomOrderedRange(TestCase):
+         # Without mitigation the LCG doesn't produce many distinct permutations
+         perms = set(tuple(mi.random_ordered_range(6)) for _ in range(10**5))
+         self.assertEqual(len(perms), factorial(6))
++
++
++# Property-based checks bound to proob properties (proob/properties/).
++
++from hypothesis import given, strategies as st
++
++_seekable_maxlen = st.one_of(st.none(), st.integers(min_value=0, max_value=5))
++
++
++# proob:01M6336H00Z2CSG7A9N9A9G6Q6
++@given(st.lists(st.integers()), _seekable_maxlen, st.data())
++def test_seekable_peek_never_changes_yielded_items(items, maxlen, data):
++    it = mi.seekable(items, maxlen=maxlen)
++    yielded = []
++    while True:
++        if data.draw(st.booleans(), label='peek'):
++            peeked = it.peek(_PEEK_END)
++            if peeked is _PEEK_END:
++                break
++            nxt = next(it)
++            assert peeked == nxt, (items, maxlen, yielded, peeked, nxt)
++            yielded.append(nxt)
++        else:
++            try:
++                yielded.append(next(it))
++            except StopIteration:
++                break
++    assert yielded == items, (items, maxlen, yielded)
++
++
++_PEEK_END = object()
++
++
++# proob:01M6336H14Y65PWQTFT1TQR6SG
++@given(st.lists(st.integers()), _seekable_maxlen, st.data())
++def test_seekable_bool_never_consumes(items, maxlen, data):
++    it = mi.seekable(items, maxlen=maxlen)
++    k = data.draw(st.integers(min_value=0, max_value=len(items)), label='k')
++    head = [next(it) for _ in range(k)]
++    truth = bool(it)
++    rest = list(it)
++    assert truth == (k < len(items)), (items, maxlen, k, truth)
++    assert head + rest == items, (items, maxlen, k, head, rest)
++
++
++# proob:01M6336H275X5R5GBHYQ25QGHH
++@given(
++    st.lists(st.integers()),
++    st.integers(min_value=1, max_value=6),
++    st.lists(st.integers(min_value=0, max_value=3)),
++)
++def test_concurrent_tee_copies_yield_whole_stream(items, n, pauses):
++    copies = mi.concurrent_tee(iter(items), n)
++    results = [None] * n
++    start = Event()
++
++    def consume_copy(i):
++        start.wait()
++        out = []
++        for j, value in enumerate(copies[i]):
++            out.append(value)
++            if pauses and pauses[(i + j) % len(pauses)] == 0:
++                sleep(0)
++        results[i] = out
++
++    threads = [Thread(target=consume_copy, args=(i,)) for i in range(n)]
++    for t in threads:
++        t.start()
++    start.set()
++    for t in threads:
++        t.join()
++    for i, out in enumerate(results):
++        assert out == items, (items, n, i, out)
++
++
++def _as(kind):
++    return lambda f: kind(f.numerator) / kind(f.denominator)
++
++
++def _numeric_range_args(scalar, step):
++    # stop = start + step * (m + f) puts the length near m by construction.
++    return st.tuples(
++        scalar,
++        step,
++        st.integers(min_value=0, max_value=300),
++        st.sampled_from([-1, Fraction(-1, 2), 0, Fraction(1, 3), 1]),
++    ).map(lambda t: (t[0], t[0] + t[1] * (t[2] + _as(type(t[0]))(Fraction(t[3]))), t[1]))
++
++
++_nonzero_int_step = st.integers(-10**6, 10**6).filter(bool)
++_float_step = st.floats(1e-3, 1e3) | st.floats(-1e3, -1e-3)
++
++_numeric_range_inputs = st.one_of(
++    _numeric_range_args(st.integers(-10**9, 10**9), _nonzero_int_step).map(
++        lambda t: (int(t[0]), int(t[1]), t[2])
++    ),
++    _numeric_range_args(st.fractions(-10**6, 10**6), st.fractions().filter(bool)),
++    _numeric_range_args(st.floats(-1e6, 1e6), _float_step).map(
++        lambda t: (float(t[0]), float(t[1]), t[2])
++    ),
++    _numeric_range_args(
++        st.decimals(-10**6, 10**6, places=3),
++        st.decimals(-10**3, 10**3, places=3).filter(bool),
++    ).map(lambda t: (t[0], Decimal(t[1]), t[2])),
++)
++
++
++# proob:01M6336H37QFZ6A5SDMNZMHWBC
++@given(_numeric_range_inputs)
++def test_numeric_range_len_matches_iteration(args):
++    r = mi.numeric_range(*args)
++    produced = list(islice(r, 1000))
++    assert len(produced) < 1000, (args, len(produced))
++    assert len(r) == len(produced), (args, len(r), len(produced))
++
++
++_small_kind = st.sampled_from([int, float, Fraction, Decimal])
++_small_ints = st.tuples(
++    st.integers(-6, 6), st.integers(-6, 6), st.integers(-6, 6).filter(bool)
++)
++_small_range_args = st.one_of(
++    st.tuples(_small_kind, _small_ints).map(
++        lambda t: tuple(map(t[0], t[1]))
++    ),
++    _numeric_range_inputs,
++)
++
++
++# proob:01M6336H49V55X409HGA21MBX8
++@given(_small_range_args, _small_range_args)
++def test_numeric_range_equal_ranges_hash_equally(args_a, args_b):
++    a = mi.numeric_range(*args_a)
++    b = mi.numeric_range(*args_b)
++    if a == b:
++        assert hash(a) == hash(b), (args_a, args_b, hash(a), hash(b))

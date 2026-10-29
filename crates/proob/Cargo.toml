@@ -1,0 +1,36 @@
+[package]
+name = "proob"
+description = "Team-approved, machine-checked, continuously guarded properties for your codebase"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+build = "build.rs"
+
+[[bin]]
+name = "proob"
+path = "src/main.rs"
+
+# The edges: CLI, hook, and (U10) Action. Orchestration and rendering only;
+# every judgement is a verified function of proob-core reached through the
+# facts and effects crates.
+[dependencies]
+proob-core.workspace = true
+proob-facts.workspace = true
+proob-effects.workspace = true
+proob-adapters.workspace = true
+clap.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true
+
+# Not published to crates.io, but released through dist (binaries on GitHub Releases).
+[package.metadata.dist]
+dist = true

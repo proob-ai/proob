@@ -1,0 +1,7 @@
+id = "01K8V5NQ4A0F3R7Y2M9D6P1XVF"
+title = "Ordering two values"
+statement = "Ordering two values returns them as a pair whose first member is the smaller."
+scope = ["clamp/src/lib.rs"]
+severity = "medium"
+rationale = "Bound to an item whose `ensures` holds struct patterns in braces: the first body locator took the first of them for the body and found nothing to mutate; the locator of v2 reads past the clauses to the real body."
+kind = "proof"

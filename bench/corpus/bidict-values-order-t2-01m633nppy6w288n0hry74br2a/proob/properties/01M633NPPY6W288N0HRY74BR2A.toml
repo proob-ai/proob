@@ -1,0 +1,6 @@
+id = "01M633NPPY6W288N0HRY74BR2A"
+title = "Values follow key order"
+statement = "In every kind of bidict, listing the values gives them in the same order as listing the keys and the items."
+scope = ["bidict/_base.py", "bidict/_frozen.py", "bidict/_bidict.py"]
+severity = "medium"
+rationale = "This is the plain dict law that callers rely on, e.g. zipping keys with values. values() in bidict/_base.py reads the inverse's order while keys() and items() read the forward order, and tests/test_bidict.py checks the law only for ordered types. Running bidict({0: 1, 2: 3}) then setting key 0 to 5 gives items [(0, 5), (2, 3)] but values [3, 5]."

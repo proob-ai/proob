@@ -1,0 +1,6 @@
+id = "01M632S6PA6ZATYCYS1NVK2JDD"
+title = "Values follow item order"
+statement = "For every kind of bidict, listing the values gives them in the same order as listing the key-value pairs."
+scope = ["bidict/_base.py", "bidict/_bidict.py", "bidict/_frozen.py"]
+severity = "high"
+rationale = "Mapping law from collections.abc.Mapping and dict: keys, values and items line up. On a plain bidict values() returns the inverse keys (bidict/_base.py:233) while items() follows the forward map (bidict/_base.py:268); overwriting a key appends its new value at the end of the inverse (bidict/_base.py:400-408), so bidict({0: 1, 2: 3}) after b[0] = 4 lists items [(0, 4), (2, 3)] but values [3, 4], and frozenbidict init with a repeated key does the same. tests/test_bidict.py:433 skips this check for non-ordered types and line 131 expects the inverse order; docs/other-bidict-types.rst:182-195 never says values drift from items. Code that zips keys with values pairs them wrongly with no error."

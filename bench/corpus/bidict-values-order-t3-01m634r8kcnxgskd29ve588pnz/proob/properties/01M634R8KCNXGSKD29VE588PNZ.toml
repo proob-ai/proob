@@ -1,0 +1,6 @@
+id = "01M634R8KCNXGSKD29VE588PNZ"
+title = "Values iterate in item order"
+statement = "For every kind of bidirectional mapping, listing its values gives them in the same order as the values appear when listing its items, including after an existing key is given a new value."
+scope = ["bidict/_base.py", "bidict/_bidict.py", "bidict/_frozen.py"]
+severity = "high"
+rationale = "The Mapping interface law says keys, values, and items views iterate in corresponding order, so zip of keys and values pairs correctly. values in bidict/_base.py returns the inverse's keys, which follow the inverse dict's insertion order; docs/other-bidict-types.rst shows that order diverging from forward order after an overwrite; tests/test_bidict.py around line 433 checks values order only for ordered bidicts, noting plain bidicts follow the inverse's order."

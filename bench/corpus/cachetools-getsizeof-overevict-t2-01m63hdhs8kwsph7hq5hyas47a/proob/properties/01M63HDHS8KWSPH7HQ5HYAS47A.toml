@@ -1,0 +1,6 @@
+id = "01M63HDHS8KWSPH7HQ5HYAS47A"
+title = "Replacing a value evicts only when needed"
+statement = "Replacing the value stored under an existing key never evicts other items unless the new total size would exceed the maximum size."
+scope = ["src/cachetools/__init__.py"]
+severity = "medium"
+rationale = "docs/index.rst lines 29-33 say items are evicted until there is enough room for the item to be added; the eviction check in src/cachetools/__init__.py lines 82-84 still counts the old size of the key being replaced, so a resize that fits may evict others; tests/__init__.py _test_getsizeof does not cover this case."

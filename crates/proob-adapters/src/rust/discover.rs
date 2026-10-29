@@ -1,0 +1,195 @@
+//! Discovery: walk each crate from its root through `mod` declarations,
+//! collect the bound tests, and compute every binding's set and hash.
+use crate::rust::manifest::{CrateKind, CrateRoot, crate_roots, is_verus_verified, packages};
+use crate::rust::scan::{Bound, ModDecl, scan};
+use crate::rust::{RustAdapter, check_ref};
+use crate::{AdapterError, Binding, Location};
+use proob_core::binding_hash::binding_hash;
+use proob_core::scope_hash::PathDigest;
+use proob_core::types::Kind;
+use proob_facts::property::file_digest;
+use proob_facts::ulid;
+use std::collections::{BTreeMap, BTreeSet};
+use std::path::{Path, PathBuf};
+
+/// Config files at the adapter root that shape how a bound test runs.
+pub const ROOT_CONFIG_FILES: [&str; 2] = [".config/nextest.toml", ".cargo/mutants.toml"];
+
+#[derive(Debug)]
+struct FileNode {
+    rel: PathBuf,
+    in_test_tree: bool,
+    children: Vec<usize>,
+}
+
+#[derive(Debug)]
+struct Crate {
+    kind: CrateKind,
+    binary_id: String,
+    files: Vec<FileNode>,
+    /// (file index, token line, id, test path)
+    tests: Vec<(usize, usize, u128, String)>,
+}
+
+pub fn discover(adapter: &RustAdapter, repo: &Path) -> Result<Vec<Binding>, AdapterError> {
+    let root = adapter.root_in(repo);
+    let config_files: Vec<PathBuf> = ROOT_CONFIG_FILES
+        .iter()
+        .filter(|f| root.join(f).is_file())
+        .map(|f| adapter.repo_relative(Path::new(f)))
+        .collect();
+    let mut bindings: Vec<Binding> = Vec::new();
+    for pkg in packages(&root, adapter.root())? {
+        // A Verus-verified crate's lib and bin roots hold proofs, not tests:
+        // the Verus adapter reads them. Its integration tests stay here.
+        let verified = is_verus_verified(&pkg.manifest);
+        for crate_root in crate_roots(&pkg)?.into_iter().filter(|r| !verified || r.kind == CrateKind::Test) {
+            let krate = walk(repo, &crate_root)?;
+            bindings.extend(bindings_of(repo, &krate, &config_files)?);
+        }
+    }
+    check_distinct(&bindings)?;
+    bindings.sort_by(|a, b| (&a.token.path, a.token.line).cmp(&(&b.token.path, b.token.line)));
+    Ok(bindings)
+}
+
+fn check_distinct(bindings: &[Binding]) -> Result<(), AdapterError> {
+    let mut seen: BTreeMap<u128, &Location> = BTreeMap::new();
+    for b in bindings {
+        if let Some(first) = seen.insert(b.id, &b.token) {
+            return Err(AdapterError::Duplicate {
+                id: ulid::encode(b.id),
+                first: first.clone(),
+                second: b.token.clone(),
+            });
+        }
+    }
+    Ok(())
+}
+
+fn read(path: &Path) -> Result<String, AdapterError> {
+    std::fs::read_to_string(path).map_err(|e| AdapterError::Io { path: path.to_path_buf(), message: e.to_string() })
+}
+
+fn repo_relative(repo: &Path, abs: &Path) -> PathBuf {
+    abs.strip_prefix(repo).map(Path::to_path_buf).unwrap_or_else(|_| abs.to_path_buf())
+}
+
+/// Breadth-first over `mod` declarations from the crate root.
+fn walk(repo: &Path, root: &CrateRoot) -> Result<Crate, AdapterError> {
+    let is_test_crate = root.kind == CrateKind::Test;
+    let mut krate = Crate { kind: root.kind, binary_id: root.binary_id.clone(), files: Vec::new(), tests: Vec::new() };
+    let mut seen: BTreeSet<PathBuf> = BTreeSet::new();
+    let mut queue: Vec<(PathBuf, Vec<String>, bool, Option<usize>)> =
+        vec![(root.file.clone(), Vec::new(), is_test_crate, None)];
+    while let Some((abs, module_path, in_test_tree, parent)) = queue.pop() {
+        if !seen.insert(abs.clone()) {
+            continue;
+        }
+        let index = krate.files.len();
+        let text = read(&abs)?;
+        let scanned = scan(&text);
+        let rel = repo_relative(repo, &abs);
+        if let Some(p) = parent {
+            krate.files[p].children.push(index);
+        }
+        for token in &scanned.tokens {
+            match &token.bound {
+                Bound::Test { id, function, module_path: inline } => {
+                    let path: Vec<&str> = module_path
+                        .iter()
+                        .chain(inline.iter())
+                        .map(String::as_str)
+                        .chain([function.as_str()])
+                        .collect();
+                    krate.tests.push((index, token.line, *id, path.join("::")));
+                }
+                Bound::Problem(problem) => {
+                    return Err(AdapterError::Token {
+                        at: Location { path: rel, line: token.line },
+                        problem: problem.clone(),
+                    });
+                }
+            }
+        }
+        let is_root = index == 0;
+        for decl in &scanned.mods {
+            if let Some(child) = resolve_mod(&abs, is_root, decl) {
+                let mut child_path = module_path.clone();
+                child_path.extend(decl.module_path.iter().cloned());
+                child_path.push(decl.name.clone());
+                queue.push((child, child_path, in_test_tree || decl.cfg_test, Some(index)));
+            }
+        }
+        krate.files.push(FileNode { rel, in_test_tree, children: Vec::new() });
+    }
+    Ok(krate)
+}
+
+/// The file a `mod name;` names, if it exists.
+pub(crate) fn resolve_mod(file: &Path, is_crate_root: bool, decl: &ModDecl) -> Option<PathBuf> {
+    let parent = file.parent()?;
+    if let Some(explicit) = &decl.path_attr {
+        let candidate = parent.join(explicit);
+        return candidate.is_file().then_some(candidate);
+    }
+    let is_mod_rs = file.file_name().is_some_and(|n| n == "mod.rs");
+    let base = if is_crate_root || is_mod_rs { parent.to_path_buf() } else { parent.join(file.file_stem()?) };
+    let dir = decl.module_path.iter().fold(base, |d, seg| d.join(seg));
+    [dir.join(format!("{}.rs", decl.name)), dir.join(&decl.name).join("mod.rs")].into_iter().find(|c| c.is_file())
+}
+
+/// The files that give a test in `file` its meaning (see the module doc).
+fn binding_files(krate: &Crate, file: usize) -> Vec<usize> {
+    match krate.kind {
+        CrateKind::Test => (0..krate.files.len()).collect(),
+        CrateKind::Lib | CrateKind::Bin => {
+            let mut out = Vec::new();
+            let mut stack = vec![file];
+            while let Some(i) = stack.pop() {
+                out.push(i);
+                stack.extend(krate.files[i].children.iter().copied().filter(|c| krate.files[*c].in_test_tree));
+            }
+            out
+        }
+    }
+}
+
+fn bindings_of(repo: &Path, krate: &Crate, config_files: &[PathBuf]) -> Result<Vec<Binding>, AdapterError> {
+    krate
+        .tests
+        .iter()
+        .map(|(file, line, id, test_path)| {
+            let mut files: Vec<PathBuf> =
+                binding_files(krate, *file).into_iter().map(|i| krate.files[i].rel.clone()).collect();
+            files.extend(config_files.iter().cloned());
+            files.sort();
+            files.dedup();
+            let binding_hash = hash_of(repo, &files)?;
+            Ok(Binding {
+                id: *id,
+                kind: Kind::Test,
+                check_ref: check_ref(&krate.binary_id, test_path),
+                files,
+                binding_hash,
+                token: Location { path: krate.files[*file].rel.clone(), line: *line },
+            })
+        })
+        .collect()
+}
+
+/// `proob-binding-v1` over the normalised content of repo-relative `files`.
+pub fn hash_of(repo: &Path, files: &[PathBuf]) -> Result<[u8; 32], AdapterError> {
+    let pairs = files
+        .iter()
+        .map(|rel| {
+            let bytes = std::fs::read(repo.join(rel))
+                .map_err(|e| AdapterError::Io { path: repo.join(rel), message: e.to_string() })?;
+            Ok(PathDigest { path: rel.to_string_lossy().as_bytes().to_vec(), digest: file_digest(&bytes) })
+        })
+        .collect::<Result<Vec<_>, AdapterError>>()?;
+    binding_hash(pairs).ok_or_else(|| AdapterError::Binding {
+        check_ref: String::new(),
+        message: "a binding file was listed twice".into(),
+    })
+}

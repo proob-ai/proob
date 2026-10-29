@@ -1,0 +1,47 @@
+# Dependency updates. Minor and patch updates are grouped into one pull
+# request per ecosystem; major updates come one per dependency.
+#
+# vstd is pinned exactly with the Verus release and the toolchain
+# (Cargo.toml, tools/get-verus.sh, rust-toolchain.toml) and is bumped by hand,
+# all three together, so it is ignored here.
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directory: /
+    target-branch: develop
+    schedule:
+      interval: weekly
+    ignore:
+      - dependency-name: vstd
+      - dependency-name: verus_builtin
+      - dependency-name: verus_builtin_macros
+    groups:
+      cargo-minor-and-patch:
+        update-types: [minor, patch]
+    commit-message:
+      prefix: build
+      include: scope
+
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: develop
+    schedule:
+      interval: weekly
+    groups:
+      actions-minor-and-patch:
+        update-types: [minor, patch]
+    commit-message:
+      prefix: ci
+
+  # tools/python-tools.txt: the Python adapter's pinned pytest, Hypothesis, and mutmut.
+  - package-ecosystem: pip
+    directory: /tools
+    target-branch: develop
+    schedule:
+      interval: monthly
+    groups:
+      python-tools-minor-and-patch:
+        update-types: [minor, patch]
+    commit-message:
+      prefix: build
+      include: scope

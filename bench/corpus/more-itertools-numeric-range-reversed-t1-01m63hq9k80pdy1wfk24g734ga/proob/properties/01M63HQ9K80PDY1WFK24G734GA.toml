@@ -1,0 +1,6 @@
+id = "01M63HQ9K80PDY1WFK24G734GA"
+title = "Reversed range mirrors forward order"
+statement = "Reading a numeric range backwards yields exactly the items it yields forwards, in reverse order, with none missing, none extra, and none changed."
+scope = ["more_itertools/more.py"]
+severity = "high"
+rationale = "The reverse iterator in more_itertools/more.py (numeric_range.__reversed__, line 2460) rebuilds a second range from the last item down past the start, and nothing settles it against the forward items the way the length is settled (more.py:2436-2443). tests/test_more.py test_reversed (line 3159) uses only exactly representable steps, while test_len_matches_iteration (line 3101) shows float steps such as 0.1 break boundary arithmetic. docs/versions.rst lines 21 and 86 record earlier bugs of this class. always_reversible (more.py:2837) inherits the behaviour."

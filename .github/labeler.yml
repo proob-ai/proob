@@ -1,0 +1,93 @@
+# Paths to area labels, for actions/labeler (.github/workflows/labeler.yml).
+# A pull request gets every area whose globs match one of its changed files.
+# The labels themselves are defined in .github/labels.yml.
+
+"area: core":
+  - changed-files:
+      - any-glob-to-any-file:
+          - crates/proob-core/**
+          - crates/proob-trusted/**
+
+"area: facts":
+  - changed-files:
+      - any-glob-to-any-file: crates/proob-facts/**
+
+"area: effects":
+  - changed-files:
+      - any-glob-to-any-file: crates/proob-effects/**
+
+"area: adapters":
+  - changed-files:
+      - any-glob-to-any-file:
+          - crates/proob-adapters/src/*.rs
+          - crates/proob-adapters/Cargo.toml
+          - crates/proob-spawn/**
+
+"area: adapter-rust":
+  - changed-files:
+      - any-glob-to-any-file: crates/proob-adapters/src/rust/**
+
+"area: adapter-verus":
+  - changed-files:
+      - any-glob-to-any-file: crates/proob-adapters/src/verus/**
+
+"area: adapter-python":
+  - changed-files:
+      - any-glob-to-any-file:
+          - crates/proob-adapters/src/python/**
+          - tools/python-tools.txt
+
+"area: cli":
+  - changed-files:
+      - any-glob-to-any-file:
+          - crates/proob/**
+          - scripts/proob
+          - scripts/proob.ps1
+
+"area: action":
+  - changed-files:
+      - any-glob-to-any-file:
+          - action.yml
+          - templates/workflows/**
+          - .github/workflows/proob-gate.yml
+          - .github/workflows/proob-evidence.yml
+
+"area: skills":
+  - changed-files:
+      - any-glob-to-any-file:
+          - skills/**
+          - evals/**
+          - .claude-plugin/**
+
+"area: hooks":
+  - changed-files:
+      - any-glob-to-any-file:
+          - hooks/**
+          - scripts/hooks/**
+          - crates/proob/src/hook/**
+          - templates/settings/**
+
+"area: shadow":
+  - changed-files:
+      - any-glob-to-any-file:
+          - crates/proob/src/cli/shadow.rs
+          - crates/proob/src/cli/shadow/**
+          - crates/proob/tests/shadow.rs
+          - skills/try/**
+
+"area: bench":
+  - changed-files:
+      - any-glob-to-any-file:
+          - bench/**
+          - sim/src/soundness.rs
+
+"area: docs":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "*.md"
+          - docs/**
+          - "**/README.md"
+
+"area: i18n":
+  - changed-files:
+      - any-glob-to-any-file: README.*.md

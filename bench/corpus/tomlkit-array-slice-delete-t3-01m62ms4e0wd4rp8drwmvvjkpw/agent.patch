@@ -1,0 +1,451 @@
+diff --git a/tests/test_api.py b/tests/test_api.py
+index 0aaf52f..442d6f1 100644
+--- a/tests/test_api.py
++++ b/tests/test_api.py
+@@ -1,6 +1,7 @@
+ import io
+ import json
+ import os
++import tomllib
+ 
+ from datetime import date
+ from datetime import datetime
+@@ -11,8 +12,14 @@ from typing import Callable
+ 
+ import pytest
+ 
++from hypothesis import given
++from hypothesis import strategies as st
++
+ import tomlkit
+ 
++from tests.util import same_value
++from tests.util import toml_documents
++
+ from tomlkit import dump
+ from tomlkit import dumps
+ from tomlkit import load
+@@ -25,6 +32,7 @@ from tomlkit.exceptions import InvalidDateTimeError
+ from tomlkit.exceptions import InvalidNumberError
+ from tomlkit.exceptions import InvalidStringError
+ from tomlkit.exceptions import InvalidTimeError
++from tomlkit.exceptions import TOMLKitError
+ from tomlkit.exceptions import UnexpectedCharError
+ from tomlkit.items import AoT
+ from tomlkit.items import Array
+@@ -156,6 +164,58 @@ def test_original_string_and_dumped_string_are_equal(
+     assert content == dumps(parsed)
+ 
+ 
++
++# proob:01M62MS4EJ28VF6SDF75VE4PT6
++@given(toml_documents())
++def test_any_valid_document_dumps_back_to_its_original_string(content: str) -> None:
++    dumped = dumps(parse(content))
++
++    assert dumped == content, f"parsed {content!r}, dumped {dumped!r}"
++
++
++_number_like = st.one_of(
++    st.text(st.sampled_from("0179_+-.eExobinfa"), min_size=1, max_size=10),
++    st.integers(4290, 4310).map(lambda n: "1" * n),
++)
++# Single-character edits of valid documents. Escapes, inline tables and the
++# backslash are left out so no edit yields a construct that TOML 1.1 (tomlkit)
++# accepts and TOML 1.0 (tomllib, the oracle) rejects.
++_edit_chars = st.sampled_from(list("=[]\"',.#\n\r\t -_:0aZ{}"))
++
++
++@st.composite
++def _edited_documents(draw: st.DrawFn) -> str:
++    text = draw(toml_documents(escapes=False, inline_tables=False))
++    at = draw(st.integers(0, len(text)))
++    kind = draw(st.sampled_from(["insert", "delete", "replace"]))
++    char = draw(_edit_chars)
++    if kind == "insert":
++        return text[:at] + char + text[at:]
++    rest = text[at + 1 :]
++    return text[:at] + (char if kind == "replace" else "") + rest
++
++
++# proob:01M62MS4FN8C07J0BMCGV2D64Q
++@given(st.one_of(_number_like.map(lambda v: f"v = {v}\n"), _edited_documents()))
++def test_invalid_toml_is_rejected_and_never_read_as_another_value(content: str) -> None:
++    try:
++        reference = tomllib.loads(content)
++    except Exception:
++        reference = None
++
++    if reference is None:
++        with pytest.raises(TOMLKitError):
++            parse(content)
++        return
++    try:
++        read = parse(content).unwrap()
++    except TOMLKitError:
++        return  # rejecting valid input is outside this property
++    assert same_value(read, reference), (
++        f"{content!r} read as {read!r}, the TOML value is {reference!r}"
++    )
++
++
+ def test_a_raw_dict_can_be_dumped() -> None:
+     s = dumps({"foo": "bar"})
+ 
+diff --git a/tests/test_items.py b/tests/test_items.py
+index 8284029..656a971 100644
+--- a/tests/test_items.py
++++ b/tests/test_items.py
+@@ -17,8 +17,12 @@ from typing import Any
+ 
+ import pytest
+ 
++from hypothesis import given
++from hypothesis import strategies as st
++
+ from tests.util import assert_is_ppo
+ from tests.util import elementary_test
++from tests.util import toml_arrays
+ from tomlkit import api
+ from tomlkit import parse
+ from tomlkit.container import OutOfOrderTableProxy
+@@ -1637,3 +1641,96 @@ def test_out_of_order_table_proxy_membership() -> None:
+         _ = 123 in table
+     # membership must not resolve values or mutate the document
+     assert doc.as_string() == content
++
++
++_array_elements = st.one_of(
++    st.integers(-1000, 1000).map(str),
++    st.text(st.characters(min_codepoint=0x61, max_codepoint=0x7A), max_size=3).map(
++        lambda t: f'"{t}"'
++    ),
++)
++_new_values = st.one_of(
++    st.integers(-1000, 1000),
++    st.text(st.characters(min_codepoint=0x61, max_codepoint=0x7A), max_size=3),
++)
++
++
++# proob:01M62MS4DFXMBD38RQSAMN7Q10
++@given(
++    toml_arrays(_array_elements),
++    st.one_of(st.none(), st.integers(-8, 8)),
++    st.one_of(st.none(), st.integers(-8, 8)),
++    st.one_of(st.none(), st.integers(-4, 4).filter(bool)),
++)
++def test_array_slice_delete_prints_the_remaining_elements(
++    literal: str, start: int | None, stop: int | None, step: int | None
++) -> None:
++    doc = parse(f"a = {literal}\n")
++    expected = doc["a"].unwrap()
++    del expected[start:stop:step]
++
++    del doc["a"][start:stop:step]
++    printed = doc.as_string()
++
++    reparsed = parse(printed)["a"].unwrap()
++    assert reparsed == expected, (
++        f"del a[{start}:{stop}:{step}] on {literal!r} printed {printed!r}; "
++        f"expected {expected!r}, printed array holds {reparsed!r}"
++    )
++
++
++@st.composite
++def _array_edit(draw: st.DrawFn, length: int) -> tuple:
++    kinds = ["insert", "append", "add_line", "del_slice"]
++    if length:
++        kinds += ["set", "del"]
++    kind = draw(st.sampled_from(kinds))
++    if kind == "insert":
++        return (kind, draw(st.integers(-length, length)), draw(_new_values))
++    if kind in ("set", "del"):
++        return (kind, draw(st.integers(-length, length - 1)), draw(_new_values))
++    if kind == "del_slice":
++        bound = st.one_of(st.none(), st.integers(-length - 2, length + 2))
++        step = st.one_of(st.none(), st.integers(-3, 3).filter(bool))
++        return (kind, slice(draw(bound), draw(bound), draw(step)), None)
++    return (kind, None, draw(_new_values))
++
++
++def _apply_array_edit(target: list, edit: tuple) -> None:
++    kind, where, value = edit
++    if kind == "insert":
++        target.insert(where, value)
++    elif kind == "append":
++        target.append(value)
++    elif kind == "add_line":
++        if isinstance(target, Array):
++            target.add_line(value)
++        else:
++            target.append(value)
++    elif kind == "set":
++        target[where] = value
++    else:
++        del target[where]
++
++
++# proob:01M62MS4E0WD4RP8DRWMVVJKPW
++@given(toml_arrays(_array_elements), st.data())
++def test_array_edits_print_an_array_that_parses_back_equal(
++    literal: str, data: st.DataObject
++) -> None:
++    doc = parse(f"a = {literal}\n")
++    array = doc["a"]
++    model = array.unwrap()
++    edits = []
++    for _ in range(data.draw(st.integers(1, 6), label="edit count")):
++        edit = data.draw(_array_edit(len(model)), label=f"edit {len(edits)}")
++        edits.append(edit)
++        _apply_array_edit(model, edit)
++        _apply_array_edit(array, edit)
++
++    printed = doc.as_string()
++    reparsed = parse(printed)["a"].unwrap()
++    assert reparsed == model, (
++        f"edits {edits!r} on {literal!r} printed {printed!r}; "
++        f"expected {model!r}, parsed back {reparsed!r}"
++    )
+diff --git a/tests/test_toml_document.py b/tests/test_toml_document.py
+index 116de35..3b291fd 100644
+--- a/tests/test_toml_document.py
++++ b/tests/test_toml_document.py
+@@ -9,9 +9,14 @@ from typing import Any
+ 
+ import pytest
+ 
++from hypothesis import given
++from hypothesis import strategies as st
++
+ import tomlkit
+ 
+ from tests.util import assert_is_ppo
++from tests.util import same_value
++from tests.util import toml_documents
+ from tomlkit import parse
+ from tomlkit import ws
+ from tomlkit._utils import _utc
+@@ -1687,3 +1692,82 @@ a.b = 1
+     doc["z"] = 2
+ 
+     assert doc.as_string() == "a.b = 1\nz = 2\n"
++
++
++_scalar_values = st.one_of(
++    st.integers(-1000, 1000),
++    st.booleans(),
++    st.text(st.characters(min_codepoint=0x20, max_codepoint=0x7E), max_size=4),
++    st.lists(st.integers(-9, 9), max_size=3),
++)
++_new_values = st.one_of(
++    _scalar_values,
++    st.dictionaries(st.sampled_from(["x", "y", "k0"]), _scalar_values, max_size=2),
++    st.dictionaries(
++        st.sampled_from(["x", "y"]),
++        st.dictionaries(st.sampled_from(["p", "q"]), _scalar_values, min_size=1),
++        min_size=1,
++        max_size=2,
++    ),
++    st.lists(
++        st.dictionaries(st.sampled_from(["p", "q"]), _scalar_values, min_size=1),
++        min_size=1,
++        max_size=2,
++    ),
++)
++_root_keys = st.sampled_from(["k0", "k1", "k 1", "t0", "t1", "a0", "n"])
++_sub_keys = st.sampled_from(["v0", "v1", "v 1", "s", "sub", "w"])
++
++
++def _tables(model: dict) -> list[str]:
++    return [k for k, v in model.items() if isinstance(v, dict)]
++
++
++@st.composite
++def _document_edit(draw: st.DrawFn, model: dict) -> tuple:
++    kinds = ["set"] + (["del"] if model else []) + (["set_in", "del_in"] if _tables(model) else [])
++    kind = draw(st.sampled_from(kinds))
++    if kind == "set":
++        return (kind, draw(_root_keys), None, draw(_new_values))
++    if kind == "del":
++        return (kind, draw(st.sampled_from(sorted(model))), None, None)
++    table = draw(st.sampled_from(sorted(_tables(model))))
++    if kind == "set_in":
++        return (kind, table, draw(_sub_keys), draw(_scalar_values))
++    if not model[table]:
++        return ("set_in", table, draw(_sub_keys), draw(_scalar_values))
++    return (kind, table, draw(st.sampled_from(sorted(model[table]))), None)
++
++
++def _apply_document_edit(target: dict, edit: tuple) -> None:
++    kind, key, sub, value = edit
++    if kind == "set":
++        target[key] = value
++    elif kind == "del":
++        del target[key]
++    elif kind == "set_in":
++        target[key][sub] = value
++    else:
++        del target[key][sub]
++
++
++# proob:01M62MS4F4JKWFFA869W0FXSP5
++@given(toml_documents(), st.data())
++def test_document_edits_print_a_document_that_parses_back_equal(
++    content: str, data: st.DataObject
++) -> None:
++    doc = parse(content)
++    model = copy.deepcopy(doc.unwrap())
++    edits = []
++    for _ in range(data.draw(st.integers(1, 5), label="edit count")):
++        edit = data.draw(_document_edit(model), label=f"edit {len(edits)}")
++        edits.append(edit)
++        _apply_document_edit(model, edit)
++        _apply_document_edit(doc, edit)
++
++    printed = doc.as_string()
++    reparsed = parse(printed).unwrap()
++    assert same_value(reparsed, model), (
++        f"edits {edits!r} on {content!r} printed {printed!r}; "
++        f"expected {model!r}, parsed back {reparsed!r}"
++    )
+diff --git a/tests/util.py b/tests/util.py
+index 83cf5d9..3347459 100644
+--- a/tests/util.py
++++ b/tests/util.py
+@@ -1,3 +1,7 @@
++import math
++
++from hypothesis import strategies as st
++
+ from tomlkit.items import AoT
+ from tomlkit.items import Array
+ from tomlkit.items import Bool
+@@ -55,3 +59,128 @@ def assert_is_ppo(v_unwrapped: object, unwrapped_type: type) -> None:
+ def elementary_test(v: Item, unwrapped_type: type) -> None:
+     v_unwrapped = v.unwrap()
+     assert_is_ppo(v_unwrapped, unwrapped_type)
++
++
++def same_value(a: object, b: object) -> bool:
++    """Deep equality of unwrapped values that treats nan as equal to nan."""
++    if isinstance(a, float) and isinstance(b, float):
++        return (math.isnan(a) and math.isnan(b)) or a == b
++    if isinstance(a, dict) and isinstance(b, dict):
++        return a.keys() == b.keys() and all(same_value(a[k], b[k]) for k in a)
++    if isinstance(a, list) and isinstance(b, list):
++        return len(a) == len(b) and all(map(same_value, a, b))
++    return type(a) is type(b) and a == b
++
++
++# Generators of valid TOML text for property-based tests. Every form below is
++# valid in both TOML 1.0 and 1.1; ``escapes`` and ``inline_tables`` can be
++# turned off so a single-character edit cannot produce a 1.1-only construct.
++_ws = st.sampled_from(["", " ", "  ", "\t"])
++_comment = st.text(
++    st.characters(min_codepoint=0x20, max_codepoint=0x7E), max_size=8
++).map(lambda c: "#" + c)
++_safe_char = st.characters(
++    min_codepoint=0x20, max_codepoint=0x7E, exclude_characters="\"\\'"
++)
++_integers = st.one_of(
++    st.integers(-(10**12), 10**12).map(str),
++    st.sampled_from(["+1", "1_000", "0xDEAD_beef", "0o755", "0b1101", "-0", "+0"]),
++)
++_floats = st.sampled_from(
++    ["1.5", "-0.0", "+1e3", "6.626e-34", "1_000.5", "inf", "-inf", "+nan", "3.14E+2"]
++)
++_datetimes = st.sampled_from(
++    [
++        "1979-05-27T07:32:00Z",
++        "1979-05-27 07:32:00.999999-07:00",
++        "1979-05-27T00:32:00.5+09:00",
++        "1979-05-27T07:32:00",
++        "1979-05-27",
++        "07:32:00",
++        "00:32:00.999",
++    ]
++)
++
++
++def _strings(escapes: bool) -> st.SearchStrategy[str]:
++    pieces = st.one_of(_safe_char, st.sampled_from(["\\n", "\\t", '\\"', "\\\\", "\\u00e9"]))
++    basic = st.lists(pieces if escapes else _safe_char, max_size=6).map(
++        lambda p: '"' + "".join(p) + '"'
++    )
++    literal = st.text(_safe_char, max_size=6).map(lambda t: "'" + t + "'")
++    multi = st.lists(st.text(_safe_char, max_size=5), max_size=3).map(
++        lambda lines: '"""' + "\n".join(lines) + '"""'
++    )
++    return st.one_of(basic, literal, multi)
++
++
++def _scalars(escapes: bool) -> st.SearchStrategy[str]:
++    return st.one_of(
++        _integers, _floats, st.sampled_from(["true", "false"]), _strings(escapes), _datetimes
++    )
++
++
++@st.composite
++def toml_arrays(draw: st.DrawFn, elements: st.SearchStrategy[str]) -> str:
++    """An array literal in one of the layouts people write by hand."""
++    values = draw(st.lists(elements, max_size=5))
++    layout = draw(st.sampled_from(["inline", "multiline", "comma_first"]))
++    if layout == "inline" or not values:
++        sep = draw(_ws) + "," + draw(_ws)
++        trailing = draw(st.sampled_from(["", ","])) if values else ""
++        return "[" + draw(_ws) + sep.join(values) + trailing + draw(_ws) + "]"
++    if layout == "multiline":
++        lines = [
++            "    " + v + "," + draw(st.one_of(st.just(""), _comment.map(lambda c: " " + c)))
++            for v in values
++        ]
++        return "[\n" + "\n".join(lines) + "\n]"
++    return "[ " + values[0] + "".join("\n  , " + v for v in values[1:]) + "\n]"
++
++
++def _values(escapes: bool, inline_tables: bool) -> st.SearchStrategy[str]:
++    scalar = _scalars(escapes)
++    array = toml_arrays(st.one_of(scalar, toml_arrays(scalar)))
++    if not inline_tables:
++        return st.one_of(scalar, array)
++    inline = st.lists(st.one_of(scalar, array), max_size=3).map(
++        lambda vs: "{"
++        + ", ".join(f"i{n} = {v}" for n, v in enumerate(vs))
++        + "}"
++    )
++    return st.one_of(scalar, array, inline)
++
++
++@st.composite
++def _body(draw: st.DrawFn, prefix: str, values: st.SearchStrategy[str]) -> list[str]:
++    lines = []
++    for n in range(draw(st.integers(0, 4))):
++        key = draw(st.sampled_from([f"{prefix}{n}", f'"{prefix} {n}"', f"{prefix}{n}.sub"]))
++        tail = draw(st.one_of(st.just(""), _comment.map(lambda c: " " + c)))
++        lines.append(
++            draw(_ws) + key + draw(_ws) + "=" + draw(_ws) + draw(values) + tail
++        )
++        lines.extend(draw(st.lists(st.one_of(_ws, _comment), max_size=1)))
++    return lines
++
++
++@st.composite
++def toml_documents(
++    draw: st.DrawFn, escapes: bool = True, inline_tables: bool = True
++) -> str:
++    """A valid TOML document: root keys, then tables and arrays of tables."""
++    values = _values(escapes, inline_tables)
++    lines = draw(_body("k", values))
++    for n in range(draw(st.integers(0, 3))):
++        kind = draw(st.sampled_from(["table", "subtable", "aot"]))
++        if kind == "aot":
++            for _ in range(draw(st.integers(1, 2))):
++                lines.append(f"[[a{n}]]")
++                lines.extend(draw(_body("v", values)))
++            continue
++        name = f"t{n}" if kind == "table" else f"t{n}.s"
++        lines.append("[" + draw(_ws) + name + draw(_ws) + "]")
++        lines.extend(draw(_body("v", values)))
++    newline = draw(st.sampled_from(["\n", "\r\n"]))
++    text = newline.join(lines)
++    return text + draw(st.sampled_from(["", newline])) if text else text

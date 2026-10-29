@@ -1,0 +1,15 @@
+kind = "catch"
+bug = "boltons-barrellist-reverse-slice"
+trial = "t1"
+language = "python"
+repo = "https://github.com/mahmoud/boltons"
+buggy_commit = "a180020c760b532e8889f161d97d05647adfee8c"
+fix_commit = "56161fec0ac7a1e5ba0577cc33c20bbdbb331728"
+fix_paths = ["boltons/listutils.py"]
+install = ["uv venv --python 3.13 .venv", "uv pip install --python .venv/bin/python -e . pytest"]
+python = "3.13"
+property = "01M63HZNJ0TFNH94T72D9RARPN"
+seed = "1793245173730613312"
+expect_buggy = "counterexample"
+expect_fixed = "no_counterexample"
+flaky = false

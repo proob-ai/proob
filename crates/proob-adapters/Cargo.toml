@@ -1,0 +1,28 @@
+[package]
+name = "proob-adapters"
+description = "proob's adapters: discover bound checks, run a kind's primary check, and score its strength, through argv arrays and never a shell"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+# Unverified. Depends on the core (grammar, binding hash), the facts crate
+# (report parsers, config, ULIDs), spawn, and third-party crates; never on
+# proob-effects. tools/crate-graph-check.sh enforces it.
+[dependencies]
+proob-core.workspace = true
+proob-facts.workspace = true
+proob-spawn.workspace = true
+toml.workspace = true
+tempfile.workspace = true
+
+# The free space that bounds parallel mutant jobs (already in the graph through tempfile).
+[target.'cfg(unix)'.dependencies]
+rustix = { version = "1", features = ["fs"] }
+
+[dev-dependencies]
+proptest.workspace = true
+
+[lints]
+workspace = true

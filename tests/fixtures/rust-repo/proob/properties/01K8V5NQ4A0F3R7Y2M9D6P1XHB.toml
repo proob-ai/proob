@@ -1,0 +1,7 @@
+id = "01K8V5NQ4A0F3R7Y2M9D6P1XHB"
+title = "Clamping stays within its bounds"
+statement = "A clamped value is never below the lower bound and never above the upper bound."
+scope = ["src/bounds.rs"]
+severity = "high"
+rationale = "Downstream arithmetic assumes the bounds hold; the current implementation forgets the upper one."
+kind = "test"

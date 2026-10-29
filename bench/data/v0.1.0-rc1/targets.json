@@ -1,0 +1,51 @@
+{
+ "indexmap": {
+  "target": "indexmap",
+  "trial": "indexmap-1",
+  "report": true,
+  "proposed": 5,
+  "bound": 5,
+  "scored": 5,
+  "able_to_fail": 4,
+  "median_kill_ratio": 0.176,
+  "errored": 0,
+  "failures": [],
+  "wall_s": 566,
+  "cost_usd": 1.7178423999999997,
+  "turns": 2,
+  "zero_footprint": true
+ },
+ "vaultwarden": {
+  "target": "vaultwarden",
+  "trial": "vaultwarden-1",
+  "report": true,
+  "proposed": 5,
+  "bound": 5,
+  "scored": 0,
+  "able_to_fail": 0,
+  "median_kill_ratio": null,
+  "errored": 0,
+  "failures": [
+   {
+    "id": "01M63KXCFJGRTRMF1XTST0NA6S",
+    "title": "Storage path split",
+    "statement": "Joining a storage directory and a file name, then splitting the result, gives back the same directory and the same file name.",
+    "witness": "dirs = [\".\"], leading = true, trailing = false, name = \"a\"; assertion failed: `(left == right)`",
+    "seed": "1793409853024199312",
+    "replay": "proob --shadow run check 01M63KXCFJGRTRMF1XTST0NA6S --json --seed 1793409853024199312"
+   },
+   {
+    "id": "01M63KXCHTECT8XHR91XSM80MH",
+    "title": "JSON key rewrite keeps keys",
+    "statement": "Rewriting JSON keys to start lower-case keeps every value and the same number of keys in every object, at every depth.",
+    "witness": "src = Object { \"SSN\": Null, \"Ssn\": Null, }; assertion failed: `(left == right)`",
+    "seed": "1793410314002757984",
+    "replay": "proob --shadow run check 01M63KXCHTECT8XHR91XSM80MH --json --seed 1793410314002757984"
+   }
+  ],
+  "wall_s": 1006,
+  "cost_usd": 1.7135860000000005,
+  "turns": 4,
+  "zero_footprint": true
+ }
+}

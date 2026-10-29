@@ -1,0 +1,6 @@
+id = "01M6336H14Y65PWQTFT1TQR6SG"
+title = "Seekable emptiness test never consumes"
+statement = "Asking whether a rewindable stream has more items never uses up an item, whatever cache size the stream was given."
+scope = ["more_itertools/more.py"]
+severity = "high"
+rationale = "The seekable docstring (more_itertools/more.py:3042-3051) shows truth-testing without consuming; __bool__ goes through peek (more.py:3120-3125), so the maxlen=0 path applies. tests/test_more.py test_truthiness checks only the truth value, not what is yielded afterwards. An if-check that silently drops data is data loss with no error."

@@ -1,0 +1,98 @@
+diff --git a/tests/test_filesize.py b/tests/test_filesize.py
+index 04774d9..4dd81e2 100644
+--- a/tests/test_filesize.py
++++ b/tests/test_filesize.py
+@@ -4,10 +4,30 @@
+ 
+ from __future__ import annotations
+ 
++import re
++
+ import pytest
++from hypothesis import given
++from hypothesis import strategies as st
+ 
+ import humanize
+ 
++MODES = {
++    "decimal": ({}, 1000, "kB MB GB TB PB EB ZB YB RB QB".split()),
++    "binary": ({"binary": True}, 1024, "KiB MiB GiB TiB PiB EiB ZiB YiB RiB QiB".split()),
++    "gnu": ({"gnu": True}, 1024, list("KMGTPEZYRQ")),
++}
++modes = st.sampled_from(sorted(MODES))
++
++
++def _parse(out: str, mode: str) -> tuple[float, int]:
++    """Return (shown number, unit exponent) of a naturalsize output; exponent 0 is bytes."""
++    m = re.fullmatch(r"(-?[\d.]+) ?(\D+)", out)
++    assert m, out
++    units = MODES[mode][2]
++    unit = m.group(2)
++    return float(m.group(1)), (units.index(unit) + 1 if unit in units else 0)
++
+ 
+ @pytest.mark.parametrize(
+     "test_args, expected",
+@@ -94,3 +114,62 @@ def test_naturalsize(test_args: list[int] | list[int | bool], expected: str) ->
+         test_args[0] = f"-{test_args[0]}"
+ 
+     assert humanize.naturalsize(*test_args) == "-" + expected
++
++
++# proob:01M62MZW430RVZ2K0ABF33AW5Y
++@given(st.data(), modes)
++def test_naturalsize_rolls_over_to_next_unit(data: st.DataObject, mode: str) -> None:
++    kwargs, base, units = MODES[mode]
++    # Uniform draws almost never land just under a unit boundary, where rounding bites.
++    near_boundary = st.builds(
++        lambda k, frac: base**k - int(base ** (k - 1) * frac),
++        st.integers(min_value=2, max_value=len(units)),
++        st.floats(min_value=0, max_value=0.1),
++    )
++    n = data.draw(st.one_of(st.integers(min_value=-(10**33), max_value=10**33), near_boundary))
++    out = humanize.naturalsize(n, **kwargs)
++    shown, exp = _parse(out, mode)
++    if exp < len(units):
++        assert abs(shown) < base, (n, mode, out)
++
++
++# proob:01M62MZW57CYSQR7D1MWEJVAVJ
++@given(st.integers(min_value=1, max_value=10**40), modes)
++def test_naturalsize_negation_only_adds_sign(n: int, mode: str) -> None:
++    kwargs = MODES[mode][0]
++    pos, neg = humanize.naturalsize(n, **kwargs), humanize.naturalsize(-n, **kwargs)
++    assert neg == "-" + pos, (n, mode, pos, neg)
++
++
++# proob:01M62MZW65ZNN3YV5F8DSW3NX5
++@given(st.data(), modes)
++def test_naturalsize_small_sizes_are_whole_bytes(data: st.DataObject, mode: str) -> None:
++    kwargs, base, _ = MODES[mode]
++    n = data.draw(st.integers(min_value=-(base - 1), max_value=base - 1))
++    out = humanize.naturalsize(n, **kwargs)
++    if mode == "gnu":
++        expected = f"{n}B"
++    elif abs(n) == 1:
++        expected = f"{n} Byte"
++    else:
++        expected = f"{n} Bytes"
++    assert out == expected, (n, mode, out)
++
++
++# proob:01M62MZW75ZGRSWNGV9TECZ1YP
++@given(st.integers(min_value=0, max_value=10**33), st.integers(min_value=0, max_value=10**33), modes)
++def test_naturalsize_is_monotonic(a: int, b: int, mode: str) -> None:
++    lo, hi = sorted((a, b))
++    kwargs, base, _ = MODES[mode]
++    outs = [humanize.naturalsize(x, **kwargs) for x in (lo, hi)]
++    (s_lo, e_lo), (s_hi, e_hi) = (_parse(o, mode) for o in outs)
++    assert s_lo * base**e_lo <= s_hi * base**e_hi, (lo, hi, mode, outs)
++
++
++# proob:01M62MZW84SQXTD2WAWRVPSKH7
++@given(st.data(), modes)
++def test_naturalsize_huge_sizes_keep_largest_unit(data: st.DataObject, mode: str) -> None:
++    kwargs, base, units = MODES[mode]
++    n = data.draw(st.integers(min_value=base ** len(units), max_value=10**400))
++    out = humanize.naturalsize(n, **kwargs)
++    assert _parse(out, mode)[1] == len(units), (n, mode, out)

@@ -1,0 +1,16 @@
+[package]
+name = "clamp"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+vstd.workspace = true
+
+# What makes this crate the Verus adapter's: `cargo verus verify` checks it,
+# and a `// proob:<ULID>` above one of its verus! items binds a proof.
+[package.metadata.verus]
+verify = true
+
+[lints]
+workspace = true

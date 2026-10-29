@@ -1,0 +1,6 @@
+id = "01M6336H00Z2CSG7A9N9A9G6Q6"
+title = "Seekable peek never loses an item"
+statement = "Looking ahead at the next item of a rewindable stream never changes the items it goes on to yield, whatever cache size the stream was given."
+scope = ["more_itertools/more.py"]
+severity = "high"
+rationale = "The seekable docstring (more_itertools/more.py:3032-3040) promises that list(it) after peek() still starts with the peeked item; tests/test_more.py test_simple_peeking checks it only without maxlen, and test_maxlen_zero covers plain iteration only. peek sets the index to len(cache) - 1 (more.py:3134-3136), which is -1 when maxlen=0, so the next item may come from the source and the peeked one is lost."

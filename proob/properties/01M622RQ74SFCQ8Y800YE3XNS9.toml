@@ -1,0 +1,7 @@
+id = "01M622RQ74SFCQ8Y800YE3XNS9"
+title = "A self-signed merge never holds"
+statement = "A self-signed merge never produces a holding property."
+scope = ["crates/proob-core/src/verdict.rs", "crates/proob-core/src/specs.rs"]
+severity = "critical"
+rationale = "ASSERTIONS.md row 1 and the verdict table's rows 22 to 25: a self-signature on the statement, the binding set, the config, or the evidence workflow turns Holds into Checked (self-signed). This is the item whose guarantee draws that line."
+kind = "proof"

@@ -1,0 +1,6 @@
+`git apply .hypothesis/patches/2026-10-29--63da62ff.patch` to add failing test cases to your code.
+=========================== short test summary info ============================
+FAILED tests/test_props.py::test_bucket_never_goes_negative - AssertionError:...
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed in 0.12s
+failed to collect stats. runner returned 1

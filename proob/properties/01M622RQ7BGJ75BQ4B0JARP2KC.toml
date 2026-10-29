@@ -1,0 +1,7 @@
+id = "01M622RQ7BGJ75BQ4B0JARP2KC"
+title = "The fact cache cannot write a verdict"
+statement = "A hand-written file in the fact cache never changes a verified view."
+scope = ["crates/proob-effects/src/cache.rs"]
+severity = "high"
+rationale = "ASSERTIONS.md, the structural half of row 6, and the plan's 'The cache holds facts, never verdicts': the cache stores fetched payloads by commit and pull request, and every run re-derives approvals through the verified eligibility function from what it fetched."
+kind = "test"

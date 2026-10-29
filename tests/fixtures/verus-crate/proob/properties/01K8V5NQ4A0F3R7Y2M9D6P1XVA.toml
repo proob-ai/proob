@@ -1,0 +1,7 @@
+id = "01K8V5NQ4A0F3R7Y2M9D6P1XVA"
+title = "Clamping lands inside its bounds"
+statement = "A clamped value lies between its bounds and equals the input whenever the input already did."
+scope = ["clamp/src/lib.rs"]
+severity = "high"
+rationale = "The bound item states this as its `ensures`; the verifier is the check, and mutation-under-proof measures whether the clause can fail."
+kind = "proof"

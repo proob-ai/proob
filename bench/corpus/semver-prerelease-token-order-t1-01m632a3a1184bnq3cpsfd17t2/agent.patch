@@ -1,0 +1,111 @@
+diff --git a/tests/test_version_properties.py b/tests/test_version_properties.py
+new file mode 100644
+index 0000000..b4dc830
+--- /dev/null
++++ b/tests/test_version_properties.py
+@@ -0,0 +1,105 @@
++"""Property-based tests bound to the proob properties in proob/properties/."""
++
++import pytest
++from hypothesis import given, strategies as st
++
++from semver import Version
++
++ALNUM = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-"
++
++numeric_id = st.one_of(st.integers(0, 20), st.integers(0, 10**30)).map(str)
++alnum_id = st.text(ALNUM, min_size=1, max_size=6).filter(lambda s: not s.isdigit())
++prerelease_id = st.one_of(numeric_id, alnum_id)
++build_id = st.text(ALNUM, min_size=1, max_size=6)
++
++
++def dotted(ids):
++    return st.lists(ids, min_size=1, max_size=4).map(".".join)
++
++
++prerelease = st.one_of(st.none(), dotted(prerelease_id))
++build = st.one_of(st.none(), dotted(build_id))
++core = st.integers(0, 3) | st.integers(0, 10**12)
++
++
++@st.composite
++def version_text(draw):
++    text = "%d.%d.%d" % (draw(core), draw(core), draw(core))
++    pre, bld = draw(prerelease), draw(build)
++    return text + ("-" + pre if pre else "") + ("+" + bld if bld else "")
++
++
++versions = version_text().map(Version.parse)
++token = st.one_of(st.none(), st.just(""), dotted(prerelease_id), st.text(max_size=8))
++
++
++# proob:01M632A3A1184BNQ3CPSFD17T2
++@given(versions, st.one_of(dotted(prerelease_id), st.text(max_size=8)))
++def test_next_prerelease_sorts_higher(v, tok):
++    try:
++        nxt = v.next_version("prerelease", tok)
++    except ValueError:
++        return
++    assert nxt > v, f"{v}.next_version('prerelease', {tok!r}) -> {nxt}, not higher"
++
++
++# proob:01M632A3AXCAY62AWN1YMT72AT
++@given(versions, versions, versions, build)
++def test_version_ordering_is_consistent(a, b, c, other_build):
++    assert (a == b) == (b == a), (a, b)
++    assert (a < b) == (b > a), (a, b)
++    assert (a <= b) == (b >= a), (a, b)
++    assert [a < b, a == b, a > b].count(True) == 1, (a, b)
++    if a <= b and b <= c:
++        assert a <= c, (a, b, c)
++    if a < b and b < c:
++        assert a < c, (a, b, c)
++    a2 = a.replace(build=other_build)
++    assert a2.compare(b) == a.compare(b), (a, a2, b)
++    assert a2 == a, (a, a2)
++
++
++BUMPS = [
++    lambda v, t: v.bump_major(),
++    lambda v, t: v.bump_minor(),
++    lambda v, t: v.bump_patch(),
++    lambda v, t: v.bump_prerelease(t),
++    lambda v, t: v.bump_prerelease(t, bump_when_empty=True),
++    lambda v, t: v.bump_build(t),
++    lambda v, t: v.next_version("major", t),
++    lambda v, t: v.next_version("minor", t),
++    lambda v, t: v.next_version("patch", t),
++    lambda v, t: v.next_version("prerelease", t),
++]
++
++
++# proob:01M632A3BH1602BM78DV4B76XZ
++@given(versions, token, st.integers(0, len(BUMPS) - 1))
++def test_bumps_produce_valid_versions(v, tok, which):
++    try:
++        result = BUMPS[which](v, tok)
++    except ValueError:
++        return
++    assert Version.is_valid(str(result)), f"bump #{which} of {v} with {tok!r} -> {result!r}"
++
++
++# proob:01M632A3C50ECNHHWVJ1YK165Q
++@given(version_text())
++def test_print_and_parse_round_trip(text):
++    v = Version.parse(text)
++    again = Version.parse(str(v))
++    assert again.to_tuple() == v.to_tuple(), (text, str(v), again.to_tuple())
++
++
++def _padded(pre, zeros):
++    return ".".join(("0" * zeros + p) if p.isdigit() else p for p in pre.split("."))
++
++
++# proob:01M632A3CS1ZV6EEBVCKGXMFCZ
++@given(versions, st.integers(0, 3), build, st.booleans())
++def test_equal_versions_hash_equally(v, zeros, other_build, empty_pre):
++    pre = v.prerelease
++    alt_pre = _padded(pre, zeros) if pre else ("" if empty_pre else None)
++    w = Version(v.major, v.minor, v.patch, alt_pre, other_build)
++    if v == w:
++        assert hash(v) == hash(w), f"{v!r} == {w!r} but hashes differ"

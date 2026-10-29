@@ -1,0 +1,6 @@
+id = "01M62J45SM2BT9HYCCSHM8Y4GA"
+title = "Word splitting agrees in both directions"
+statement = "Cutting text into word pieces gives the same pieces whether you walk the text forwards or backwards."
+scope = ["src/word.rs"]
+severity = "high"
+rationale = "Editors and search tools that step backwards would get different words than forwards. Evidence: quickcheck_forward_reverse_words in tests/test.rs, the forward and reverse WordBreakTest loops in tests/test.rs, and the comment in src/word.rs on WB3c needing extra context in reverse because WB4 hides it. An unconfirmed reading of src/word.rs suggests letter, colon, ZWJ, emoji may split differently forwards and backwards."

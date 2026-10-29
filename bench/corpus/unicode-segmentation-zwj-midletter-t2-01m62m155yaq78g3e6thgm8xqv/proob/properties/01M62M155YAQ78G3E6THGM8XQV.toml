@@ -1,0 +1,6 @@
+id = "01M62M155YAQ78G3E6THGM8XQV"
+title = "Mid-word punctuation before joiner and emoji"
+statement = "When a punctuation mark that may sit inside a word, such as a colon or a period, is followed by a zero-width joiner and an emoji, word segmentation never attaches the punctuation, joiner and emoji to the letters before it, as Unicode word-break rules (UAX 29) require."
+scope = ["src/word.rs"]
+severity = "high"
+rationale = "Wrong word boundaries break cursor movement, search and word counts for text with emoji. Reading src/word.rs, the forward word breaker turns a letter followed by mid-word punctuation into a pending state that waits for another letter (src/word.rs:346-350), skips a following joiner (src/word.rs:265-267), and then the joiner-plus-emoji branch switches to the emoji state (src/word.rs:285-287), which bypasses the rewind at src/word.rs:428-435; so a colon, joiner and emoji after a letter seem to stay in one segment. This was found by reading and has not been run. tests/test.rs:224 carries a TODO noting that joiner interleavings are under-tested."

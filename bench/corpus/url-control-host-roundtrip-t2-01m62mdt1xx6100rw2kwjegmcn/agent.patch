@@ -1,0 +1,241 @@
+diff --git a/url/Cargo.toml b/url/Cargo.toml
+index 06a7149..a4c33f2 100644
+--- a/url/Cargo.toml
++++ b/url/Cargo.toml
+@@ -21,6 +21,7 @@ serde = "1.0"
+ serde_derive = "1.0"
+ serde_json = "1.0"
+ bencher = "0.1"
++proptest = "1"
+ 
+ [target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dev-dependencies]
+ wasm-bindgen-test = "0.3"
+diff --git a/url/tests/props.rs b/url/tests/props.rs
+new file mode 100644
+index 0000000..e1a13cc
+--- /dev/null
++++ b/url/tests/props.rs
+@@ -0,0 +1,223 @@
++// Copyright 2013-2014 The rust-url developers.
++//
++// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
++// http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
++// <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
++// option. This file may not be copied, modified, or distributed
++// except according to those terms.
++
++//! Property-based tests, one per proob property.
++#![cfg(feature = "std")]
++
++use proptest::prelude::*;
++use std::net::{Ipv4Addr, Ipv6Addr};
++use url::{Host, Url};
++
++const SPECIAL: &[&str] = &["http", "https", "ws", "wss", "ftp", "file"];
++const NON_SPECIAL: &[&str] = &["foo", "git", "sc", "x-y"];
++
++/// Any char a URL may meet: ASCII (controls, DEL, all punctuation), a few non-ASCII, `%` escapes.
++fn url_char() -> impl Strategy<Value = String> {
++    prop_oneof![
++        4 => (0u8..=0x7F).prop_map(|b| (b as char).to_string()),
++        2 => prop::sample::select(vec!["a", "b", "z", "0", "9", ".", "-", "%"]).prop_map(String::from),
++        1 => (0u8..=0xFF).prop_map(|b| format!("%{:02X}", b)),
++        1 => prop::sample::select(vec!["é", "ß", "\u{80}", "\u{9F}", "\u{200D}", "\u{FF0E}", "日本"])
++            .prop_map(String::from),
++    ]
++}
++
++fn url_text(max: usize) -> impl Strategy<Value = String> {
++    prop::collection::vec(url_char(), 0..max).prop_map(|v| v.concat())
++}
++
++fn scheme() -> impl Strategy<Value = &'static str> {
++    prop::sample::select([SPECIAL, NON_SPECIAL, &["data", "mailto"]].concat())
++}
++
++fn is_control(c: char) -> bool {
++    c <= '\u{1F}' || c == '\u{7F}'
++}
++
++fn is_forbidden_in_special_host(c: char) -> bool {
++    is_control(c) || " %#/:<>?@[\\]^|".contains(c)
++}
++
++/// RFC 5952 / WHATWG IPv6 serialization, written independently of the crate.
++fn canonical_ipv6(s: [u16; 8]) -> String {
++    let (mut best, mut best_len, mut i) = (8, 1, 0);
++    while i < 8 {
++        let start = i;
++        while i < 8 && s[i] == 0 {
++            i += 1;
++        }
++        if i - start > best_len {
++            best = start;
++            best_len = i - start;
++        }
++        i += 1;
++    }
++    let hex = |r: &[u16]| r.iter().map(|g| format!("{:x}", g)).collect::<Vec<_>>().join(":");
++    if best == 8 {
++        hex(&s)
++    } else {
++        format!("{}::{}", hex(&s[..best]), hex(&s[best + best_len..]))
++    }
++}
++
++fn domain() -> impl Strategy<Value = String> {
++    prop::collection::vec("[a-z][a-z0-9]{0,9}", 1..4).prop_map(|v| v.join("."))
++}
++
++/// A valid host for the setter, paired with the text it must read back as.
++fn valid_host() -> impl Strategy<Value = (String, String)> {
++    prop_oneof![
++        domain().prop_map(|d| (d.clone(), d)),
++        any::<u32>().prop_map(|n| {
++            let s = Ipv4Addr::from(n).to_string();
++            (s.clone(), s)
++        }),
++        any::<[u16; 8]>().prop_map(|s| {
++            let c = format!("[{}]", canonical_ipv6(s));
++            (c.clone(), c)
++        }),
++    ]
++}
++
++proptest! {
++    // proob:01M62MDT0TJCGMYKJ891EZ54ND
++    #[test]
++    fn reparsing_own_text_gives_same_url(
++        scheme in scheme(),
++        slashes in prop::sample::select(vec!["", "/", "//", "///"]),
++        body in url_text(24),
++    ) {
++        let input = format!("{}:{}{}", scheme, slashes, body);
++        if let Ok(url) = Url::parse(&input) {
++            let again = Url::parse(url.as_str());
++            prop_assert!(again.is_ok(), "input {:?} gave {:?}, which fails to parse: {:?}", input, url.as_str(), again);
++            let again = again.unwrap();
++            prop_assert_eq!(url.as_str(), again.as_str(), "input {:?}", input);
++            prop_assert_eq!(url.scheme(), again.scheme(), "input {:?}", input);
++            prop_assert_eq!(url.username(), again.username(), "input {:?}", input);
++            prop_assert_eq!(url.password(), again.password(), "input {:?}", input);
++            // Known exception (whatwg/url#79): no host reparses as an empty host.
++            prop_assert!(
++                url.host() == again.host() || (url.host_str(), again.host_str()) == (None, Some("")),
++                "input {:?}: host {:?} reparsed as {:?}", input, url.host(), again.host()
++            );
++            prop_assert_eq!(url.port(), again.port(), "input {:?}", input);
++            prop_assert_eq!(url.path(), again.path(), "input {:?}", input);
++            prop_assert_eq!(url.query(), again.query(), "input {:?}", input);
++            prop_assert_eq!(url.fragment(), again.fragment(), "input {:?}", input);
++        }
++    }
++
++    // proob:01M62MDT1XX6100RW2KWJEGMCN
++    #[test]
++    fn non_special_host_never_holds_raw_control(
++        scheme in prop::sample::select(NON_SPECIAL),
++        host in url_text(12),
++    ) {
++        if let Ok(url) = Url::parse(&format!("{}://{}/p", scheme, host)) {
++            if let Some(h) = url.host_str() {
++                prop_assert!(!h.chars().any(is_control), "parsed host {:?} from {:?}", h, host);
++            }
++        }
++        let mut url = Url::parse(&format!("{}://x/p", scheme)).unwrap();
++        let result = url.set_host(Some(&host));
++        // The setter keeps only the text before the first ':'.
++        let used = host.split(':').next().unwrap();
++        if used.contains(['\0', '\t', '\n', '\r']) {
++            prop_assert!(result.is_err(), "set_host({:?}) accepted, host now {:?}", host, url.host_str());
++        }
++        if let Some(h) = url.host_str() {
++            prop_assert!(!h.chars().any(is_control), "set_host({:?}) gave host {:?}", host, h);
++        }
++    }
++
++    // proob:01M62MDT2ZN4AQT28ZCFQXNFR2
++    #[test]
++    fn special_host_never_holds_forbidden_char(
++        scheme in prop::sample::select(SPECIAL),
++        host in url_text(12),
++    ) {
++        let check = |url: &Url, how: &str| -> Result<(), TestCaseError> {
++            if let Some(Host::Domain(h)) = url.host() {
++                prop_assert!(
++                    !h.chars().any(is_forbidden_in_special_host),
++                    "{} with {:?} gave host {:?}", how, host, h
++                );
++            }
++            Ok(())
++        };
++        if let Ok(url) = Url::parse(&format!("{}://{}/p", scheme, host)) {
++            check(&url, "parse")?;
++        }
++        let mut url = Url::parse(&format!("{}://x/p", scheme)).unwrap();
++        let _ = url.set_host(Some(&host));
++        check(&url, "set_host")?;
++    }
++
++    // proob:01M62MDT41GKW87D09N0VBW1NA
++    #[test]
++    fn set_host_reads_back_and_reparses(
++        base in prop::sample::select(vec![
++            "http://example.com/a?b#c",
++            "https://u:p@h:8080/x",
++            "ws://w",
++            "ftp://f/d/",
++            "file://host/p",
++            "foo://bar/baz?q",
++            "git://u@g:22/r#f",
++            "sc:/no/authority",
++        ]),
++        (host, expected) in valid_host(),
++    ) {
++        let mut url = Url::parse(base).unwrap();
++        let before = url.clone();
++        let result = url.set_host(Some(&host));
++        prop_assert!(result.is_ok(), "set_host({:?}) on {:?}: {:?}", host, base, result);
++        prop_assert_eq!(url.host_str(), Some(expected.as_str()), "set_host({:?}) on {:?}", host, base);
++        prop_assert_eq!(url.scheme(), before.scheme());
++        prop_assert_eq!(url.port(), before.port(), "set_host({:?}) on {:?}", host, base);
++        prop_assert_eq!(url.path(), before.path(), "set_host({:?}) on {:?}", host, base);
++        prop_assert_eq!(url.query(), before.query());
++        prop_assert_eq!(url.fragment(), before.fragment());
++        let again = Url::parse(url.as_str());
++        prop_assert!(again.is_ok(), "{:?} fails to parse: {:?}", url.as_str(), again);
++        let again = again.unwrap();
++        prop_assert_eq!(again.as_str(), url.as_str());
++        prop_assert_eq!(again.host(), url.host(), "{:?}", url.as_str());
++    }
++
++    // proob:01M62MDT52Q9A2RH4C0X5SBV8J
++    #[test]
++    fn ip_host_prints_canonical_text(
++        v4 in any::<u32>(),
++        v4_spelling in 0u8..3,
++        v6 in any::<[u16; 8]>(),
++        upper in any::<[bool; 8]>(),
++        pad in any::<[bool; 8]>(),
++    ) {
++        let o = v4.to_be_bytes();
++        let v4_text = match v4_spelling {
++            0 => format!("{}.{}.{}.{}", o[0], o[1], o[2], o[3]),
++            1 => v4.to_string(),
++            _ => format!("0x{:x}", v4),
++        };
++        let url = Url::parse(&format!("http://{}/", v4_text)).unwrap();
++        let expected = Ipv4Addr::from(v4).to_string();
++        prop_assert_eq!(url.host_str(), Some(expected.as_str()), "IPv4 spelled {:?}", v4_text);
++
++        let groups: Vec<String> = (0..8).map(|i| {
++            let g = if pad[i] { format!("{:04x}", v6[i]) } else { format!("{:x}", v6[i]) };
++            if upper[i] { g.to_uppercase() } else { g }
++        }).collect();
++        let v6_text = format!("[{}]", groups.join(":"));
++        let url = Url::parse(&format!("http://{}/", v6_text)).unwrap();
++        let expected = format!("[{}]", canonical_ipv6(v6));
++        prop_assert_eq!(url.host_str(), Some(expected.as_str()), "IPv6 spelled {:?}", v6_text);
++        prop_assert_eq!(url.host(), Some(Host::Ipv6(Ipv6Addr::from(v6))));
++    }
++}

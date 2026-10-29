@@ -1,0 +1,7 @@
+id = "01K8PBH7WXN5F2A3C4D5E6G7H8"
+title = "Scope hash is order-independent"
+statement = "The scope hash of a set of files does not depend on the order in which the files are listed."
+scope = ["crates/proob-core/src/scope_hash.rs"]
+severity = "high"
+rationale = "Approvals are about content."
+status = "approved"

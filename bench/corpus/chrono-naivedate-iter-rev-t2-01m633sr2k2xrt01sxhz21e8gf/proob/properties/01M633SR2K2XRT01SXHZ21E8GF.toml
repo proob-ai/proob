@@ -1,0 +1,6 @@
+id = "01M633SR2K2XRT01SXHZ21E8GF"
+title = "Day and week iterator length matches what it yields"
+statement = "The length a run of days or weeks reports always equals the number of dates still to come from it, from either end, and drops by one for each date taken."
+scope = ["src/naive/date/mod.rs"]
+severity = "medium"
+rationale = "size_hint and ExactSizeIterator at src/naive/date/mod.rs:2229-2235 count only up to the maximum date, yet rev yields down toward the minimum date (test_day_iterator_limit and test_week_iterator_limit in src/naive/date/tests.rs show rev near the minimum yields 2 while len reports nearly the whole range), and after next_back the reported length grows instead of shrinking. Callers such as collect pre-size buffers from this length."

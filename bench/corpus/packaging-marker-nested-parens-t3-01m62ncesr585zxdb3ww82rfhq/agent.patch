@@ -1,0 +1,235 @@
+diff --git a/tests/property/test_markers.py b/tests/property/test_markers.py
+new file mode 100644
+index 0000000..f06977b
+--- /dev/null
++++ b/tests/property/test_markers.py
+@@ -0,0 +1,229 @@
++# This file is dual licensed under the terms of the Apache License, Version
++# 2.0, and the BSD License. See the LICENSE file in the root of this repository
++# for complete details.
++
++"""Property tests for environment ``Marker`` parsing, printing and evaluation.
++
++Markers are generated as trees over a small pool of atoms and rendered with
++explicit grouping, optionally wrapped in extra redundant parentheses. Every
++property is checked against every environment in ``ENVIRONMENTS`` (the full
++product of the values the atoms read), not a sample of them.
++"""
++
++from __future__ import annotations
++
++import itertools
++
++import pytest
++from hypothesis import given
++from hypothesis import strategies as st
++
++from packaging.markers import InvalidMarker, Marker
++from packaging.utils import canonicalize_name
++from packaging.version import Version
++
++# No `property` marker: these are proob-bound checks, and the default
++# `-m "not property"` in pyproject.toml would deselect them under `proob run check`.
++
++# (marker text, oracle over an environment dict)
++ATOMS = [
++    ('os_name == "nt"', lambda e: e["os_name"] == "nt"),
++    ('os_name != "posix"', lambda e: e["os_name"] != "posix"),
++    ('sys_platform == "linux"', lambda e: e["sys_platform"] == "linux"),
++    ('"win" in sys_platform', lambda e: "win" in e["sys_platform"]),
++    (
++        'python_version >= "3.9"',
++        lambda e: Version(e["python_version"]) >= Version("3.9"),
++    ),
++    (
++        'python_version < "3.11"',
++        lambda e: Version(e["python_version"]) < Version("3.11"),
++    ),
++]
++
++ENVIRONMENTS = [
++    {"os_name": o, "sys_platform": s, "python_version": p}
++    for o, s, p in itertools.product(
++        ["nt", "posix"],
++        ["linux", "win32", "darwin"],
++        ["3.8", "3.9", "3.10", "3.11", "3.12"],
++    )
++]
++
++# Tree nodes: ("atom", index) | ("op", left, "and"|"or", right) | ("paren", node)
++atoms = st.integers(0, len(ATOMS) - 1).map(lambda i: ("atom", i))
++base_trees = st.recursive(
++    atoms,
++    lambda kids: st.one_of(
++        st.tuples(st.just("op"), kids, st.sampled_from(["and", "or"]), kids),
++        st.tuples(st.just("paren"), kids),
++    ),
++    max_leaves=8,
++)
++ops = st.sampled_from(["and", "or"])
++# An operator whose right side is a redundantly parenthesized group, the shape
++# where removing parentheses can regroup; plain random trees rarely hit it.
++nested_groups = st.builds(
++    lambda x, op1, y, op2, z: ("op", x, op1, ("paren", ("op", y, op2, z))),
++    base_trees, ops, base_trees, ops, base_trees,
++)
++marker_trees = st.one_of(base_trees, nested_groups)
++
++
++def render(node: tuple) -> str:
++    """Render a tree as marker text whose grouping matches the tree."""
++    if node[0] == "atom":
++        return ATOMS[node[1]][0]
++    if node[0] == "paren":
++        # Redundant parentheses go on top of any grouping the child needs.
++        return f"({render_child(node[1])})"
++    _, left, op, right = node
++    return f"{render_child(left)} {op} {render_child(right)}"
++
++
++def render_child(node: tuple) -> str:
++    return f"({render(node)})" if node[0] == "op" else render(node)
++
++
++def render_flat(node: tuple) -> str:
++    """Render the same atoms and operators in order with every parenthesis removed."""
++    if node[0] == "atom":
++        return ATOMS[node[1]][0]
++    if node[0] == "paren":
++        return render_flat(node[1])
++    _, left, op, right = node
++    return f"{render_flat(left)} {op} {render_flat(right)}"
++
++
++def oracle(node: tuple, env: dict[str, str]) -> bool:
++    if node[0] == "atom":
++        return ATOMS[node[1]][1](env)
++    if node[0] == "paren":
++        return oracle(node[1], env)
++    _, left, op, right = node
++    if op == "and":
++        return oracle(left, env) and oracle(right, env)
++    return oracle(left, env) or oracle(right, env)
++
++
++def outcomes(marker: Marker) -> list[bool]:
++    return [marker.evaluate(env) for env in ENVIRONMENTS]
++
++
++# proob:01M62NCERM8825CS7JEJZYEWAV
++@given(tree=marker_trees)
++def test_marker_str_round_trip_preserves_meaning(tree: tuple) -> None:
++    text = render(tree)
++    marker = Marker(text)
++    printed = str(marker)
++    reparsed = Marker(printed)
++    for env in ENVIRONMENTS:
++        assert reparsed.evaluate(env) == marker.evaluate(env), (
++            f"input={text!r} printed={printed!r} env={env} "
++            f"original={marker.evaluate(env)} reparsed={reparsed.evaluate(env)}"
++        )
++
++
++# Pairs: two independent trees, or a tree and its parenthesis-free rendering
++# (same atoms and operators in the same order, possibly grouped differently).
++marker_pairs = st.one_of(
++    st.tuples(marker_trees.map(render), marker_trees.map(render)),
++    marker_trees.map(lambda t: (render(t), render_flat(t))),
++)
++
++
++# proob:01M62NCESR585ZXDB3WW82RFHQ
++@given(pair=marker_pairs)
++def test_equal_markers_evaluate_the_same(pair: tuple[str, str]) -> None:
++    a, b = Marker(pair[0]), Marker(pair[1])
++    if a == b:
++        assert outcomes(a) == outcomes(b), (
++            f"a={pair[0]!r} b={pair[1]!r} compare equal (str {str(a)!r}) "
++            f"but evaluate differently: {outcomes(a)} vs {outcomes(b)}"
++        )
++
++
++words = st.lists(st.from_regex(r"[a-z0-9]+", fullmatch=True), min_size=1, max_size=4)
++separators = st.text(alphabet="-_.", min_size=1, max_size=3)
++
++
++@st.composite
++def extra_spellings(draw: st.DrawFn, parts: list[str]) -> str:
++    """One spelling of the extra named by ``parts``: random case and separators."""
++    seps = [draw(separators) for _ in parts[1:]]
++    joined = parts[0] + "".join(s + p for s, p in zip(seps, parts[1:]))
++    flips = draw(st.lists(st.booleans(), min_size=len(joined), max_size=len(joined)))
++    return "".join(c.upper() if f else c for c, f in zip(joined, flips))
++
++
++@st.composite
++def same_extra_pair(draw: st.DrawFn) -> tuple[str, str]:
++    parts = draw(words)
++    return draw(extra_spellings(parts)), draw(extra_spellings(parts))
++
++
++# proob:01M62NCETVAB793RW8GQG9H38S
++@given(pair=same_extra_pair(), extra_on_left=st.booleans())
++def test_extra_names_match_after_normalization(
++    pair: tuple[str, str], extra_on_left: bool
++) -> None:
++    in_marker, in_env = pair
++    assert canonicalize_name(in_marker) == canonicalize_name(in_env)
++    text = (
++        f'extra == "{in_marker}"' if extra_on_left else f'"{in_marker}" == extra'
++    )
++    result = Marker(text).evaluate({"extra": in_env})
++    assert result is True, f"marker={text!r} env extra={in_env!r} evaluated {result}"
++
++
++def quoted_spans(text: str) -> set[int]:
++    """Indices that sit inside a quoted value (quotes included)."""
++    inside, quote, spans = False, "", set()
++    for i, c in enumerate(text):
++        if inside:
++            spans.add(i)
++            inside = c != quote
++        elif c in "\"'":
++            inside, quote = True, c
++            spans.add(i)
++    return spans
++
++
++@st.composite
++def unbalanced_markers(draw: st.DrawFn) -> str:
++    """A valid marker with one parenthesis inserted or removed outside quotes."""
++    text = render(draw(marker_trees))
++    parens = [i for i, c in enumerate(text) if c in "()"]
++    if parens and draw(st.booleans()):
++        i = draw(st.sampled_from(parens))
++        return text[:i] + text[i + 1 :]
++    spans = quoted_spans(text)
++    slots = [i for i in range(len(text) + 1) if i not in spans]
++    i = draw(st.sampled_from(slots))
++    return text[:i] + draw(st.sampled_from("()")) + text[i:]
++
++
++# proob:01M62NCEVZ0F325HX3SHKM962M
++@given(text=unbalanced_markers())
++def test_unbalanced_parentheses_are_rejected(text: str) -> None:
++    assert text.count("(") != text.count(")")
++    with pytest.raises(InvalidMarker):
++        parsed = Marker(text)
++        pytest.fail(f"unbalanced marker {text!r} parsed as {str(parsed)!r}")
++
++
++# proob:01M62NCEX31HH5Z3S7FZ4W8346
++@given(left=marker_trees, right=marker_trees)
++def test_combined_markers_evaluate_as_and_or(left: tuple, right: tuple) -> None:
++    a, b = Marker(render(left)), Marker(render(right))
++    both, either = a & b, a | b
++    for env in ENVIRONMENTS:
++        l_val, r_val = oracle(left, env), oracle(right, env)
++        assert both.evaluate(env) == (l_val and r_val), (
++            f"({render(left)!r}) & ({render(right)!r}) env={env} "
++            f"got {both.evaluate(env)} expected {l_val and r_val}"
++        )
++        assert either.evaluate(env) == (l_val or r_val), (
++            f"({render(left)!r}) | ({render(right)!r}) env={env} "
++            f"got {either.evaluate(env)} expected {l_val or r_val}"
++        )

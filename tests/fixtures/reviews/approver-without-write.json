@@ -1,0 +1,257 @@
+{
+  "description": "carol (read) approved c1 and the blob changed afterwards: write access is checked before the blob, so NoWriteAccess. An otherwise eligible non-writer is the permission-removed scenario.",
+  "default_branch": "main",
+  "governed_paths": [
+    "proob/properties/01J9Z3W1V8Q4K7N2M5R8T1X4C6.toml"
+  ],
+  "introducing_commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "pulls_for_commit": {
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": [
+      {
+        "number": 7,
+        "user": {
+          "login": "alice",
+          "id": 1001,
+          "type": "User"
+        },
+        "merged": true,
+        "merged_at": "2026-10-20T10:00:00Z",
+        "merge_commit_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "base": {
+          "ref": "main",
+          "sha": "0000000000000000000000000000000000000000"
+        },
+        "head": {
+          "ref": "feature",
+          "sha": "2222222222222222222222222222222222222222"
+        }
+      }
+    ]
+  },
+  "pulls": {
+    "7": {
+      "number": 7,
+      "user": {
+        "login": "alice",
+        "id": 1001,
+        "type": "User"
+      },
+      "merged": true,
+      "merged_at": "2026-10-20T10:00:00Z",
+      "merge_commit_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "base": {
+        "ref": "main",
+        "sha": "0000000000000000000000000000000000000000"
+      },
+      "head": {
+        "ref": "feature",
+        "sha": "2222222222222222222222222222222222222222"
+      }
+    }
+  },
+  "reviews": {
+    "7": [
+      {
+        "id": 501,
+        "user": {
+          "login": "carol",
+          "id": 1003,
+          "type": "User"
+        },
+        "state": "APPROVED",
+        "commit_id": "1111111111111111111111111111111111111111",
+        "submitted_at": "2026-10-19T11:00:00Z"
+      }
+    ]
+  },
+  "users": {
+    "alice": {
+      "login": "alice",
+      "id": 1001,
+      "type": "User"
+    },
+    "bob": {
+      "login": "bob",
+      "id": 1002,
+      "type": "User"
+    },
+    "carol": {
+      "login": "carol",
+      "id": 1003,
+      "type": "User"
+    },
+    "dave": {
+      "login": "dave",
+      "id": 1004,
+      "type": "User"
+    },
+    "dependabot[bot]": {
+      "login": "dependabot[bot]",
+      "id": 2001,
+      "type": "Bot"
+    },
+    "web-flow": {
+      "login": "web-flow",
+      "id": 19864447,
+      "type": "User"
+    }
+  },
+  "permissions": {
+    "bob": {
+      "permission": "write",
+      "role_name": "write",
+      "user": {
+        "login": "bob",
+        "id": 1002,
+        "type": "User"
+      }
+    },
+    "carol": {
+      "permission": "read",
+      "role_name": "read",
+      "user": {
+        "login": "carol",
+        "id": 1003,
+        "type": "User"
+      }
+    },
+    "dave": {
+      "permission": "write",
+      "role_name": "write",
+      "user": {
+        "login": "dave",
+        "id": 1004,
+        "type": "User"
+      }
+    },
+    "alice": {
+      "permission": "write",
+      "role_name": "write",
+      "user": {
+        "login": "alice",
+        "id": 1001,
+        "type": "User"
+      }
+    }
+  },
+  "pull_commits": {
+    "7": [
+      {
+        "sha": "1111111111111111111111111111111111111111",
+        "author": {
+          "login": "alice",
+          "id": 1001,
+          "type": "User"
+        },
+        "committer": {
+          "login": "alice",
+          "id": 1001,
+          "type": "User"
+        },
+        "parents": [
+          {
+            "sha": "0000000000000000000000000000000000000000"
+          }
+        ],
+        "files": []
+      },
+      {
+        "sha": "2222222222222222222222222222222222222222",
+        "author": {
+          "login": "alice",
+          "id": 1001,
+          "type": "User"
+        },
+        "committer": {
+          "login": "alice",
+          "id": 1001,
+          "type": "User"
+        },
+        "parents": [
+          {
+            "sha": "1111111111111111111111111111111111111111"
+          }
+        ],
+        "files": []
+      }
+    ]
+  },
+  "commits": {
+    "1111111111111111111111111111111111111111": {
+      "sha": "1111111111111111111111111111111111111111",
+      "author": {
+        "login": "alice",
+        "id": 1001,
+        "type": "User"
+      },
+      "committer": {
+        "login": "alice",
+        "id": 1001,
+        "type": "User"
+      },
+      "parents": [
+        {
+          "sha": "0000000000000000000000000000000000000000"
+        }
+      ],
+      "files": [
+        {
+          "filename": "proob/properties/01J9Z3W1V8Q4K7N2M5R8T1X4C6.toml",
+          "status": "added"
+        }
+      ]
+    },
+    "2222222222222222222222222222222222222222": {
+      "sha": "2222222222222222222222222222222222222222",
+      "author": {
+        "login": "alice",
+        "id": 1001,
+        "type": "User"
+      },
+      "committer": {
+        "login": "alice",
+        "id": 1001,
+        "type": "User"
+      },
+      "parents": [
+        {
+          "sha": "1111111111111111111111111111111111111111"
+        }
+      ],
+      "files": [
+        {
+          "filename": "proob/properties/01J9Z3W1V8Q4K7N2M5R8T1X4C6.toml",
+          "status": "modified"
+        }
+      ]
+    }
+  },
+  "blobs": {
+    "1111111111111111111111111111111111111111:proob/properties/01J9Z3W1V8Q4K7N2M5R8T1X4C6.toml": "5555555555555555555555555555555555555555",
+    "2222222222222222222222222222222222222222:proob/properties/01J9Z3W1V8Q4K7N2M5R8T1X4C6.toml": "6666666666666666666666666666666666666666",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:proob/properties/01J9Z3W1V8Q4K7N2M5R8T1X4C6.toml": "6666666666666666666666666666666666666666"
+  },
+  "heads": {
+    "origin/main": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "main": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "history": {
+    "proob/properties/01J9Z3W1V8Q4K7N2M5R8T1X4C6.toml": [
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ]
+  },
+  "commit_times": {
+    "0000000000000000000000000000000000000000": 1760000000,
+    "1111111111111111111111111111111111111111": 1760100000,
+    "2222222222222222222222222222222222222222": 1760200000,
+    "3333333333333333333333333333333333333333": 1760300000,
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": 1760400000,
+    "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb": 1760400000,
+    "cccccccccccccccccccccccccccccccccccccccc": 1760400000,
+    "dddddddddddddddddddddddddddddddddddddddd": 1760400100,
+    "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee": 1760500000
+  },
+  "files": {
+    "proob/properties/01J9Z3W1V8Q4K7N2M5R8T1X4C6.toml": "id = \"01J9Z3W1V8Q4K7N2M5R8T1X4C6\"\n"
+  }
+}

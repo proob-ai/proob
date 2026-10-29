@@ -1,0 +1,7 @@
+id = "01M622RQ75T3CFHXPNAAHR3PPD"
+title = "A waiver lapses with its issue or its window"
+statement = "A waiver passes the gate only while its issue is open and its window has not expired."
+scope = ["crates/proob-core/src/verdict.rs", "crates/proob-core/src/specs.rs"]
+severity = "high"
+rationale = "ASSERTIONS.md row 5 (waived_requirements) and verdict table row 4: a waiver whose window has passed or whose tracking issue is closed is Broken (waiver expired), before any other row applies."
+kind = "proof"

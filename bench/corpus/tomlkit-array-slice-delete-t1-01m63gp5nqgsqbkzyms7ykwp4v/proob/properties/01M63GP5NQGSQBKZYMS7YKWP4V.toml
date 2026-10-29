@@ -1,0 +1,6 @@
+id = "01M63GP5NQGSQBKZYMS7YKWP4V"
+title = "Array delete keeps printed text in step"
+statement = "After any element or range of elements is removed from an array, the printed array lists exactly the elements that remain, in the same order."
+scope = ["tomlkit/items.py"]
+severity = "high"
+rationale = "Arrays keep their values and their printed layout side by side (tomlkit/items.py:1409-1416); the range removal at tomlkit/items.py:1690-1692 builds positions from the raw start, stop, and step, so negative or out-of-range bounds may remove different printed entries than values. tests/test_items.py:370-384 covers only single-index removal. A drift means a later dump writes different data than the program holds."

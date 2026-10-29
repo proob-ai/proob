@@ -1,0 +1,19 @@
+[package]
+name = "proob-spawn"
+description = "The only place proob starts a child process: argv arrays, no shell, no inherited stdin, captured output, a timeout"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+# A leaf: no proob crate, so adapters and effects can both use it without
+# either reaching the other. tools/crate-graph-check.sh enforces it.
+[dependencies]
+wait-timeout.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

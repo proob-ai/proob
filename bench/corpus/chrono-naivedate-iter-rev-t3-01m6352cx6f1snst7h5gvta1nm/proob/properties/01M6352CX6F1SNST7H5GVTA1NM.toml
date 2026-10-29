@@ -1,0 +1,6 @@
+id = "01M6352CX6F1SNST7H5GVTA1NM"
+title = "Reported length matches dates remaining"
+statement = "The number of dates a date sequence reports as remaining always equals the number it will still yield."
+scope = ["src/naive/date/mod.rs", "src/naive/date/tests.rs"]
+severity = "medium"
+rationale = "Both iterators claim an exact size (src/naive/date/mod.rs:2235, :2269) but size_hint counts only toward the maximum date (:2229-2232, :2263-2266), so after a backward step the length grows; src/naive/date/tests.rs:733 checks only the item count near the maximum, not the length."

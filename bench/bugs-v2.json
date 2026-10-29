@@ -1,0 +1,442 @@
+[
+  {
+    "id": "more-itertools-numeric-range-reversed",
+    "language": "python",
+    "repo": "https://github.com/more-itertools/more-itertools",
+    "buggy_sha": "3ea9b009b19db0e01a83d51cee43e9935c0d657f",
+    "fix_sha": "8a930acd4fa0222af8209ae84806c18f260ee9a3",
+    "fix_date": "2026-09-17T09:28:11-05:00",
+    "issue_url": "https://github.com/more-itertools/more-itertools/issues/1275 (PR https://github.com/more-itertools/more-itertools/pull/1276)",
+    "summary": "numeric_range.__reversed__ builds a new range with a negated step, so float rounding changes: reversed(numeric_range(0.0, 1.0, 0.1)) yields different values (0.7000000000000001 vs 0.7) than list(r)[::-1], and datetime ranges at datetime.min/max overflow computing the new stop.",
+    "module_paths": [
+      "more_itertools/more.py"
+    ],
+    "regression_test": {
+      "tests": [
+        "tests/test_more.py::NumericRangeTests::test_reversed_preserves_float_values",
+        "tests/test_more.py::NumericRangeTests::test_reversed_datetime_limits"
+      ],
+      "files": [
+        "tests/test_more.py"
+      ]
+    },
+    "install": [
+      "uv venv --python 3.13 .venv",
+      "uv pip install --python .venv/bin/python -e . pytest"
+    ],
+    "suite_cmd": ".venv/bin/python -m pytest -q -p no:cacheprovider tests",
+    "suite_result_buggy": {
+      "passed": 758,
+      "failed": 0,
+      "subtests_passed": 21173,
+      "seconds": 9
+    },
+    "regression_fails_on_buggy": {
+      "value": true,
+      "failure": "2 failed (5 subtests): AssertionError: Lists differ: [0.9, 0.8, 0.7000000000000001, ...] != [0.9, 0.8, 0.7, ...]; OverflowError: date value out of range"
+    },
+    "regression_passes_on_fix": true,
+    "python_version": "3.13",
+    "difficulty_guess": {
+      "level": "easy",
+      "reason": "Sequence/reversed law 'list(reversed(r)) == list(r)[::-1]' fails for most float steps (0.1); any float-range generator hits it"
+    },
+    "split": "held-out"
+  },
+  {
+    "id": "boltons-barrellist-reverse-slice",
+    "language": "python",
+    "repo": "https://github.com/mahmoud/boltons",
+    "buggy_sha": "a180020c760b532e8889f161d97d05647adfee8c",
+    "fix_sha": "56161fec0ac7a1e5ba0577cc33c20bbdbb331728",
+    "fix_date": "2026-09-07T02:17:15-07:00",
+    "issue_url": "https://github.com/mahmoud/boltons/pull/471",
+    "summary": "BarrelList.iter_slice translates negative-step slices by negating start/stop instead of normalising with slice.indices(), so bl[-2::-1] returns [5,4,...] instead of [6,5,...], and common slices such as bl[::-1] or large negative bounds raise ValueError from islice; the list subclass disagrees with list slicing.",
+    "module_paths": [
+      "boltons/listutils.py"
+    ],
+    "regression_test": {
+      "tests": [
+        "tests/test_listutils.py::test_barrellist_slicing_matches_list"
+      ],
+      "files": [
+        "tests/test_listutils.py"
+      ]
+    },
+    "install": [
+      "uv venv --python 3.13 .venv",
+      "uv pip install --python .venv/bin/python -e . pytest"
+    ],
+    "suite_cmd": ".venv/bin/python -m pytest -q -p no:cacheprovider tests",
+    "suite_result_buggy": {
+      "passed": 500,
+      "failed": 0,
+      "seconds": 2
+    },
+    "regression_fails_on_buggy": {
+      "value": true,
+      "failure": "1 failed; ValueError: Stop argument for islice() must be None or an integer (over the test's 540 slice combinations: 18 wrong results, 289 raise)"
+    },
+    "regression_passes_on_fix": true,
+    "python_version": "3.13",
+    "difficulty_guess": {
+      "level": "easy",
+      "reason": "model-based property 'BarrelList(xs)[s] == xs[s]' for random slices fails on almost any negative step, including [::-1]"
+    },
+    "split": "held-out"
+  },
+  {
+    "id": "cattrs-literal-rename-disambiguation",
+    "language": "python",
+    "repo": "https://github.com/python-attrs/cattrs",
+    "buggy_sha": "0a1d658438f1cd0d2a409edf867c0f1d3ef40398",
+    "fix_sha": "b618aab7d97df8921d05bbf3ef3446da716a16de",
+    "fix_date": "2026-09-30T22:18:04+02:00",
+    "issue_url": "https://github.com/python-attrs/cattrs/pull/778",
+    "summary": "The literal-field union disambiguator looks up the Python attribute name, not the key set by override(rename=...), so a union of attrs classes discriminated by a renamed Literal field cannot structure its own unstructured output (KeyError: 'kind' for {'type': 'cat'}).",
+    "module_paths": [
+      "src/cattrs/disambiguators.py"
+    ],
+    "regression_test": {
+      "tests": [
+        "tests/test_disambiguators.py::test_literal_field_renaming",
+        "tests/test_disambiguators.py::test_literal_field_renaming_different_attributes",
+        "tests/test_disambiguators.py::test_literal_field_renaming_different_keys",
+        "tests/test_disambiguators.py::test_literal_field_explicit_overrides"
+      ],
+      "files": [
+        "tests/test_disambiguators.py"
+      ],
+      "note": "PR merged by rebase: b618aab holds code and test, the merge tip b3fb197 only edits HISTORY.md"
+    },
+    "install": [
+      "uv venv --python 3.13 .venv",
+      "uv pip install --python .venv/bin/python -e . pytest hypothesis immutables pytest-benchmark ujson orjson msgpack PyYAML tomlkit cbor2 pymongo msgspec tomli-w"
+    ],
+    "suite_cmd": ".venv/bin/python -m pytest -q -p no:cacheprovider tests",
+    "suite_result_buggy": {
+      "passed": 980,
+      "failed": 0,
+      "xfailed": 15,
+      "seconds": 65,
+      "note": "without the preconf extras three test modules error at collection"
+    },
+    "regression_fails_on_buggy": {
+      "value": true,
+      "failure": "25 failed (parametrised); KeyError: 'kind'"
+    },
+    "regression_passes_on_fix": true,
+    "python_version": "3.13",
+    "difficulty_guess": {
+      "level": "medium",
+      "reason": "round trip structure(unstructure(x)) == x fails only for a union of classes with a Literal discriminator AND a rename override on that field; the generator must build converter configuration, not just values"
+    },
+    "split": "held-out"
+  },
+  {
+    "id": "tomlkit-bool-eq",
+    "language": "python",
+    "repo": "https://github.com/python-poetry/tomlkit",
+    "buggy_sha": "19edc23b0244e1546abbf3b7890c3d8a0deeaf81",
+    "fix_sha": "18e7f98252f18db5c973435453cd25e1c7bd4c61",
+    "fix_date": "2026-10-16T10:37:35+08:00",
+    "issue_url": "https://github.com/python-poetry/tomlkit/pull/660",
+    "summary": "Bool.__eq__ accepts only a native bool and returns NotImplemented for another Bool, so item(True) != item(True) and two parses of 'a = [true, false]' compare unequal: equality is not reflexive.",
+    "module_paths": [
+      "tomlkit/items.py"
+    ],
+    "regression_test": {
+      "tests": [
+        "tests/test_items.py::test_booleans_compare_equal_to_each_other"
+      ],
+      "files": [
+        "tests/test_items.py"
+      ]
+    },
+    "install": [
+      "git submodule update --init --recursive",
+      "uv venv --python 3.13 .venv",
+      "uv pip install --python .venv/bin/python -e . pytest PyYAML"
+    ],
+    "suite_cmd": ".venv/bin/python -m pytest -q -p no:cacheprovider tests",
+    "suite_result_buggy": {
+      "passed": 1202,
+      "failed": 0,
+      "seconds": 1
+    },
+    "regression_fails_on_buggy": {
+      "value": true,
+      "failure": "assert True == True (item(True) == item(True) is False)"
+    },
+    "regression_passes_on_fix": true,
+    "python_version": "3.13",
+    "difficulty_guess": {
+      "level": "easy",
+      "reason": "Eq law (reflexivity) or 'parse(s) == parse(s)' over any document containing a boolean in an array or a standalone item fails immediately"
+    },
+    "split": "held-out"
+  },
+  {
+    "id": "portion-intervaldict-combine-drop",
+    "language": "python",
+    "repo": "https://github.com/AlexandreDecan/portion",
+    "buggy_sha": "622e7ca1f3a36a7cb337e6f51abeef0ee5e40c44",
+    "fix_sha": "da33c974745749f89c2e1787a86839395cc298b2",
+    "fix_date": "2026-10-26T12:15:55+01:00",
+    "issue_url": "https://github.com/AlexandreDecan/portion/pull/115",
+    "summary": "IntervalDict.combine's two-pointer sweep over non-atomic keys can exhaust one side before visiting the remaining keys of the other, so pieces of the domain intersection silently vanish: with d1 = {[3,4)|(4,5]: 'sides', [4]: 'middle'} and d2 = {(3,5): 'right'}, combined.get(4) is None instead of ('middle', 'right').",
+    "module_paths": [
+      "portion/dict.py"
+    ],
+    "regression_test": {
+      "tests": [
+        "tests/test_dict.py::TestIntervalDict::test_combine_non_atomic_interval_with_interior_piece"
+      ],
+      "files": [
+        "tests/test_dict.py"
+      ],
+      "note": "the fix adds two more tests (test_combine_pass_interval_non_atomic_keys, ..._spanning_keys) that pass on both commits; they guard intermediate PR commits"
+    },
+    "install": [
+      "uv venv --python 3.13 .venv",
+      "uv pip install --python .venv/bin/python -e . pytest pytest-benchmark"
+    ],
+    "suite_cmd": ".venv/bin/python -m pytest -q -p no:cacheprovider tests",
+    "suite_result_buggy": {
+      "passed": 230,
+      "failed": 0,
+      "skipped": 11,
+      "seconds": 1,
+      "note": "11 skipped are benchmarks (--benchmark-skip in the project's pytest config)"
+    },
+    "regression_fails_on_buggy": {
+      "value": true,
+      "failure": "AssertionError: combined dict is missing [4] -> ('middle', 'right')"
+    },
+    "regression_passes_on_fix": true,
+    "python_version": "3.13",
+    "difficulty_guess": {
+      "level": "hard",
+      "reason": "needs a non-atomic key whose interior gap is filled by another key (built by assignment order), overlapped by the other dict; property 'combine domain == d1.domain & d2.domain' only fails on that structure. The bug was introduced by an unreleased performance rewrite (8db341e)"
+    },
+    "split": "held-out"
+  },
+  {
+    "id": "funcy-counter-walk",
+    "language": "python",
+    "repo": "https://github.com/Suor/funcy",
+    "buggy_sha": "d3d1463753cafaa83c5b083df8c01ca46e2a91eb",
+    "fix_sha": "7e5f8a2284ec1562135bba3497a2c54ab3f64056",
+    "fix_date": "2026-10-12T16:31:23+07:00",
+    "issue_url": "https://github.com/Suor/funcy/pull/200",
+    "summary": "Mapping transformations (walk_values, walk_keys, project, omit, select_values, ...) rebuild the input type by calling its constructor on (key, value) pairs; for collections.Counter that counts the pairs, so walk_values(lambda n: n * 2, Counter(a=2)) returns Counter({('a', 4): 1}) instead of Counter(a=4).",
+    "module_paths": [
+      "funcy/colls.py"
+    ],
+    "regression_test": {
+      "tests": [
+        "tests/test_colls.py::test_counter_mapping_operations"
+      ],
+      "files": [
+        "tests/test_colls.py"
+      ]
+    },
+    "install": [
+      "uv venv --python 3.13 .venv",
+      "uv pip install --python .venv/bin/python -e . pytest whatever"
+    ],
+    "suite_cmd": ".venv/bin/python -m pytest -q -p no:cacheprovider tests",
+    "suite_result_buggy": {
+      "passed": 257,
+      "failed": 0,
+      "seconds": 1
+    },
+    "regression_fails_on_buggy": {
+      "value": true,
+      "failure": "assert {('a', 4): 1, ('b', -2): 1, ('zero', 0): 1} == {'a': 4, 'b': -2, 'zero': 0}"
+    },
+    "regression_passes_on_fix": true,
+    "python_version": "3.13",
+    "difficulty_guess": {
+      "level": "medium",
+      "reason": "functor law walk_values(id, m) == m holds for dict/defaultdict/OrderedDict; fails only if the generator includes Counter among mapping types"
+    },
+    "split": "held-out"
+  },
+  {
+    "id": "bytes-try-get-int-sign-extend",
+    "language": "rust",
+    "repo": "https://github.com/tokio-rs/bytes",
+    "buggy_sha": "d5c8ad3227afe459c09f1d0d85455abf00f0381a",
+    "fix_sha": "7930d93d583757e922014312d4aa3e58a415131f",
+    "fix_date": "2026-09-03T17:00:02+02:00",
+    "issue_url": "https://github.com/tokio-rs/bytes/pull/839",
+    "summary": "Buf::try_get_int / try_get_int_le copy n < 8 bytes into a zeroed i64 without sign extension, so [0xff, 0xff, 0xff].try_get_int(3) is Ok(16777215) while the panicking twin get_int(3) returns -1.",
+    "module_paths": [
+      "src/buf/buf_impl.rs"
+    ],
+    "regression_test": {
+      "tests": [
+        "try_get_int_sign_extends"
+      ],
+      "files": [
+        "tests/test_buf.rs"
+      ],
+      "run": "rustup run 1.99.1 cargo test --test test_buf try_get_int_sign_extends"
+    },
+    "install": [
+      "rustup run 1.99.1 cargo test --no-run --lib --tests"
+    ],
+    "suite_cmd": "rustup run 1.99.1 cargo test --lib --tests",
+    "suite_result_buggy": {
+      "passed": 1056,
+      "failed": 0,
+      "seconds": 10,
+      "note": "seconds include the build"
+    },
+    "regression_fails_on_buggy": {
+      "value": true,
+      "failure": "left: Ok(16777215) right: Ok(-1)"
+    },
+    "regression_passes_on_fix": true,
+    "toolchain": "1.99.1 (no rust-toolchain file)",
+    "difficulty_guess": {
+      "level": "easy",
+      "reason": "agreement property 'try_get_int(n) == Ok(get_int(n))' (or put_int/get round trip) fails for any negative value with n < 8"
+    },
+    "split": "held-out"
+  },
+  {
+    "id": "ordered-float-mixed-nan-eq",
+    "language": "rust",
+    "repo": "https://github.com/reem/rust-ordered-float",
+    "buggy_sha": "29d27c4cfb592016b1758843737c80ab4ff3a609",
+    "fix_sha": "b86fd8ced4fe0ee749163f8b0b5b0c238d0e30f0",
+    "fix_date": "2026-10-11T15:57:25-07:00",
+    "issue_url": "https://github.com/reem/rust-ordered-float/pull/185",
+    "summary": "PartialEq<T> for OrderedFloat<T> uses primitive float equality, so OrderedFloat(nan) == nan is false although OrderedFloat(nan) == OrderedFloat(nan) is true: mixed equality disagrees with the wrapper's total equality.",
+    "module_paths": [
+      "src/lib.rs"
+    ],
+    "regression_test": {
+      "tests": [
+        "ordered_f32_mixed_eq_nan",
+        "ordered_f64_mixed_eq_nan"
+      ],
+      "files": [
+        "tests/test.rs"
+      ],
+      "run": "rustup run 1.99.1 cargo test --test test mixed_eq",
+      "note": "the fix also adds ordered_f32/f64_mixed_eq_controls, which pass on both commits"
+    },
+    "install": [
+      "rustup run 1.99.1 cargo test --no-run --lib --tests"
+    ],
+    "suite_cmd": "rustup run 1.99.1 cargo test --lib --tests",
+    "suite_result_buggy": {
+      "passed": 72,
+      "failed": 0,
+      "seconds": 2,
+      "note": "seconds with build cached; Cargo.lock committed"
+    },
+    "regression_fails_on_buggy": {
+      "value": true,
+      "failure": "2 failed; panicked at tests/test.rs:118 assert!(OrderedFloat(first) == first) (NaN)"
+    },
+    "regression_passes_on_fix": true,
+    "toolchain": "1.99.1 (no rust-toolchain file)",
+    "difficulty_guess": {
+      "level": "easy",
+      "reason": "consistency law 'OrderedFloat(a) == b  <=>  OrderedFloat(a) == OrderedFloat(b)' fails whenever the float generator produces NaN, which proptest/quickcheck any-float strategies do"
+    },
+    "split": "held-out"
+  },
+  {
+    "id": "rust-decimal-mul-negative-zero",
+    "language": "rust",
+    "repo": "https://github.com/paupino/rust-decimal",
+    "buggy_sha": "591a7b1d36da1e8e501992e643fe2fae9b414ac2",
+    "fix_sha": "45b666926f86db2d5e1b7bb850d80c30071d332e",
+    "fix_date": "2026-10-28T10:17:51Z",
+    "issue_url": "https://github.com/paupino/rust-decimal/issues/842 (PR https://github.com/paupino/rust-decimal/pull/871)",
+    "summary": "finish_mul assumes the product of two non-zero operands is non-zero, but Buf24::rescale can round a wide product to zero, so Decimal::new(-5_000_000_000, 20) * Decimal::new(1, 20) is '-0.0000000000000000000000000000' (sign set) while the 32-bit path returns unsigned zero.",
+    "module_paths": [
+      "src/ops/mul.rs"
+    ],
+    "regression_test": {
+      "tests": [
+        "arithmetic::it_does_not_return_negative_zero_from_wide_multiplication"
+      ],
+      "files": [
+        "tests/decimal_tests/arithmetic.rs"
+      ],
+      "run": "rustup run 1.99.1 cargo test --test decimal_tests it_does_not_return_negative_zero_from_wide_multiplication"
+    },
+    "install": [
+      "export MYSQLCLIENT_LIB_DIR=<any existing dir> MYSQLCLIENT_VERSION=8.0.0",
+      "rustup run 1.99.1 cargo test --no-run --lib --tests"
+    ],
+    "suite_cmd": "rustup run 1.99.1 cargo test --lib --tests",
+    "suite_result_buggy": {
+      "passed": 211,
+      "failed": 0,
+      "seconds": 9,
+      "note": "45 lib + 158 decimal_tests + 5 serde + 1 track_caller + 2 version-numbers; build 6 s cold after deps. The diesel mysql dev-dependency's build script needs MYSQLCLIENT_LIB_DIR/VERSION set (to anything); libmysqlclient is never linked by these targets"
+    },
+    "regression_fails_on_buggy": {
+      "value": true,
+      "failure": "left: \"0.0000000000000000000000000000\" right: \"-0.0000000000000000000000000000\""
+    },
+    "regression_passes_on_fix": true,
+    "toolchain": "1.99.1 (no rust-toolchain file)",
+    "difficulty_guess": {
+      "level": "medium",
+      "reason": "property 'x * y == 0 implies !is_sign_negative()' (or to_string never starts with '-0') needs a negative operand with a mantissa wider than 32 bits and scales summing past 28 so the product rounds to zero; uniform decimals rarely do"
+    },
+    "split": "held-out"
+  },
+  {
+    "id": "time-sunday-week-number",
+    "language": "rust",
+    "repo": "https://github.com/time-rs/time",
+    "buggy_sha": "b59172714f4e42daf118ca508928c803248b1881",
+    "fix_sha": "1a835ca577818c666c564927e12c862c3e9b0dfa",
+    "fix_date": "2026-10-16T02:55:12-04:00",
+    "issue_url": "https://github.com/time-rs/time/pull/815",
+    "summary": "Parsing a date from [year]-W[week_number repr:sunday]-[weekday repr:sunday] computes the ordinal with adjustment(year) - 1 instead of adjustment(year) % 7, so in most years the parsed date is six days off from the date that was formatted: Date::parse(d.format(fd)) != d. The existing parse_date cases encoded the wrong answers and were corrected by the fix.",
+    "module_paths": [
+      "time/src/parsing/parsed.rs"
+    ],
+    "regression_test": {
+      "tests": [
+        "parsing::parse_date_week_number_roundtrip::case_1",
+        "parsing::parse_date::case_06 .. case_13 (8 corrected expectations)"
+      ],
+      "files": [
+        "time/tests/integration/parsing.rs"
+      ],
+      "run": "rustup run 1.99.1 cargo test -p time --all-features --test tests parsing::parse_date"
+    },
+    "install": [
+      "rustup run 1.99.1 cargo test --no-run -p time --all-features --lib --tests"
+    ],
+    "suite_cmd": "rustup run 1.99.1 cargo test -p time --all-features --lib --tests",
+    "suite_result_buggy": {
+      "passed": 7062,
+      "failed": 0,
+      "seconds": 16,
+      "note": "15 s build + 1 s run; the integration test crate compiles only with all features"
+    },
+    "regression_fails_on_buggy": {
+      "value": true,
+      "failure": "9 failed: parse_date cases 06-13 and parse_date_week_number_roundtrip::case_1 (repr:sunday); the repr:monday round trip passes"
+    },
+    "regression_passes_on_fix": true,
+    "toolchain": "1.99.1 (no rust-toolchain file)",
+    "difficulty_guess": {
+      "level": "medium",
+      "reason": "round trip parse(format(d)) == d fails for most dates, but only with the Sunday-based week-number format description; the agent must think to generate that format, not the default ones"
+    },
+    "split": "held-out"
+  }
+]

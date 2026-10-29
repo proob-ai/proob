@@ -1,0 +1,20 @@
+[package]
+name = "proob-core"
+description = "proob's verified core: the functions that decide approvals and verdicts, checked by Verus"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+# The layering rule, enforced by tools/crate-graph-check.sh: nothing but the Verus
+# standard library and the trusted base. No serde, no strings, no I/O.
+[dependencies]
+vstd.workspace = true
+proob-trusted.workspace = true
+
+[package.metadata.verus]
+verify = true
+
+[lints]
+workspace = true

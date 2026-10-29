@@ -1,0 +1,6 @@
+id = "01M632PN78QFX967MGYA3QMKF2"
+title = "Day sequence reversed"
+statement = "Reading a run of consecutive days from the back yields exactly the dates read from the front, in reverse order."
+scope = ["src/naive/date/mod.rs"]
+severity = "high"
+rationale = "The day iterator declares itself double-ended, a promise that next_back walks the same items from the other end, but next_back in src/naive/date/mod.rs moves the single cursor toward the earliest date while next and size_hint run toward the latest. test_day_iterator_limit in src/naive/date/tests.rs expects rev() from MIN_YEAR-01-03 to yield 2 dates though the forward length is millions, and the rev() doc example on iter_days starts from a different date than the forward one. Generic code using rev, rposition, or last-from-the-back silently gets wrong dates."

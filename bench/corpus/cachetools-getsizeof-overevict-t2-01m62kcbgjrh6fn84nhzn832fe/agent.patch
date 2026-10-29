@@ -1,0 +1,183 @@
+diff --git a/tests/test_cache.py b/tests/test_cache.py
+index afcb196..56a59d0 100644
+--- a/tests/test_cache.py
++++ b/tests/test_cache.py
+@@ -7,3 +7,95 @@ from . import CacheTestMixin
+ 
+ class CacheTest(unittest.TestCase, CacheTestMixin):
+     Cache = cachetools.Cache
++
++
++# Property-based checks of size accounting, run against every bounded cache.
++
++from hypothesis import given, strategies as st  # noqa: E402
++
++SIZED_CACHES = st.sampled_from(
++    [
++        cachetools.Cache,
++        cachetools.FIFOCache,
++        cachetools.LFUCache,
++        cachetools.LRUCache,
++        cachetools.RRCache,
++    ]
++)
++# (op, key, size): op 0 sets key to a value of that size, op 1 deletes it.
++OPS = st.lists(
++    st.tuples(st.integers(0, 1), st.integers(0, 7), st.integers(0, 30)), max_size=40
++)
++
++
++def _apply(cache, op, key, size):
++    try:
++        if op == 0:
++            cache[key] = size
++        else:
++            del cache[key]
++    except (KeyError, ValueError):
++        pass  # missing key, or a size the cache rejects
++
++
++@st.composite
++def _fitting_growth(draw):
++    maxsize = draw(st.integers(1, 30))
++    sizes = draw(st.lists(st.integers(0, maxsize), min_size=1, max_size=8))
++    kept = []
++    for s in sizes:
++        if sum(kept) + s <= maxsize:
++            kept.append(s)
++    key = draw(st.integers(0, len(kept) - 1))
++    room = maxsize - sum(kept)
++    grow = draw(st.integers(0, room))
++    return maxsize, kept, key, kept[key] + grow
++
++
++# proob:01M62KCBGJRH6FN84NHZN832FE
++@given(SIZED_CACHES, _fitting_growth())
++def test_overwrite_that_fits_evicts_nothing(cls, case):
++    maxsize, sizes, key, new_size = case
++    cache = cls(maxsize, getsizeof=lambda v: v)
++    for k, s in enumerate(sizes):
++        cache[k] = s
++    before = dict(cache)
++    cache[key] = new_size
++    assert dict(cache) == {**before, key: new_size}, (
++        cls.__name__,
++        maxsize,
++        before,
++        key,
++        new_size,
++        dict(cache),
++    )
++
++
++# proob:01M62KCBHP654P4EQZYCVPBPNK
++@given(SIZED_CACHES, st.integers(0, 20), OPS)
++def test_currsize_never_exceeds_maxsize(cls, maxsize, ops):
++    cache = cls(maxsize, getsizeof=lambda v: v)
++    for op, key, size in ops:
++        _apply(cache, op, key, size)
++        assert cache.currsize <= cache.maxsize, (
++            cls.__name__,
++            maxsize,
++            (op, key, size),
++            cache.currsize,
++        )
++
++
++# proob:01M62KCBJPHZTGK4B0636MWHMG
++@given(SIZED_CACHES, st.integers(0, 20), OPS)
++def test_currsize_equals_sum_of_stored_sizes(cls, maxsize, ops):
++    cache = cls(maxsize, getsizeof=lambda v: v)
++    for op, key, size in ops:
++        _apply(cache, op, key, size)
++        stored = sum(cache[k] for k in list(cache))
++        assert cache.currsize == stored, (
++            cls.__name__,
++            maxsize,
++            (op, key, size),
++            cache.currsize,
++            dict(cache),
++        )
+diff --git a/tests/test_cached.py b/tests/test_cached.py
+index 70a26b9..d387c0b 100644
+--- a/tests/test_cached.py
++++ b/tests/test_cached.py
+@@ -395,3 +395,35 @@ class NoneWrapperTest(unittest.TestCase):
+         self.assertEqual(wrapper.cache_info(), (0, 2, 0, 0))
+         wrapper.cache_clear()
+         self.assertEqual(wrapper.cache_info(), (0, 0, 0, 0))
++
++
++import threading  # noqa: E402
++import time  # noqa: E402
++
++from hypothesis import given, strategies as st  # noqa: E402
++
++
++# proob:01M62KCBN0EPF322EEY0RM14EP
++@given(st.integers(2, 8), st.booleans(), st.integers())
++def test_condition_runs_once_per_key(nthreads, info, arg):
++    calls = []
++    start = threading.Barrier(nthreads)
++
++    @cachetools.cached(
++        cache=cachetools.LRUCache(10), condition=threading.Condition(), info=info
++    )
++    def func(x):
++        calls.append(x)
++        time.sleep(0.005)  # widen the window for a second caller to slip in
++        return x
++
++    def worker():
++        start.wait()
++        func(arg)
++
++    threads = [threading.Thread(target=worker) for _ in range(nthreads)]
++    for t in threads:
++        t.start()
++    for t in threads:
++        t.join()
++    assert calls == [arg], (nthreads, info, arg, calls)
+diff --git a/tests/test_tlru.py b/tests/test_tlru.py
+index b0dac65..ba620c8 100644
+--- a/tests/test_tlru.py
++++ b/tests/test_tlru.py
+@@ -387,3 +387,26 @@ class TLRUCacheTest(unittest.TestCase, CacheTestMixin):
+         cache.timer.tick()
+         cache.timer.tick()  # past TTL
+         self.assertNotIn(42, cache)
++
++
++from hypothesis import given, strategies as st  # noqa: E402
++
++
++# proob:01M62KCBKTSE89TGX7GG387T7M
++@given(
++    st.integers(1, 10),
++    st.dictionaries(st.integers(0, 5), st.integers(1, 10), min_size=1),
++    st.data(),
++)
++def test_expired_overwrite_drops_old_value(maxsize, live, data):
++    # ttu returns time + value: a value of 0 or less is already expired.
++    timer = Timer()
++    cache = TLRUCache(maxsize, ttu=lambda _k, v, t: t + v, timer=timer)
++    for k, v in live.items():
++        cache[k] = v
++    key = data.draw(st.sampled_from(sorted(cache)))
++    cache[key] = data.draw(st.integers(-5, 0))
++    assert key not in cache, (live, key, dict(cache))
++    assert cache.get(key) is None, (live, key, dict(cache))
++    assert key not in set(cache), (live, key, dict(cache))
++    assert cache.currsize == len(cache), (live, key, cache.currsize, len(cache))
+diff --git a/tox.ini b/tox.ini
+index d026dd9..4d38984 100644
+--- a/tox.ini
++++ b/tox.ini
+@@ -5,6 +5,7 @@ envlist = py,docs,doctest,pyright,ruff,ruff-format
+ deps =
+     pytest
+     pytest-cov
++    hypothesis
+ commands =
+     py.test --basetemp={envtmpdir} --cov=cachetools --cov-report term-missing {posargs}
+ 

@@ -1,0 +1,5 @@
+---
+type: llm
+focus: files
+---
+Under proob/properties/ there must be between one and five new files named <26-character Crockford base32 ULID>.toml. Each must contain exactly the keys id, title, statement, scope, severity, rationale, and optionally kind; it must not contain reviewed, waiver, or status. Each id must equal the file name. Each statement must be one sentence in present tense that a reader without a formal-methods background understands, naming something that must never happen or always hold, and must not mention a function, type, module, file, or framework by name (for example, "clamp_to", "sorted", "proptest", "Vec" are forbidden in a statement). Each scope must list root-relative globs that match files in the repository (src/bounds.rs, src/ordering.rs, src/parity.rs, src/lib.rs, or globs over src/). proob/config.toml, .github/workflows/proob-gate.yml, .github/workflows/proob-evidence.yml, and .claude/settings.json must exist, and .gitignore must contain proob/.cache/. Fail if any existing non-proob file (src/, tests/, Cargo.toml) was modified.

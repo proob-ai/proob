@@ -1,0 +1,30 @@
+[package]
+name = "proob-effects"
+description = "proob's effects: git, the GitHub client, the fact cache, evidence retrieval, and the assembly of facts for the verified core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+# Unverified. Depends on the core, the facts crate, spawn, and third-party
+# crates; never on proob-trusted (reached only through the core), and nothing
+# in proob-adapters may depend on this crate. tools/crate-graph-check.sh
+# enforces both.
+[dependencies]
+proob-core.workspace = true
+proob-facts.workspace = true
+proob-spawn.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+globset.workspace = true
+reqwest.workspace = true
+rustls.workspace = true
+zip.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+tempfile.workspace = true
+
+[lints]
+workspace = true

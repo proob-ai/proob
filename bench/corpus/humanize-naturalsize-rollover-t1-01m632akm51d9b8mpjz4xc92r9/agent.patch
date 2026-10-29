@@ -1,0 +1,157 @@
+diff --git a/pyproject.toml b/pyproject.toml
+index b277739..0c62f5f 100644
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -37,6 +37,7 @@ classifiers = [
+ dynamic = [ "version" ]
+ optional-dependencies.tests = [
+   "freezegun",
++  "hypothesis",
+   "pytest>=9",
+   "pytest-benchmark",
+   "pytest-codspeed",
+diff --git a/tests/test_filesize.py b/tests/test_filesize.py
+index 04774d9..8a13eb6 100644
+--- a/tests/test_filesize.py
++++ b/tests/test_filesize.py
+@@ -4,9 +4,14 @@
+ 
+ from __future__ import annotations
+ 
++import re
++
+ import pytest
++from hypothesis import assume, given
++from hypothesis import strategies as st
+ 
+ import humanize
++import humanize.filesize
+ 
+ 
+ @pytest.mark.parametrize(
+@@ -94,3 +99,85 @@ def test_naturalsize(test_args: list[int] | list[int | bool], expected: str) ->
+         test_args[0] = f"-{test_args[0]}"
+ 
+     assert humanize.naturalsize(*test_args) == "-" + expected
++
++
++_MODES = st.sampled_from([(False, False), (True, False), (False, True)])
++# Uniform draws almost never land just below a unit boundary, so mix those in.
++_NEAR_BOUNDARY = st.builds(
++    lambda base, exp, offset, sign: sign * (base**exp - offset),
++    st.sampled_from([1000, 1024]),
++    st.integers(min_value=1, max_value=11),
++    st.integers(min_value=0, max_value=2**20),
++    st.sampled_from([1, -1]),
++)
++_SIZES = st.one_of(
++    st.integers(min_value=-(1024**11), max_value=1024**11), _NEAR_BOUNDARY
++)
++_UNIT_RE = re.compile(r"^(-?[\d.]+) ?(\D*)$")
++
++
++def _split(text: str) -> tuple[float, str]:
++    match = _UNIT_RE.match(text)
++    assert match, text
++    return float(match[1]), match[2]
++
++
++def _unit_rank(unit: str, gnu: bool) -> int:
++    # Rank 0 is plain bytes; rank n is the n-th prefixed unit.
++    if unit in ("Byte", "Bytes", "B"):
++        return 0
++    table = humanize.filesize.suffixes["gnu" if gnu else "decimal"]
++    binary = humanize.filesize.suffixes["binary"]
++    return (binary.index(unit) if unit in binary else table.index(unit)) + 1
++
++
++# proob:01M632AKM51D9B8MPJZ4XC92R9
++@given(_SIZES, _MODES)
++def test_naturalsize_rolls_over_before_base(value: int, mode: tuple[bool, bool]) -> None:
++    binary, gnu = mode
++    text = humanize.naturalsize(value, binary, gnu)
++    number, unit = _split(text)
++    base = 1024 if (binary or gnu) else 1000
++    top = _unit_rank(unit, gnu) == len(humanize.filesize.suffixes["gnu"])
++    assert top or abs(number) < base, (value, binary, gnu, text)
++
++
++# proob:01M632AKNB714RPFDE6C4RYJRW
++@given(
++    st.integers(min_value=0, max_value=1024**11),
++    st.integers(min_value=0, max_value=1024**11),
++    _MODES,
++)
++def test_naturalsize_unit_never_shrinks(a: int, b: int, mode: tuple[bool, bool]) -> None:
++    binary, gnu = mode
++    small, large = sorted((a, b))
++    small_text = humanize.naturalsize(small, binary, gnu)
++    large_text = humanize.naturalsize(large, binary, gnu)
++    small_rank = _unit_rank(_split(small_text)[1], gnu)
++    large_rank = _unit_rank(_split(large_text)[1], gnu)
++    assert small_rank <= large_rank, (small, small_text, large, large_text, mode)
++
++
++# proob:01M632AKQNK2J1YYSYJYJKNKDH
++@given(st.integers(min_value=1, max_value=1024**11), _MODES)
++def test_naturalsize_negative_mirrors_positive(value: int, mode: tuple[bool, bool]) -> None:
++    binary, gnu = mode
++    positive = humanize.naturalsize(value, binary, gnu)
++    negative = humanize.naturalsize(-value, binary, gnu)
++    assert negative == "-" + positive, (value, mode, positive, negative)
++
++
++# proob:01M632AKRRAXZ15ZMWFV7F1AQF
++@given(st.integers(min_value=-1023, max_value=1023), _MODES)
++def test_naturalsize_small_sizes_are_whole_bytes(value: int, mode: tuple[bool, bool]) -> None:
++    binary, gnu = mode
++    base = 1024 if (binary or gnu) else 1000
++    assume(abs(value) < base)
++    text = humanize.naturalsize(value, binary, gnu)
++    if gnu:
++        expected = f"{value}B"
++    elif abs(value) == 1:
++        expected = f"{value} Byte"
++    else:
++        expected = f"{value} Bytes"
++    assert text == expected, (value, mode, text)
+diff --git a/tests/test_number.py b/tests/test_number.py
+index 244dee0..a7138bc 100644
+--- a/tests/test_number.py
++++ b/tests/test_number.py
+@@ -6,6 +6,8 @@ import math
+ import typing
+ 
+ import pytest
++from hypothesis import given
++from hypothesis import strategies as st
+ 
+ import humanize
+ from humanize import number
+@@ -314,3 +316,26 @@ def test_clamp(test_args: list[typing.Any], expected: str) -> None:
+ )
+ def test_metric(test_args: list[typing.Any], expected: str) -> None:
+     assert humanize.metric(*test_args) == expected
++
++
++# proob:01M632AKPFW3NWHS3XD80SET8Q
++@given(
++    st.one_of(
++        st.floats(
++            min_value=-1e33, max_value=1e33, allow_nan=False, allow_infinity=False
++        ),
++        # Uniform draws rarely land just below a power of ten, so mix those in.
++        st.builds(
++            lambda exp, frac, sign: sign * 10.0**exp * (1 - frac),
++            st.integers(min_value=-29, max_value=33),
++            st.floats(min_value=0, max_value=1e-3),
++            st.sampled_from([1, -1]),
++        ),
++    ).filter(lambda v: v == 0 or 1e-30 <= abs(v) < 1e33)
++)
++def test_metric_mantissa_below_1000(value: float) -> None:
++    text = humanize.metric(value)
++    if "x 10" in text:
++        return  # scientific fallback carries no SI prefix
++    mantissa = float(text.split(" ")[0])
++    assert abs(mantissa) < 1000, (value, text)

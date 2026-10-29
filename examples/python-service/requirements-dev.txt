@@ -1,0 +1,5 @@
+# Test tooling for idem. pytest runs the tests; Hypothesis is here for
+# property-based tests. Pin to taste; proob's own tool pins live in its
+# repository under tools/python-tools.txt.
+pytest
+hypothesis

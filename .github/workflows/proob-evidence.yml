@@ -1,0 +1,152 @@
+# proob evidence: the default-branch runs whose results are the only evidence
+# a verdict reads. Written by `proob init`.
+#
+# Evidence is produced only here: on every push to the default branch (the
+# checks and proofs at the merged hashes) and nightly (the same plus mutation
+# scoring, which measures whether each check can fail at all). A pull
+# request's own run never becomes evidence; it only gates that pull request.
+#
+# The same two-job shape as the gate. `execute` runs repository code and holds
+# no token (`permissions: {}`); `judge` reads with the default token, runs no
+# repository code, packages the raw results into evidence records with this
+# run's identity, and uploads them. No job has a write permission; the
+# artifact upload needs none.
+#
+# `fetch-depth: 0`: proob needs the full history of the default branch.
+#
+# The action is pinned to a full commit SHA with the version as a comment, so
+# a moved tag can never change what produces your evidence. Bump it on
+# purpose.
+#
+# The evidence artifact is kept for 90 days, longer than the freshness window
+# verdicts read it within (config `freshness_days`, 14 by default). A private
+# repository needs `contents: read` on the execute job for the checkout; see
+# proob-gate.yml.
+#
+# BRING-UP (this repository only, until a release containing `proob action`
+# exists): no released binary can run these jobs yet, so each job builds proob
+# from the checkout and hands the binary to the action through `binary:`
+# instead of downloading a pinned release. The judge job therefore compiles
+# repository code during bring-up, the one exception to the rule above. Two
+# edits end it once the release is tagged: replace each `uses: ./` and its
+# `binary:` line with `uses: proob-ai/proob@<sha> # vX.Y.Z`, and delete every
+# step marked BRING-UP.
+name: proob evidence
+
+on:
+  push:
+    branches: [master]
+  schedule:
+    # Nightly at 03:17 UTC; a fixed off-the-hour minute avoids the top-of-hour
+    # queue. GitHub disables schedules on repositories idle for 60 days.
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: proob-evidence-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  # Pinned with tools/get-verus.sh; the cache key below must change with it.
+  PROOB_VERUS_VERSION: 0.2026.10.26.d17fbd0
+
+jobs:
+  execute:
+    name: proob execute
+    runs-on: ubuntu-latest
+    # No token: this job runs repository code.
+    # PRIVATE REPO: actions/checkout cannot clone a private repository with no
+    # permissions, so this job reads contents. The token is never in the job's
+    # environment (persist-credentials: false) and grants no write. Set this
+    # back to `permissions: {}` the day the repository is public.
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          # Repository code runs in this job: leave no credential in .git/config.
+          persist-credentials: false
+      - name: Install the Rust toolchain pinned in rust-toolchain.toml
+        run: rustup toolchain install && rustup show active-toolchain
+      - uses: taiki-e/install-action@1168f6810a3cb30a3514bf5756a3b7f0422c6df8 # v2.87.28
+        with:
+          tool: cargo-nextest@0.9.150,cargo-mutants@27.1.0
+      - name: Cache the pinned Verus release
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.proob-dev/verus
+          key: verus-${{ runner.os }}-${{ runner.arch }}-${{ env.PROOB_VERUS_VERSION }}
+      - name: Fetch and verify the pinned Verus release (the proof-backed properties)
+        run: |
+          dir=$(tools/get-verus.sh)
+          echo "$dir" >> "$GITHUB_PATH"
+          "$dir/verus" --version
+      - name: "BRING-UP: build proob from this checkout"
+        run: cargo build --locked -p proob
+      - name: Run every bound check, and on schedule every score (no token)
+        # BRING-UP: replace with `uses: proob-ai/proob@<sha> # vX.Y.Z` and
+        # remove the `binary:` line and the build step once a release
+        # containing `proob action` exists.
+        uses: ./
+        with:
+          binary: target/debug/proob
+          mode: evidence
+          job: execute
+      - name: Hand the raw results to the judge job
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: proob-results
+          path: proob/.cache/results/
+          if-no-files-found: error
+          retention-days: 7
+
+  judge:
+    name: proob evidence
+    needs: execute
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read # governed files and their history
+      pull-requests: read # the reviews that approved them
+      actions: read # earlier evidence runs
+      issues: read # waiver issues
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: "BRING-UP: install the Rust toolchain pinned in rust-toolchain.toml"
+        run: rustup toolchain install && rustup show active-toolchain
+      - name: "BRING-UP: build proob from this checkout (repository code, judge job)"
+        run: cargo build --locked -p proob
+      - name: Take the raw results from the execute job
+        # The judge packages them only when their manifest names this run.
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: proob-results
+          path: proob/.cache/results/
+      - name: Package the results as evidence of this run (read-only token)
+        # Stamps each record with this run's id, commit, and workflow blob,
+        # writes proob/.cache/evidence/evidence.jsonl, and renders the status
+        # of the default branch; exits 0, noting any negative outcome.
+        # BRING-UP: replace with `uses: proob-ai/proob@<sha> # vX.Y.Z` and
+        # remove the `binary:` line and the two BRING-UP steps above once a
+        # release containing `proob action` exists.
+        uses: ./
+        with:
+          binary: target/debug/proob
+          mode: evidence
+          job: judge
+        env:
+          # The only token in either workflow, and it can only read.
+          GITHUB_TOKEN: ${{ github.token }}
+      - name: Publish the evidence records
+        # The artifact every later verdict reads; its name is fixed.
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: proob-evidence
+          path: proob/.cache/evidence/
+          if-no-files-found: error
+          retention-days: 90

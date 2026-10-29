@@ -1,0 +1,6 @@
+id = "01M62H14F5F2BAFDN37JZFSM0M"
+title = "Array edits stay parseable"
+statement = "After any edit to an array, its saved text parses back to exactly the values the program holds."
+scope = ["tomlkit/items.py"]
+severity = "high"
+rationale = "Arrays keep values both as a plain list and as formatted groups with commas, indents and comments (tomlkit/items.py:1409-1416, 1488-1521); every mutation must keep both in step. Tests in tests/test_items.py (around lines 342-358, 1227, 1246, 1509-1570) re-parse the printed array; CHANGELOG fixes #499 (duplicated commas on comma-first insert) and #580 (trailing comment before the closing bracket, see comment at tomlkit/items.py:1492-1495) show this broke before."

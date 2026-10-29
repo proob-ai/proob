@@ -1,0 +1,6 @@
+id = "01M63JRTRNKGHDZDPV669148PD"
+title = "Zero product is never negative zero"
+statement = "When a multiplication comes out as zero, the result is plain zero and never negative zero."
+scope = ["src/ops/mul.rs", "src/ops/common.rs"]
+severity = "high"
+rationale = "The unchecked constructor contract at src/decimal.rs:561 requires a zero mantissa to have its sign cleared, yet src/ops/mul.rs:161-167 builds the result with the operand sign after the rescale at src/ops/mul.rs:154 can round a tiny product to zero. CHANGELOG.md:555-559 states -0 is corrected to 0 for operations. tests/decimal_tests/arithmetic.rs:256-260 covers only the positive tiny times tiny case. A negative zero prints as -0.000 (src/decimal.rs:2563), a wrong sign on amounts."

@@ -1,0 +1,15 @@
+kind = "catch"
+bug = "cattrs-literal-rename-disambiguation"
+trial = "t1"
+language = "python"
+repo = "https://github.com/python-attrs/cattrs"
+buggy_commit = "0a1d658438f1cd0d2a409edf867c0f1d3ef40398"
+fix_commit = "b618aab7d97df8921d05bbf3ef3446da716a16de"
+fix_paths = ["src/cattrs/disambiguators.py"]
+install = ["uv venv --python 3.13 .venv", "uv pip install --python .venv/bin/python -e . pytest hypothesis immutables pytest-benchmark ujson orjson msgpack PyYAML tomlkit cbor2 pymongo msgspec tomli-w"]
+python = "3.13"
+property = "01M63HZBQC3J3W4TF7WN9T1P00"
+seed = "1793239468244217120"
+expect_buggy = "counterexample"
+expect_fixed = "no_counterexample"
+flaky = false

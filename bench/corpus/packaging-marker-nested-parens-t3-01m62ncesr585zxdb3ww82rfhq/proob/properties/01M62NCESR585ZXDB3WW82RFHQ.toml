@@ -1,0 +1,6 @@
+id = "01M62NCESR585ZXDB3WW82RFHQ"
+title = "Equal markers mean the same thing"
+statement = "Two environment markers compare equal only when they evaluate the same in every environment."
+scope = ["src/packaging/markers.py"]
+severity = "high"
+rationale = "Marker equality and hashing compare the printed text (src/packaging/markers.py 404-411). If printing loses grouping, two markers with different meanings compare equal and deduplication can drop a real dependency condition. Related tests: test_different_markers_different_hashes and test_chaining_associativity_and_str in tests/test_markers.py."

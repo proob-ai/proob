@@ -1,0 +1,205 @@
+diff --git a/pyproject.toml b/pyproject.toml
+index 07a3618..55a7548 100644
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -79,6 +79,7 @@ test = [
+   "tox<=4.56.1",
+   "pytest<=9.1.1",
+   "pytest-cov<=7.1.0",
++  "hypothesis<=6.169.4",
+   
+ ]
+ publish = [
+diff --git a/tests/test_bump.py b/tests/test_bump.py
+index 767d38f..5330488 100644
+--- a/tests/test_bump.py
++++ b/tests/test_bump.py
+@@ -211,3 +211,47 @@ def test_next_version_ignores_token_for_main_parts(part, token, expected):
+ def test_should_bump_build(version, expected):
+     assert bump_build(version) == expected
+     assert compare(version, expected) == 0
++
++
++# --- property-based checks ---
++from hypothesis import given, strategies as st  # noqa: E402
++_alnum = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-"
++_numeric_id = st.integers(min_value=0).map(str)
++_alpha_id = st.from_regex(r"[0-9]*[a-zA-Z-][0-9a-zA-Z-]*", fullmatch=True).filter(
++    str.isascii
++)
++_identifier = st.one_of(_numeric_id, _alpha_id)
++_dotted = st.lists(_identifier, min_size=1, max_size=4).map(".".join)
++_build = st.lists(st.text(_alnum, min_size=1), min_size=1, max_size=3).map(".".join)
++_number = st.one_of(st.integers(0, 3), st.integers(min_value=0))
++_versions = st.builds(
++    Version, _number, _number, _number, st.none() | _dotted, st.none() | _build
++)
++
++
++# proob:01M62GJ3NT92CB5S1099T1NBKK
++@given(_versions, st.just("") | _dotted)
++def test_next_prerelease_sorts_strictly_after(version, token):
++    result = version.next_version("prerelease", token)
++    assert result > version, f"{version!s} with token {token!r} gave {result!s}"
++
++
++# proob:01M62GJ3QZ54TRK6GP0HB0E3H9
++@given(
++    _versions,
++    st.sampled_from(["major", "minor", "patch", "prerelease", "build", "next"]),
++    st.sampled_from(Version.NAMES[:-1]),
++    st.none() | st.just("") | _dotted,
++)
++def test_bumped_versions_round_trip(version, op, part, token):
++    if op == "next":
++        result = version.next_version(part, token or "rc")
++    elif op == "prerelease":
++        result = version.bump_prerelease(token)
++    elif op == "build":
++        result = version.bump_build(token)
++    else:
++        result = getattr(version, "bump_" + op)()
++    text = str(result)
++    parsed = Version.parse(text)
++    assert parsed.to_tuple() == result.to_tuple(), f"{version!s} {op} {part} {token!r}: {text} parsed as {parsed!r}"
+diff --git a/tests/test_compare.py b/tests/test_compare.py
+index 354f3fe..6ee048b 100644
+--- a/tests/test_compare.py
++++ b/tests/test_compare.py
+@@ -407,3 +407,32 @@ def test_direct_compare_with_collections():
+ def test_direct_compare_with_invalid_type(other):
+     with pytest.raises(TypeError):
+         Version(1, 0, 0).compare(other)
++
++
++# --- property-based checks ---
++from functools import cmp_to_key  # noqa: E402
++
++from hypothesis import given, strategies as st  # noqa: E402
++_alnum = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-"
++_numeric_id = st.integers(min_value=0).map(str)
++_alpha_id = st.from_regex(r"[0-9]*[a-zA-Z-][0-9a-zA-Z-]*", fullmatch=True).filter(
++    str.isascii
++)
++_identifier = st.one_of(_numeric_id, _alpha_id)
++_dotted = st.lists(_identifier, min_size=1, max_size=4).map(".".join)
++_build = st.lists(st.text(_alnum, min_size=1), min_size=1, max_size=3).map(".".join)
++_number = st.one_of(st.integers(0, 3), st.integers(min_value=0))
++_versions = st.builds(
++    Version, _number, _number, _number, st.none() | _dotted, st.none() | _build
++)
++
++
++# proob:01M62GJ3PYSQSZQV332011M1S8
++@given(st.lists(_versions, min_size=1, max_size=8), _build)
++def test_comparison_is_a_total_order(versions, build):
++    ordered = sorted(versions, key=cmp_to_key(Version.compare))
++    for i, a in enumerate(ordered):
++        assert a.compare(a.replace(build=build)) == 0, f"{a!s} vs build {build!r}"
++        for b in ordered[i:]:
++            assert a.compare(b) == -b.compare(a), f"{a!s} vs {b!s} not antisymmetric"
++            assert a.compare(b) <= 0, f"sorted order broken: {a!s} after {b!s}"
+diff --git a/tests/test_optional_native_backend.py b/tests/test_optional_native_backend.py
+index 981f357..f6cdf52 100644
+--- a/tests/test_optional_native_backend.py
++++ b/tests/test_optional_native_backend.py
+@@ -24,3 +24,43 @@ def test_optional_backend_is_available_without_changing_public_objects() -> None
+ def test_optional_backend_is_not_used_for_python_only_optional_parts() -> None:
+     result = Version.parse("7", optional_minor_and_patch=True)
+     assert result.to_tuple() == (7, 0, 0, None, None)
++
++
++# --- property-based checks ---
++from hypothesis import given, strategies as st  # noqa: E402
++_alnum = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-"
++_numeric_id = st.integers(min_value=0).map(str)
++_alpha_id = st.from_regex(r"[0-9]*[a-zA-Z-][0-9a-zA-Z-]*", fullmatch=True).filter(
++    str.isascii
++)
++_identifier = st.one_of(_numeric_id, _alpha_id)
++_dotted = st.lists(_identifier, min_size=1, max_size=4).map(".".join)
++_build = st.lists(st.text(_alnum, min_size=1), min_size=1, max_size=3).map(".".join)
++_number = st.one_of(st.integers(0, 3), st.integers(min_value=0))
++_versions = st.builds(
++    Version, _number, _number, _number, st.none() | _dotted, st.none() | _build
++)
++_texts = st.one_of(
++    _versions.map(str),
++    st.text(),
++    st.from_regex(r"\d+\.\d+\.\d+(-[\w.-]*)?(\+[\w.-]*)?", fullmatch=True),
++)
++
++
++def _outcome(parse_parts, text):
++    saved = version_module._native_parse_parts
++    version_module._native_parse_parts = parse_parts
++    try:
++        return Version.parse(text).to_tuple()
++    except ValueError:
++        return "rejected"
++    finally:
++        version_module._native_parse_parts = saved
++
++
++# proob:01M62GJ3T57T6ERFX69WTBADJR
++@given(_texts)
++def test_native_and_python_parsers_agree(text):
++    native = _outcome(version_module._native_parse_parts, text)
++    python = _outcome(None, text)
++    assert native == python, f"{text!r}: native {native!r}, python {python!r}"
+diff --git a/tests/test_parsing.py b/tests/test_parsing.py
+index 7987d7d..9472d40 100644
+--- a/tests/test_parsing.py
++++ b/tests/test_parsing.py
+@@ -216,3 +216,51 @@ def test_next_version_with_versioninfo(version, part, expected):
+     next_version = ver.next_version(part)
+     assert isinstance(next_version, Version)
+     assert str(next_version) == expected
++
++
++# --- property-based checks ---
++from hypothesis import given, strategies as st  # noqa: E402
++_alnum = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-"
++_numeric_id = st.integers(min_value=0).map(str)
++_alpha_id = st.from_regex(r"[0-9]*[a-zA-Z-][0-9a-zA-Z-]*", fullmatch=True).filter(
++    str.isascii
++)
++_identifier = st.one_of(_numeric_id, _alpha_id)
++_dotted = st.lists(_identifier, min_size=1, max_size=4).map(".".join)
++_build = st.lists(st.text(_alnum, min_size=1), min_size=1, max_size=3).map(".".join)
++_number = st.one_of(st.integers(0, 3), st.integers(min_value=0))
++_versions = st.builds(
++    Version, _number, _number, _number, st.none() | _dotted, st.none() | _build
++)
++
++
++def _pad(identifier, zeros):
++    return "0" * zeros + identifier if identifier.isdigit() else identifier
++
++
++# One prerelease spelled two ways: numeric identifiers get independent leading zeros.
++_two_spellings = st.lists(
++    st.tuples(_identifier, st.integers(0, 3), st.integers(0, 3)), min_size=1, max_size=4
++).map(
++    lambda parts: (
++        ".".join(_pad(i, za) for i, za, _ in parts),
++        ".".join(_pad(i, zb) for i, _, zb in parts),
++    )
++)
++
++
++# proob:01M62GJ3S2R9DT5D7SY7S8A0BD
++@given(
++    _number,
++    _number,
++    _number,
++    st.one_of(st.tuples(st.none(), st.none()), _two_spellings, st.tuples(_dotted, _dotted)),
++    st.none() | _build,
++    st.none() | _build,
++)
++def test_equal_versions_hash_equal(major, minor, patch, prereleases, build_a, build_b):
++    pre_a, pre_b = prereleases
++    a = Version(major, minor, patch, pre_a, build_a)
++    b = Version(major, minor, patch, pre_b, build_b)
++    if a == b:
++        assert hash(a) == hash(b), f"{a!r} == {b!r} but hashes differ"

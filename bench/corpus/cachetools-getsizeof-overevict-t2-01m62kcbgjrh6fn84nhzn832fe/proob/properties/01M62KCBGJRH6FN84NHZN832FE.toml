@@ -1,0 +1,6 @@
+id = "01M62KCBGJRH6FN84NHZN832FE"
+title = "No over-eviction on overwrite"
+statement = "Replacing a stored value with a larger one never evicts other entries when the new total still fits within the size limit."
+scope = ["src/cachetools/__init__.py"]
+severity = "high"
+rationale = "The eviction loop in src/cachetools/__init__.py (lines 82-84) compares the current size, which still counts the old value, plus the new size against maxsize, so an overwrite that fits can still evict. docs/index.rst lines 41-43 say popitem is called only until there is enough room. tests/__init__.py lines 253-257 cover only an overwrite that truly needs eviction. Callers with a custom getsizeof silently lose entries."

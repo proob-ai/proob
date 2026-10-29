@@ -1,0 +1,10 @@
+{
+  "name": "proob",
+  "version": "0.1.0",
+  "description": "Team-approved, machine-checked, continuously guarded properties for your codebase.",
+  "author": {
+    "name": "proob-ai"
+  },
+  "repository": "https://github.com/proob-ai/proob",
+  "license": "Apache-2.0"
+}

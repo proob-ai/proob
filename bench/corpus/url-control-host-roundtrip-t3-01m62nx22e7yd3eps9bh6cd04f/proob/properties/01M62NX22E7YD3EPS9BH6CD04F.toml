@@ -1,0 +1,6 @@
+id = "01M62NX22E7YD3EPS9BH6CD04F"
+title = "No raw control characters in opaque hosts"
+statement = "The host of a URL with a non-special scheme never contains a raw control character, space, or URL delimiter."
+scope = ["url/src/host.rs", "url/src/parser.rs", "url/src/lib.rs"]
+severity = "high"
+rationale = "A raw control character in a host breaks round-trip and can make downstream consumers split or misread the host. url/src/host.rs (lines 131-157) rejects forbidden code points in the opaque host parser and percent-encodes the remaining C0 controls and DEL with the CONTROLS set; url/src/parser.rs (lines 1009-1050) strips tab and newline before that parser, while set_host in url/src/lib.rs (line 2050) passes its input straight through."

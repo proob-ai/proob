@@ -1,0 +1,181 @@
+diff --git a/Cargo.toml b/Cargo.toml
+index 49604ae..39e32a0 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -62,6 +62,7 @@ serde_json = { version = "1" }
+ serde_derive = { version = "1", default-features = false }
+ similar-asserts = { version = "2.0.0" }
+ bincode = { version = "1.3.0" }
++proptest = { version = "1" }
+ windows-bindgen = { version = "0.66" }                     # MSRV is 1.74
+ 
+ [target.'cfg(all(target_family = "wasm", not(any(target_os = "emscripten", target_os = "wasi"))))'.dev-dependencies]
+diff --git a/src/naive/date/tests.rs b/src/naive/date/tests.rs
+index 0b47ca4..f3f7e19 100644
+--- a/src/naive/date/tests.rs
++++ b/src/naive/date/tests.rs
+@@ -918,3 +918,121 @@ const MIN_DAYS_FROM_YEAR_0: i32 = MIN_YEAR * 365 + MIN_YEAR / 4 - MIN_YEAR / 100
+ 
+ // only used for testing, but duplicated in naive::datetime
+ const MAX_BITS: usize = 44;
++
++mod props {
++    use super::NaiveDate;
++    use proptest::prelude::*;
++
++    /// Any representable date, across the whole range.
++    fn any_date() -> impl Strategy<Value = NaiveDate> {
++        (NaiveDate::MIN.num_days_from_ce()..=NaiveDate::MAX.num_days_from_ce())
++            .prop_map(|d| NaiveDate::from_num_days_from_ce_opt(d).unwrap())
++    }
++
++    /// Any date, with extra weight within ~10 years of either end so short runs are enumerable.
++    fn iter_start() -> impl Strategy<Value = NaiveDate> {
++        prop_oneof![
++            any_date(),
++            (0i64..4000).prop_map(|k| NaiveDate::MAX - crate::Days::new(k as u64)),
++            (0i64..4000).prop_map(|k| NaiveDate::MIN + crate::Days::new(k as u64)),
++        ]
++    }
++
++    /// Takes from the front (`true`) or the back (`false`) per op; returns what was yielded.
++    fn drive<I: DoubleEndedIterator<Item = NaiveDate> + ExactSizeIterator>(
++        mut it: I,
++        ops: &[bool],
++    ) -> Vec<(bool, Option<NaiveDate>, usize, usize)> {
++        ops.iter()
++            .map(|&front| {
++                let before = it.len();
++                let got = if front { it.next() } else { it.next_back() };
++                (front, got, before, it.len())
++            })
++            .collect()
++    }
++
++    /// Reading from the back yields the forward run reversed (checked fully when the run is short).
++    fn rev_mirrors<I: DoubleEndedIterator<Item = NaiveDate> + Clone>(
++        it: I,
++        start: NaiveDate,
++    ) -> Result<(), TestCaseError> {
++        let fwd: Vec<_> = it.clone().take(5000).collect();
++        if fwd.len() < 5000 {
++            let mut back: Vec<_> = it.rev().take(fwd.len() + 1).collect();
++            back.reverse();
++            prop_assert_eq!(&back, &fwd, "start {}: reversed back reading differs from forward", start);
++        } else {
++            // The run is too long to enumerate: its back end must lie beyond every forward date seen.
++            let back_first = it.clone().next_back();
++            prop_assert!(back_first > fwd.last().copied(),
++                "start {}: first from back {:?}, but forward already reached {:?}", start, back_first, fwd.last());
++        }
++        Ok(())
++    }
++
++    proptest! {
++        // proob:01M633SR0SX43DE5FGCKPVA0JX
++        #[test]
++        fn rev_iteration_mirrors_forward(start in iter_start(), weeks in any::<bool>()) {
++            if weeks {
++                rev_mirrors(start.iter_weeks(), start)?;
++            } else {
++                rev_mirrors(start.iter_days(), start)?;
++            }
++        }
++
++        // proob:01M633SR2K2XRT01SXHZ21E8GF
++        #[test]
++        fn iter_len_matches_yield(
++            start in iter_start(),
++            weeks in any::<bool>(),
++            ops in proptest::collection::vec(any::<bool>(), 0..40),
++        ) {
++            let steps = if weeks { drive(start.iter_weeks(), &ops) } else { drive(start.iter_days(), &ops) };
++            for (front, got, before, after) in steps {
++                let want = if got.is_some() { before.wrapping_sub(1) } else { before };
++                prop_assert_eq!(after, want,
++                    "start {} weeks {}: {} yielded {:?}, len went {} -> {}",
++                    start, weeks, if front { "next" } else { "next_back" }, got, before, after);
++                prop_assert!(got.is_some() || before == 0,
++                    "start {} weeks {}: {} yielded None with len {}",
++                    start, weeks, if front { "next" } else { "next_back" }, before);
++            }
++            let len = if weeks { start.iter_weeks().len() } else { start.iter_days().len() };
++            if len < 5000 {
++                let (f, b) = if weeks {
++                    (start.iter_weeks().take(len + 1).count(), start.iter_weeks().rev().take(len + 1).count())
++                } else {
++                    (start.iter_days().take(len + 1).count(), start.iter_days().rev().take(len + 1).count())
++                };
++                prop_assert_eq!((f, b), (len, len), "start {} weeks {}: len {} but yields (front, back)", start, weeks, len);
++            }
++        }
++
++        // proob:01M633SR4DQQMC3R7VFQ5KFDC0
++        #[test]
++        fn both_ends_never_repeat(
++            start in iter_start(),
++            weeks in any::<bool>(),
++            ops in proptest::collection::vec(any::<bool>(), 0..40),
++        ) {
++            let steps = if weeks { drive(start.iter_weeks(), &ops) } else { drive(start.iter_days(), &ops) };
++            let mut seen = std::collections::BTreeSet::new();
++            for (i, (_, got, _, _)) in steps.iter().enumerate() {
++                if let Some(d) = got {
++                    prop_assert!(seen.insert(*d),
++                        "start {} weeks {} ops {:?}: date {} yielded twice (step {})", start, weeks, ops, d, i);
++                }
++            }
++        }
++
++        // proob:01M633SR6J002PA5J0RD43B9JK
++        #[test]
++        fn display_then_parse_round_trips(d in any_date()) {
++            let text = d.to_string();
++            let back = text.parse::<NaiveDate>();
++            prop_assert_eq!(back, Ok(d), "date {:?} (year {}) printed as {:?}", d, d.year(), text);
++        }
++    }
++}
+diff --git a/src/weekday_set.rs b/src/weekday_set.rs
+index 989131c..e2f7da8 100644
+--- a/src/weekday_set.rs
++++ b/src/weekday_set.rs
+@@ -497,4 +497,38 @@ mod tests {
+             }
+         }
+     }
++
++    mod props {
++        use super::WeekdaySet;
++        use crate::Weekday;
++        use proptest::prelude::*;
++
++        proptest! {
++            // proob:01M633SR8VM17MCKW58YGXP705
++            #[test]
++            fn both_ends_yield_each_day_once(
++                bits in 0u8..0b1000_0000,
++                start in 0u8..7,
++                ops in proptest::collection::vec(any::<bool>(), 0..10),
++            ) {
++                let set = WeekdaySet(bits);
++                let start = Weekday::try_from(start).unwrap();
++                let mut it = set.iter(start);
++                let mut seen = WeekdaySet::EMPTY;
++                for &front in ops.iter().chain(core::iter::repeat(&true).take(8)) {
++                    let before = it.len();
++                    let got = if front { it.next() } else { it.next_back() };
++                    match got {
++                        Some(d) => {
++                            prop_assert!(set.contains(d), "set {:?} start {:?}: yielded {:?} not in set", set, start, d);
++                            prop_assert!(seen.insert(d), "set {:?} start {:?} ops {:?}: {:?} yielded twice", set, start, ops, d);
++                            prop_assert_eq!(it.len(), before - 1, "set {:?} start {:?}: len after yielding {:?}", set, start, d);
++                        }
++                        None => prop_assert_eq!(before, 0, "set {:?} start {:?}: None with len {}", set, start, before),
++                    }
++                }
++                prop_assert_eq!(seen, set, "start {:?} ops {:?}: yielded set differs", start, ops);
++            }
++        }
++    }
+ }

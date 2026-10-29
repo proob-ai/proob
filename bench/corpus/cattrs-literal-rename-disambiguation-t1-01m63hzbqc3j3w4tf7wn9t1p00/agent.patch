@@ -1,0 +1,230 @@
+diff --git a/tests/test_converter.py b/tests/test_converter.py
+index ab86d55..5c7d64b 100644
+--- a/tests/test_converter.py
++++ b/tests/test_converter.py
+@@ -23,6 +23,7 @@ from hypothesis import assume, given
+ from hypothesis.strategies import booleans, just, lists, one_of, sampled_from
+ 
+ from cattrs import BaseConverter, Converter, UnstructureStrategy
++from cattrs._compat import adapted_fields
+ from cattrs.dispatch import StructureHook, UnstructureHook
+ from cattrs.errors import (
+     ClassValidationError,
+@@ -30,7 +31,7 @@ from cattrs.errors import (
+     StructureHandlerNotFoundError,
+ )
+ from cattrs.fns import raise_error
+-from cattrs.gen import make_dict_structure_fn, override
++from cattrs.gen import make_dict_structure_fn, make_dict_unstructure_fn, override
+ 
+ from ._compat import is_py310_plus
+ from .helpers import assert_only_unstructured
+@@ -944,3 +945,30 @@ def test_hook_factories_with_converter_methods(converter: BaseConverter):
+     )
+ 
+     assert converter.structure((2,), Test) == Test(1)
++
++
++# proob:01M63HZBRHECS4FWZETXXSRG6J
++@given(
++    simple_typed_classes(allow_nan=False) | simple_typed_dataclasses(allow_nan=False),
++    booleans(),
++    booleans(),
++    one_of(just(None), sampled_from(["k_", "renamed '\" "])),
++)
++def test_roundtrip_with_overrides(cls_and_vals, omit_if_default, use_alias, prefix):
++    """Unstructure then structure gives back an equal value, with renames, aliases and omit_if_default."""
++    converter = Converter(omit_if_default=omit_if_default, use_alias=use_alias)
++    cl, vals, kwargs = cls_and_vals
++    if prefix is not None:
++        renames = {
++            a.name: override(rename=f"{prefix}{a.name}") for a in adapted_fields(cl)
++        }
++        converter.register_structure_hook(
++            cl, make_dict_structure_fn(cl, converter, **renames)
++        )
++        converter.register_unstructure_hook(
++            cl, make_dict_unstructure_fn(cl, converter, **renames)
++        )
++    inst = cl(*vals, **kwargs)
++    unstructured = converter.unstructure(inst)
++    structured = converter.structure(unstructured, cl)
++    assert structured == inst, (inst, unstructured, structured)
+diff --git a/tests/test_disambiguators.py b/tests/test_disambiguators.py
+index 2ae5090..fe6e97d 100644
+--- a/tests/test_disambiguators.py
++++ b/tests/test_disambiguators.py
+@@ -3,11 +3,14 @@
+ from dataclasses import dataclass
+ from functools import partial
+ from itertools import permutations
++from keyword import iskeyword
++from string import ascii_lowercase
+ from typing import Literal, Union
+ 
+ import pytest
+-from attrs import NOTHING, asdict, define, field, fields
++from attrs import NOTHING, asdict, define, field, fields, make_class
+ from hypothesis import HealthCheck, assume, given, settings
++from hypothesis.strategies import booleans, integers, lists, text
+ 
+ from cattrs import Converter
+ from cattrs.disambiguators import create_default_dis_func, is_supported_union
+@@ -405,3 +408,96 @@ def test_dataclasses_literals(converter):
+ 
+     assert converter.structure({"a": "a"}, Union[A, B]) == A()
+     assert converter.structure({"b": "b"}, Union[A, B]) == B("b")
++
++
++_identifiers = text(ascii_lowercase, min_size=1).filter(
++    lambda s: not iskeyword(s) and s not in ("kind", "x")
++)
++
++
++# proob:01M63HZBQC3J3W4TF7WN9T1P00
++@given(key=_identifiers, via_alias=booleans(), pick_b=booleans(), x=integers())
++def test_renamed_literal_discriminator(key, via_alias, pick_b, x):
++    """A Literal discriminator serialized under a renamed or aliased key picks the right class."""
++    if via_alias:
++
++        @define
++        class A:
++            kind: Literal["a"] = field(alias=key)
++            x: int
++
++        @define
++        class B:
++            kind: Literal["b"] = field(alias=key)
++            x: int
++
++    else:
++
++        @define
++        class A:
++            kind: Literal["a"]
++            x: int
++
++        @define
++        class B:
++            kind: Literal["b"]
++            x: int
++
++    c = Converter(use_alias=via_alias)
++    if not via_alias:
++        for cl in (A, B):
++            c.register_structure_hook(
++                cl, make_dict_structure_fn(cl, c, kind=override(rename=key))
++            )
++
++    cl, lit = (B, "b") if pick_b else (A, "a")
++    expected = cl(**{key if via_alias else "kind": lit, "x": x})
++    payload = {key: lit, "x": x}
++    result = c.structure(payload, Union[A, B])
++    assert result == expected, (payload, via_alias, result)
++
++
++# proob:01M63HZBSM44ZYGGZGF1QDW0C3
++@settings(suppress_health_check=[HealthCheck.filter_too_much, HealthCheck.too_slow])
++@given(lists(simple_classes(defaults=False), min_size=2, max_size=3))
++def test_disambiguation_order_independent_generated(cls_and_vals):
++    """The class chosen for a payload does not depend on the union's member order."""
++    classes = [cl for cl, _, _ in cls_and_vals]
++    assume(len(set(classes)) == len(classes))
++    payloads = [asdict(cl(*vals, **kwargs)) for cl, vals, kwargs in cls_and_vals]
++    c = Converter()
++
++    def outcome(ordering, payload):
++        try:
++            return create_default_dis_func(c, *ordering)(payload)
++        except Exception as exc:  # noqa: BLE001
++            return type(exc)
++
++    for payload in payloads:
++        results = {o: outcome(o, payload) for o in permutations(classes)}
++        assert len(set(results.values())) == 1, (payload, results)
++
++
++# proob:01M63HZBVV63AEY8CP1VHXCTBK
++@given(
++    shared=lists(_identifiers, max_size=3, unique=True),
++    n=integers(min_value=1, max_value=4),
++    pick=integers(min_value=0, max_value=3),
++)
++def test_unique_required_field_selects_class(shared, n, pick):
++    """A unique required field selects its class; the field-less member is only the fallback."""
++    shared = [f"s_{s}" for s in shared]
++    members = [
++        make_class(f"C{i}", {name: field(type=int) for name in [*shared, f"u{i}"]})
++        for i in range(n)
++    ]
++    fallback = make_class("F", {name: field(type=int) for name in shared})
++    c = Converter()
++    union = Union[(*members, fallback)]
++
++    target = members[pick % n]
++    payload = {name: 0 for name in [*shared, f"u{pick % n}"]}
++    assert type(c.structure(payload, union)) is target, (payload, n)
++
++    only_shared = {name: 0 for name in shared}
++    assert type(c.structure(only_shared, union)) is fallback, (only_shared, n)
+diff --git a/tests/test_preconf.py b/tests/test_preconf.py
+index d258b11..73818b8 100644
+--- a/tests/test_preconf.py
++++ b/tests/test_preconf.py
+@@ -1,4 +1,5 @@
+ # ruff: noqa: PLC0415
++import os
+ import time
+ from collections.abc import Callable, Iterator, Set
+ from datetime import date, datetime, timezone
+@@ -1081,3 +1082,50 @@ def test_naive_datetimes_are_unstructured_as_utc_cbor2(
+     from cattrs.preconf.cbor2 import make_converter as cbor2_make_converter
+ 
+     test_naive_datetimes_are_unstructured_as_utc(cbor2_make_converter, set_timezone)
++
++
++_roundtrip_converters = {
++    "json": (json_make_converter, {}),
++    "ujson": (ujson_make_converter, {}),
++    "msgpack": (msgpack_make_converter, {"strict_map_key": False}),
++}
++if not NO_CBOR2:
++    from cattrs.preconf.cbor2 import make_converter as _cbor2_make_converter
++
++    _roundtrip_converters["cbor2"] = (_cbor2_make_converter, {})
++
++
++# proob:01M63HZBTQ3E81HG48HF9XCXKH
++@given(
++    name=sampled_from(sorted(_roundtrip_converters)),
++    everything=everythings(min_int=-9223372036854775808, max_int=9223372036854775807),
++    naive=datetimes(min_value=datetime(1970, 1, 2), max_value=datetime(2038, 1, 1)),
++    zones=lists(
++        sampled_from(["UTC", "America/New_York", "Asia/Kolkata", "Pacific/Auckland"]),
++        min_size=2,
++        max_size=2,
++    ),
++)
++def test_preconf_loads_reverses_dumps(name, everything, naive, zones):
++    """loads reverses dumps, and naive datetimes do not shift with the local timezone."""
++    make, loads_kwargs = _roundtrip_converters[name]
++    converter = make()
++    raw = converter.dumps(everything)
++    back = converter.loads(raw, Everything, **loads_kwargs)
++    assert back == everything, (name, everything, back)
++
++    old_tz = os.environ.get("TZ")
++    seen = []
++    try:
++        for zone in zones:
++            os.environ["TZ"] = zone
++            time.tzset()
++            dumped = converter.dumps(naive)
++            seen.append((zone, dumped, converter.loads(dumped, datetime, **loads_kwargs)))
++    finally:
++        if old_tz is None:
++            os.environ.pop("TZ", None)
++        else:
++            os.environ["TZ"] = old_tz
++        time.tzset()
++    assert seen[0][1:] == seen[1][1:], (name, naive, seen)

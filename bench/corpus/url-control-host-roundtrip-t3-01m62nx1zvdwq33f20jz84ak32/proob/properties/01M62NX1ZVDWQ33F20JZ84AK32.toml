@@ -1,0 +1,6 @@
+id = "01M62NX1ZVDWQ33F20JZ84AK32"
+title = "Setters keep a URL consistent"
+statement = "Changing any part of a valid URL leaves a URL whose text parses back to the same URL."
+scope = ["url/src/*.rs", "url/tests/*.rs"]
+severity = "high"
+rationale = "Every setter rewrites one serialization string and its byte offsets together; if they drift, accessors return the wrong part or panic. url/tests/unit.rs (lines 476-540) checks invariants after set_* , path_segments_mut and query_pairs_mut on fixed inputs, url/tests/wpt.rs runs the WPT setters_tests.json cases, and url/fuzz/fuzz_targets/fuzz-url.rs calls setters but asserts nothing afterwards."

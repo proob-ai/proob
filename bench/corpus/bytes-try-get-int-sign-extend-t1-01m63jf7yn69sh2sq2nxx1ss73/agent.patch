@@ -1,0 +1,139 @@
+diff --git a/Cargo.toml b/Cargo.toml
+index 3fe8583..95c8165 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -32,6 +32,7 @@ serde = { version = "1.0.60", optional = true, default-features = false, feature
+ extra-platforms = { package = "portable-atomic", version = "1.3", optional = true, default-features = false, features = ["require-cas"] }
+ 
+ [dev-dependencies]
++proptest = "1"
+ serde_test = "1.0"
+ 
+ [target.'cfg(loom)'.dev-dependencies]
+@@ -44,3 +45,7 @@ rustdoc-args = ["--cfg", "docsrs"]
+ unexpected_cfgs = { level = "warn", check-cfg = [
+   'cfg(loom)',
+ ] }
++
++# proptest pulls bytes from crates.io (bit-vec -> borsh); resolve it to this crate so `-p bytes` is unambiguous.
++[patch.crates-io]
++bytes = { path = "." }
+diff --git a/tests/test_buf.rs b/tests/test_buf.rs
+index 1520df8..c498b20 100644
+--- a/tests/test_buf.rs
++++ b/tests/test_buf.rs
+@@ -459,3 +459,64 @@ fn copy_to_bytes_mut() {
+     let bytes_mut2 = BytesMut::from(ret);
+     assert_eq!(bytes_mut2.as_ptr(), ptr);
+ }
++
++mod props {
++    use bytes::{Buf, BufMut, TryGetError};
++    use proptest::prelude::*;
++
++    proptest! {
++        // proob:01M63JF7YN69SH2SQ2NXX1SS73
++        #[test]
++        fn try_get_int_matches_get_int(
++            nbytes in 0usize..=8,
++            data in proptest::collection::vec(any::<u8>(), 8..16),
++        ) {
++            let be = (&data[..]).try_get_int(nbytes);
++            prop_assert_eq!(be, Ok((&data[..]).get_int(nbytes)), "be: data={:?} nbytes={}", data, nbytes);
++            let le = (&data[..]).try_get_int_le(nbytes);
++            prop_assert_eq!(le, Ok((&data[..]).get_int_le(nbytes)), "le: data={:?} nbytes={}", data, nbytes);
++        }
++
++        // proob:01M63JF80YPBRWN8B7679P892E
++        #[test]
++        fn put_int_get_int_round_trip(nbytes in 1usize..=8, x in any::<i64>()) {
++            // Sign-extend the low nbytes of x so the value fits in nbytes.
++            let shift = 64 - 8 * nbytes as u32;
++            let n = (x << shift) >> shift;
++            let mut be = Vec::new();
++            be.put_int(n, nbytes);
++            prop_assert_eq!((&be[..]).get_int(nbytes), n, "be: n={} nbytes={} bytes={:?}", n, nbytes, be);
++            let mut le = Vec::new();
++            le.put_int_le(n, nbytes);
++            prop_assert_eq!((&le[..]).get_int_le(nbytes), n, "le: n={} nbytes={} bytes={:?}", n, nbytes, le);
++        }
++
++        // proob:01M63JF8232EG5HC9KTFM14MCR
++        #[test]
++        fn failed_try_get_leaves_buffer_untouched(
++            data in proptest::collection::vec(any::<u8>(), 0..8),
++            extra in 1usize..8,
++        ) {
++            let avail = data.len();
++            let want = avail + extra;
++            fn err<T>(requested: usize, available: usize) -> Result<T, TryGetError> {
++                Err(TryGetError { requested, available })
++            }
++
++            let mut buf = &data[..];
++            let mut dst = vec![0u8; want];
++            prop_assert_eq!(buf.try_copy_to_slice(&mut dst), err(want, avail), "copy: data={:?} want={}", data, want);
++            prop_assert_eq!(buf, &data[..]);
++
++            prop_assert_eq!(buf.try_get_u64(), err(8, avail), "u64: data={:?}", data);
++            prop_assert_eq!(buf, &data[..]);
++
++            if want <= 8 {
++                prop_assert_eq!(buf.try_get_int(want), err(want, avail), "int: data={:?} want={}", data, want);
++                prop_assert_eq!(buf, &data[..]);
++                prop_assert_eq!(buf.try_get_int_le(want), err(want, avail), "int_le: data={:?} want={}", data, want);
++                prop_assert_eq!(buf, &data[..]);
++            }
++        }
++    }
++}
+diff --git a/tests/test_bytes.rs b/tests/test_bytes.rs
+index 5d01b5b..deb30eb 100644
+--- a/tests/test_bytes.rs
++++ b/tests/test_bytes.rs
+@@ -1821,3 +1821,45 @@ fn bytes_mut_reserve_overflow() {
+     // This call relies on the corrupted cap and may cause UB & HBO
+     b.put_u8(b'h');
+ }
++
++mod props {
++    use bytes::{Bytes, BytesMut};
++    use proptest::prelude::*;
++
++    fn data_and_index() -> impl Strategy<Value = (Vec<u8>, usize)> {
++        proptest::collection::vec(any::<u8>(), 0..256)
++            .prop_flat_map(|v| { let n = v.len(); (Just(v), 0..=n) })
++    }
++
++    proptest! {
++        // proob:01M63JF7ZS6MPM43XXARFMXHKH
++        #[test]
++        fn split_bytes_rejoin_and_survive_drop((data, at) in data_and_index()) {
++            let mut head = Bytes::from(data.clone());
++            let tail = head.split_off(at);
++            let joined = [&head[..], &tail[..]].concat();
++            prop_assert_eq!(&joined, &data, "split_off at={}", at);
++            drop(head);
++            prop_assert_eq!(&tail[..], &data[at..], "tail after head dropped, at={}", at);
++
++            let mut rest = Bytes::from(data.clone());
++            let front = rest.split_to(at);
++            drop(rest);
++            prop_assert_eq!(&front[..], &data[..at], "front after rest dropped, at={}", at);
++        }
++
++        // proob:01M63JF8371NQYJS3J94XR22GQ
++        #[test]
++        fn split_bytes_mut_rejoins((data, at) in data_and_index()) {
++            let mut a = BytesMut::from(&data[..]);
++            let b = a.split_off(at);
++            a.unsplit(b);
++            prop_assert_eq!(&a[..], &data[..], "split_off/unsplit at={}", at);
++
++            let mut rest = BytesMut::from(&data[..]);
++            let mut front = rest.split_to(at);
++            front.unsplit(rest);
++            prop_assert_eq!(&front[..], &data[..], "split_to/unsplit at={}", at);
++        }
++    }
++}

@@ -1,0 +1,6 @@
+id = "01M63J7B3TX5ZP9Z0ABB01Z03K"
+title = "Combining keeps every covered point"
+statement = "Combining two interval dictionaries gives every point covered by either one a value: the combined value where both cover it, and the one side's value where only that side covers it."
+scope = ["portion/dict.py"]
+severity = "high"
+rationale = "The combine docstring in portion/dict.py (lines 255-258) and README.md (lines 674-676) promise this. CHANGELOG.md line 7 says 2.7.0-pre1 rewrote combine for speed, and tests/test_dict.py only covers atomic keys or single-key sides. Reproduced locally: with d1 = {[0,1] | [4,5]: a, [2,3]: b} and d2 = {[0,5]: x}, combine drops [2,3]."

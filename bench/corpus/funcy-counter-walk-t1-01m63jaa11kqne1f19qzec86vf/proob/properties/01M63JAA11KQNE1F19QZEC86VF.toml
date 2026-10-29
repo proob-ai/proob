@@ -1,0 +1,6 @@
+id = "01M63JAA11KQNE1F19QZEC86VF"
+title = "Selecting keys keeps kind and original values"
+statement = "Selecting, projecting, or omitting keys of any kind of dictionary returns the same kind of dictionary holding exactly the matching keys with their original values."
+scope = ["funcy/colls.py"]
+severity = "medium"
+rationale = "funcy/colls.py select, select_keys, project, omit (157-169, 247-253) rebuild the result with the input type constructor; tests/test_colls.py test_select_keys, test_project, test_omit cover plain dicts."

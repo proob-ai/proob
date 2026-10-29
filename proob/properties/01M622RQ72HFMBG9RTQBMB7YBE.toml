@@ -1,0 +1,7 @@
+id = "01M622RQ72HFMBG9RTQBMB7YBE"
+title = "An unapproved check, config, or workflow never holds"
+statement = "No property is ever shown as holding unless its bound check, the gate config, and the evidence workflow were each approved by a reviewer who did not write them."
+scope = ["crates/proob-core/src/verdict.rs", "crates/proob-core/src/specs.rs"]
+severity = "critical"
+rationale = "ASSERTIONS.md row 2 (check_and_governance_team_approved): the binding axis of the verdict, where an unreviewed binding set reads Not checked and an amended config or workflow reads Re-approve before anything can hold."
+kind = "proof"

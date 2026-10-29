@@ -1,0 +1,6 @@
+id = "01M633BQVXA83YKYB61YCBC37S"
+title = "Sizes roll over to the next unit"
+statement = "A formatted size never shows a rounded amount of 1000 or more of a unit (1024 in binary and GNU modes) when a larger unit exists."
+scope = ["src/humanize/filesize.py"]
+severity = "medium"
+rationale = "The unit is chosen from the unrounded value and then rounded by the format string (src/humanize/filesize.py lines 99-101), so 999999 bytes prints 1000.0 kB and 1048575 binary prints 1024.0 KiB. tests/test_filesize.py has no case just below a unit boundary. The docstring promises compatibility with the jinja2 filesizeformat filter."

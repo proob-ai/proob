@@ -1,0 +1,291 @@
+diff --git a/tests/test_api.py b/tests/test_api.py
+index 0aaf52f..9154b21 100644
+--- a/tests/test_api.py
++++ b/tests/test_api.py
+@@ -11,8 +11,12 @@ from typing import Callable
+ 
+ import pytest
+ 
++from hypothesis import given
++
+ import tomlkit
+ 
++from tests.util import toml_data
++from tests.util import toml_documents
+ from tomlkit import dump
+ from tomlkit import dumps
+ from tomlkit import load
+@@ -716,3 +720,18 @@ def test_integer_rejects_invalid_strings(raw: str) -> None:
+ def test_integer_from_int_unchanged() -> None:
+     assert tomlkit.integer(1000).as_string() == "1000"
+     assert int(tomlkit.integer(1000)) == 1000
++
++
++# proob:01M63GP5PWYK27HHR8E1STT0SX
++@given(toml_documents())
++def test_parse_then_print_gives_original_text(content: str) -> None:
++    printed = dumps(parse(content))
++    assert printed == content, (content, printed)
++
++
++# proob:01M63GP5S2J4846DVVQPBCZ877
++@given(toml_data)
++def test_built_value_reads_back_equal_after_printing(data: dict[str, Any]) -> None:
++    printed = dumps(data)
++    reparsed = loads(printed).unwrap()
++    assert reparsed == data, (data, printed, reparsed)
+diff --git a/tests/test_items.py b/tests/test_items.py
+index 8284029..2f94d8a 100644
+--- a/tests/test_items.py
++++ b/tests/test_items.py
+@@ -17,6 +17,9 @@ from typing import Any
+ 
+ import pytest
+ 
++from hypothesis import given
++from hypothesis import strategies as st
++
+ from tests.util import assert_is_ppo
+ from tests.util import elementary_test
+ from tomlkit import api
+@@ -1637,3 +1640,38 @@ def test_out_of_order_table_proxy_membership() -> None:
+         _ = 123 in table
+     # membership must not resolve values or mutate the document
+     assert doc.as_string() == content
++
++
++_array_sep = st.sampled_from([",", ", ", " , ", ",\n    ", ",\n", ",  # note\n  "])
++
++
++@st.composite
++def _array_and_deletion(draw: st.DrawFn) -> tuple[str, list[int], int | slice]:
++    values = draw(st.lists(st.integers(-1000, 1000), max_size=8))
++    seps = draw(st.lists(_array_sep, min_size=len(values), max_size=len(values)))
++    body = "".join(f"{v}{s}" for v, s in zip(values, seps))
++    if body and not draw(st.booleans()):
++        body = body[: -len(seps[-1])]  # no trailing comma
++    text = f"a = [{draw(st.sampled_from(['', ' ', chr(10) + '  ']))}{body}]\n"
++    bound = st.none() | st.integers(-len(values) - 3, len(values) + 3)
++    step = st.none() | st.integers(-4, 4).filter(lambda s: s != 0)
++    key: int | slice = draw(
++        st.builds(slice, bound, bound, step)
++        | (st.integers(-len(values), len(values) - 1) if values else st.nothing())
++    )
++    return text, values, key
++
++
++# proob:01M63GP5NQGSQBKZYMS7YKWP4V
++@given(_array_and_deletion())
++def test_array_delete_leaves_printed_text_with_remaining_elements(
++    case: tuple[str, list[int], int | slice],
++) -> None:
++    text, values, key = case
++    doc = parse(text)
++    expected = list(values)
++    del expected[key]
++    del doc["a"][key]
++    printed = doc.as_string()
++    reparsed = parse(printed)["a"]
++    assert reparsed == expected, (text, key, printed, reparsed, expected)
+diff --git a/tests/test_toml_document.py b/tests/test_toml_document.py
+index 116de35..a8d0fcd 100644
+--- a/tests/test_toml_document.py
++++ b/tests/test_toml_document.py
+@@ -9,9 +9,16 @@ from typing import Any
+ 
+ import pytest
+ 
++from hypothesis import given
++from hypothesis import strategies as st
++
+ import tomlkit
+ 
+ from tests.util import assert_is_ppo
++from tests.util import toml_data
++from tests.util import toml_documents
++from tests.util import toml_keys
++from tests.util import toml_scalars
+ from tomlkit import parse
+ from tomlkit import ws
+ from tomlkit._utils import _utc
+@@ -19,6 +26,9 @@ from tomlkit.api import document
+ from tomlkit.exceptions import NonExistentKey
+ from tomlkit.exceptions import ParseError
+ from tomlkit.exceptions import TOMLKitError
++from tomlkit.items import Array
++from tomlkit.items import InlineTable
++from tomlkit.items import Table
+ from tomlkit.toml_document import TOMLDocument
+ 
+ 
+@@ -1687,3 +1697,62 @@ a.b = 1
+     doc["z"] = 2
+ 
+     assert doc.as_string() == "a.b = 1\nz = 2\n"
++
++
++def _same(a: Any, b: Any) -> bool:
++    if isinstance(a, dict) and isinstance(b, dict):
++        return a.keys() == b.keys() and all(_same(a[k], b[k]) for k in a)
++    if isinstance(a, list) and isinstance(b, list):
++        return len(a) == len(b) and all(_same(x, y) for x, y in zip(a, b))
++    if isinstance(a, float) and isinstance(b, float) and a != a and b != b:
++        return True  # nan reads back as nan
++    return type(a) is type(b) and a == b
++
++
++def _tables(container: Any) -> list[Any]:
++    found = [container]
++    for v in container.values():
++        if isinstance(v, (Table, InlineTable)):
++            found.extend(_tables(v))
++    return found
++
++
++def _edit(data: st.DataObject, doc: TOMLDocument) -> None:
++    target = data.draw(st.sampled_from(_tables(doc)), label="target")
++    keys = list(target.keys())
++    arrays = [k for k in keys if isinstance(target[k], Array)]
++    ops = ["set"] + (["delete"] if keys else []) + (["array"] if arrays else [])
++    op = data.draw(st.sampled_from(ops), label="op")
++    if op == "set":
++        key = data.draw((st.sampled_from(keys) | toml_keys) if keys else toml_keys, label="key")
++        target[key] = data.draw(toml_scalars | toml_data, label="value")
++    elif op == "delete":
++        del target[data.draw(st.sampled_from(keys), label="key")]
++    else:
++        arr = target[data.draw(st.sampled_from(arrays), label="array")]
++        choice = data.draw(st.sampled_from(["append", "insert", "del", "set"]))
++        if choice == "append" or not arr:
++            arr.append(data.draw(toml_scalars, label="item"))
++        elif choice == "insert":
++            index = data.draw(st.integers(-len(arr), len(arr)), label="index")
++            arr.insert(index, data.draw(toml_scalars, label="item"))
++        else:
++            index = data.draw(st.integers(-len(arr), len(arr) - 1), label="index")
++            if choice == "del":
++                del arr[index]
++            else:
++                arr[index] = data.draw(toml_scalars, label="item")
++
++
++# proob:01M63GP5QZY58C9K0SBV4ZVZKQ
++@given(toml_documents(), st.data())
++def test_edited_document_reads_back_as_held_data(
++    content: str, data: st.DataObject
++) -> None:
++    doc = parse(content)
++    for _ in range(data.draw(st.integers(1, 6), label="edits")):
++        _edit(data, doc)
++        printed = doc.as_string()
++        reparsed = parse(printed).unwrap()
++        held = doc.unwrap()
++        assert _same(reparsed, held), (content, printed, reparsed, held)
+diff --git a/tests/util.py b/tests/util.py
+index 83cf5d9..6f1a8fc 100644
+--- a/tests/util.py
++++ b/tests/util.py
+@@ -55,3 +55,103 @@ def assert_is_ppo(v_unwrapped: object, unwrapped_type: type) -> None:
+ def elementary_test(v: Item, unwrapped_type: type) -> None:
+     v_unwrapped = v.unwrap()
+     assert_is_ppo(v_unwrapped, unwrapped_type)
++
++
++# Hypothesis strategies shared by the property tests.
++import json  # noqa: E402
++
++from datetime import date  # noqa: E402
++from datetime import datetime  # noqa: E402
++from datetime import time  # noqa: E402
++from datetime import timedelta  # noqa: E402
++from datetime import timezone  # noqa: E402
++
++from hypothesis import strategies as st  # noqa: E402
++
++
++_NO_CONTROL = st.characters(blacklist_categories=("Cs", "Cc"))
++# TOML offsets have minute precision.
++_offsets = st.none() | st.builds(
++    lambda m: timezone(timedelta(minutes=m)), st.integers(-24 * 60 + 1, 24 * 60 - 1)
++)
++toml_scalars = st.one_of(
++    st.booleans(),
++    st.integers(-(2**63), 2**63 - 1),
++    st.floats(allow_nan=False),
++    st.text(),
++    st.dates(),
++    st.times(),
++    st.datetimes(timezones=_offsets),
++)
++toml_keys = st.text(max_size=8)
++toml_data = st.dictionaries(
++    toml_keys,
++    st.recursive(
++        toml_scalars,
++        lambda kids: st.lists(kids, max_size=4)
++        | st.dictionaries(toml_keys, kids, max_size=4),
++        max_leaves=12,
++    ),
++    max_size=6,
++)
++
++_ws = st.sampled_from(["", " ", "  ", "\t"])
++_bare_key = st.from_regex(r"[A-Za-z0-9_-]{1,6}", fullmatch=True)
++_comment = st.builds(
++    lambda t: "#" + t, st.text(st.characters(blacklist_categories=("Cs", "Cc")), max_size=10)
++)
++_value_text = st.recursive(
++    st.one_of(
++        st.sampled_from(
++            [
++                "true", "false", "0", "+17", "-5", "1_000", "0xDEAD_beef", "0o755",
++                "0b1101", "3.14", "-0.0", "6.626e-34", "1E6", "inf", "-inf", "nan",
++                "1979-05-27T07:32:00Z", "1979-05-27T00:32:00.999999-07:00",
++                "1979-05-27T07:32:00", "1979-05-27", "07:32:00", "00:32:00.5",
++            ]
++        ),
++        st.integers().map(str),
++        st.text(_NO_CONTROL).map(lambda s: json.dumps(s, ensure_ascii=False)),
++        st.text(_NO_CONTROL.filter(lambda c: c != "'")).map(lambda s: f"'{s}'"),
++    ).filter(lambda v: "\x7f" not in v),
++    lambda kids: st.builds(
++        lambda items, sep, pad: "[" + pad + sep.join(items) + pad + "]",
++        st.lists(kids, max_size=4),
++        st.sampled_from([",", ", ", " , ", ",\n  "]),
++        st.sampled_from(["", " ", "\n"]),
++    )
++    | st.builds(
++        lambda pairs: "{" + ", ".join(f"{k} = {v}" for k, v in pairs.items()) + "}",
++        st.dictionaries(_bare_key, kids, max_size=3),
++    ),
++    max_leaves=6,
++)
++
++
++@st.composite
++def _section(draw: st.DrawFn) -> str:
++    keys = draw(st.lists(_bare_key, unique=True, max_size=5))
++    lines = []
++    for k in keys:
++        if draw(st.booleans()):
++            lines.append(draw(st.sampled_from(["", "  "])) + draw(_comment))
++        trailer = draw(st.none() | _comment)
++        lines.append(
++            f"{draw(_ws)}{k}{draw(_ws)}={draw(_ws)}{draw(_value_text)}"
++            + (f"{draw(_ws)} {trailer}" if trailer else draw(_ws))
++        )
++        if draw(st.booleans()):
++            lines.append("")
++    return "\n".join(lines)
++
++
++@st.composite
++def toml_documents(draw: st.DrawFn) -> str:
++    """Valid TOML text with varied spacing, comments, number and string forms."""
++    parts = [draw(_section())]
++    names = draw(st.lists(_bare_key, unique=True, max_size=3))
++    for i, name in enumerate(names):
++        header = draw(st.sampled_from([f"[section_{name}]", f"[ section_{name} ]", f"[section_{i}.{name}]"]))
++        parts.append(f"{header}{draw(_ws)}\n{draw(_section())}")
++    text = "\n".join(parts)
++    return text + draw(st.sampled_from(["", "\n", "\n\n"]))

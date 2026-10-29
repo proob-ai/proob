@@ -1,0 +1,13 @@
+schema_version = 1
+kill_floor = 0
+
+[policy]
+holds = "pass"
+checked = "pass"
+proposed = "pass"
+waived = "pass"
+not_checked_within_grace = "pass"
+not_checked_after_grace = "warn"
+re_approve = "warn"
+broken_affected = "block"
+broken_unaffected = "pass"

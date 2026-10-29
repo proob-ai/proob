@@ -1,0 +1,79 @@
+{
+ "taxonomy": {
+  "law-not-stated": "the area was sensed, but a law of a standard interface the code implements was never stated",
+  "masked-by-other-bug": "the check reached the target bug, but a second real bug keeps it failing on the fixed code, so strict scoring does not credit it",
+  "generator-domain": "the statement was right, the generator never produced the inputs that reach the bug",
+  "environment": "the check could not run",
+  "area-not-sensed": "no property was proposed for the code that holds the bug",
+  "statement-too-weak": "a property covers the code but cannot distinguish the bug"
+ },
+ "misses": [
+  {
+   "trial": "t1",
+   "bug": "bidict-values-order",
+   "cause": "law-not-stated",
+   "note": "Mapping law zip(keys(), values()) == items() stated only for the ordered variant"
+  },
+  {
+   "trial": "t2",
+   "bug": "bidict-values-order",
+   "cause": "law-not-stated",
+   "note": "Mapping law zip(keys(), values()) == items() stated only for the ordered variant"
+  },
+  {
+   "trial": "t3",
+   "bug": "bidict-values-order",
+   "cause": "law-not-stated",
+   "note": "Mapping law zip(keys(), values()) == items() stated only for the ordered variant"
+  },
+  {
+   "trial": "t1",
+   "bug": "chrono-naivedate-iter-rev",
+   "cause": "law-not-stated",
+   "note": "DoubleEndedIterator law: take(n).rev() equals the forward items reversed"
+  },
+  {
+   "trial": "t3",
+   "bug": "chrono-naivedate-iter-rev",
+   "cause": "law-not-stated",
+   "note": "DoubleEndedIterator law: take(n).rev() equals the forward items reversed"
+  },
+  {
+   "trial": "t1",
+   "bug": "url-control-host-roundtrip",
+   "cause": "masked-by-other-bug",
+   "note": "round trip reached a live slicing panic first"
+  },
+  {
+   "trial": "t3",
+   "bug": "url-control-host-roundtrip",
+   "cause": "masked-by-other-bug",
+   "note": "buggy-tree witness is the target bug; fixed tree fails on a live set_host panic"
+  },
+  {
+   "trial": "t3",
+   "bug": "semver-prerelease-token-order",
+   "cause": "masked-by-other-bug",
+   "note": "next-prerelease property also fails on rc9 -> rc10, fixed upstream later"
+  },
+  {
+   "trial": "t3",
+   "bug": "unicode-segmentation-zwj-midletter",
+   "cause": "masked-by-other-bug",
+   "note": "buggy-tree witness is the target bug; the test also mishandles rule WB7a"
+  },
+  {
+   "trial": "t2",
+   "bug": "toml-serde-key-quoting",
+   "cause": "generator-domain",
+   "note": "keys needing quotes never generated in table-header position"
+  },
+  {
+   "trial": "t2",
+   "bug": "packaging-marker-nested-parens",
+   "cause": "environment",
+   "note": "every check errored in this trial"
+  }
+ ],
+ "next": "law-not-stated (5 of 11): declare and sense should state the laws of standard interfaces the code implements; tune on the dev split only"
+}

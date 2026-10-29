@@ -1,0 +1,258 @@
+diff --git a/tests/test_api.py b/tests/test_api.py
+index 0aaf52f..11fbb31 100644
+--- a/tests/test_api.py
++++ b/tests/test_api.py
+@@ -1,3 +1,4 @@
++import copy
+ import io
+ import json
+ import os
+@@ -11,6 +12,9 @@ from typing import Callable
+ 
+ import pytest
+ 
++from hypothesis import given
++from hypothesis import strategies as st
++
+ import tomlkit
+ 
+ from tomlkit import dump
+@@ -716,3 +720,85 @@ def test_integer_rejects_invalid_strings(raw: str) -> None:
+ def test_integer_from_int_unchanged() -> None:
+     assert tomlkit.integer(1000).as_string() == "1000"
+     assert int(tomlkit.integer(1000)) == 1000
++
++
++_bare_keys = st.text("abcdefghijklmnopqrstuvwxyz_-", min_size=1, max_size=4)
++_values = st.one_of(
++    st.integers(min_value=-(2**63), max_value=2**63 - 1),
++    st.booleans(),
++    st.text(st.characters(codec="utf-8", exclude_categories=("Cs", "Cc"))),
++    st.lists(st.integers(-1000, 1000), max_size=4),
++)
++_tomls = st.recursive(
++    st.dictionaries(_bare_keys, _values, max_size=4),
++    lambda inner: st.dictionaries(
++        _bare_keys, st.one_of(_values, inner), max_size=4
++    ),
++    max_leaves=12,
++)
++
++
++@st.composite
++def _toml_text(draw: st.DrawFn) -> str:
++    # Re-space a dumped document so the parser sees layout it must keep.
++    lines = tomlkit.dumps(draw(_tomls)).splitlines(keepends=True)
++    out = []
++    for line in lines:
++        if draw(st.booleans()):
++            out.append(draw(st.sampled_from(["\n", "# note\n", "  \n", "\t# x \n"])))
++        if " = " in line and draw(st.booleans()):
++            line = line.replace(" = ", draw(st.sampled_from(["=", "  =\t", " =  "])), 1)
++        if line.endswith("\n") and draw(st.booleans()):
++            line = line[:-1] + draw(st.sampled_from(["  # c\n", " \n", "\r\n"]))
++        out.append(line)
++    return "".join(out)
++
++
++# proob:01M62H14HBKFC5EMXZE2WNEX5S
++@given(_toml_text())
++def test_parse_then_print_returns_original_text(text: str) -> None:
++    assert parse(text).as_string() == text, text
++
++
++@st.composite
++def _doc_edits(draw: st.DrawFn) -> tuple[dict[str, Any], list[tuple]]:
++    start = draw(_tomls)
++    model = copy.deepcopy(start)
++    edits = []
++    for _ in range(draw(st.integers(min_value=1, max_value=5))):
++        tables = [[]] + [[k] for k, v in model.items() if isinstance(v, dict)]
++        path = draw(st.sampled_from(tables))
++        where = model
++        for k in path:
++            where = where[k]
++        if where and draw(st.booleans()):
++            key = draw(st.sampled_from(sorted(where)))
++            edits.append(("del", path + [key]))
++            del where[key]
++        else:
++            key, value = draw(_bare_keys), draw(_values)
++            edits.append(("set", path + [key], value))
++            where[key] = value
++    return start, edits
++
++
++# proob:01M62H14G8CKC0V3VE3430VJ9X
++@given(_doc_edits())
++def test_key_edits_never_move_other_keys_between_tables(
++    case: tuple[dict[str, Any], list[tuple]],
++) -> None:
++    start, edits = case
++    doc = parse(tomlkit.dumps(start))
++    model = copy.deepcopy(start)
++    for edit in edits:
++        target, where = doc, model
++        for k in edit[1][:-1]:
++            target, where = target[k], where[k]
++        if edit[0] == "del":
++            del target[edit[1][-1]]
++            del where[edit[1][-1]]
++        else:
++            target[edit[1][-1]] = edit[2]
++            where[edit[1][-1]] = edit[2]
++    out = doc.as_string()
++    assert parse(out).unwrap() == model, (start, edits, out, model)
+diff --git a/tests/test_items.py b/tests/test_items.py
+index 8284029..8a15c45 100644
+--- a/tests/test_items.py
++++ b/tests/test_items.py
+@@ -17,6 +17,9 @@ from typing import Any
+ 
+ import pytest
+ 
++from hypothesis import given
++from hypothesis import strategies as st
++
+ from tests.util import assert_is_ppo
+ from tests.util import elementary_test
+ from tomlkit import api
+@@ -1637,3 +1640,138 @@ def test_out_of_order_table_proxy_membership() -> None:
+         _ = 123 in table
+     # membership must not resolve values or mutate the document
+     assert doc.as_string() == content
++
++
++_scalars = st.one_of(
++    st.integers(min_value=-(2**63), max_value=2**63 - 1),
++    st.booleans(),
++    st.text(st.characters(codec="utf-8", exclude_categories=("Cs", "Cc"))),
++)
++
++
++@st.composite
++def _array_source(draw: st.DrawFn) -> tuple[str, list[Any]]:
++    values = draw(st.lists(st.integers(min_value=-1000, max_value=1000), max_size=8))
++    sep = draw(st.sampled_from([", ", ",", ",\n    ", " , "]))
++    trailing = "," if values and draw(st.booleans()) else ""
++    multiline = draw(st.booleans())
++    body = sep.join(str(v) for v in values) + trailing
++    text = f"a = [\n    {body}\n]\n" if multiline else f"a = [{body}]\n"
++    return text, values
++
++
++_index_or_none = st.one_of(st.none(), st.integers(min_value=-12, max_value=12))
++_slices = st.builds(
++    slice,
++    _index_or_none,
++    _index_or_none,
++    st.one_of(st.none(), st.integers(min_value=-4, max_value=4).filter(bool)),
++)
++
++
++def _array_edit(n: int) -> st.SearchStrategy[tuple]:
++    edits = [
++        st.tuples(st.just("append"), _scalars),
++        st.tuples(st.just("insert"), st.integers(-n - 2, n + 2), _scalars),
++        st.tuples(st.just("add_line"), st.lists(_scalars, max_size=3)),
++        st.tuples(st.just("del_slice"), _slices),
++    ]
++    if n:
++        edits += [
++            st.tuples(st.just("set"), st.integers(-n, n - 1), _scalars),
++            st.tuples(st.just("del"), st.integers(-n, n - 1)),
++        ]
++    return st.one_of(edits)
++
++
++def _apply_edit(a: Array, model: list[Any], edit: tuple) -> None:
++    op, *args = edit
++    if op == "append":
++        a.append(args[0])
++        model.append(args[0])
++    elif op == "insert":
++        a.insert(args[0], args[1])
++        model.insert(args[0], args[1])
++    elif op == "add_line":
++        a.add_line(*args[0])
++        model.extend(args[0])
++    elif op == "set":
++        a[args[0]] = args[1]
++        model[args[0]] = args[1]
++    else:
++        del a[args[0]]
++        del model[args[0]]
++
++
++# proob:01M62H14F5F2BAFDN37JZFSM0M
++@given(_array_source(), st.data())
++def test_array_edits_round_trip_to_held_values(
++    source: tuple[str, list[Any]], data: st.DataObject
++) -> None:
++    text, values = source
++    doc = parse(text)
++    a = doc["a"]
++    model = list(values)
++    for _ in range(data.draw(st.integers(min_value=1, max_value=5))):
++        _apply_edit(a, model, data.draw(_array_edit(len(model))))
++    out = doc.as_string()
++    assert list(a) == model, (text, list(a), model)
++    assert parse(out)["a"].unwrap() == model, (text, out, model)
++
++
++# proob:01M62H14KM9026RFS6TTMDX9G2
++@given(_array_source(), _slices)
++def test_array_slice_delete_leaves_remaining_values_in_text(
++    source: tuple[str, list[Any]], key: slice
++) -> None:
++    text, values = source
++    doc = parse(text)
++    del doc["a"][key]
++    remaining = values[:]
++    del remaining[key]
++    out = doc.as_string()
++    assert parse(out)["a"].unwrap() == remaining, (text, key, out, remaining)
++
++
++_bare_keys = st.text("abcdefghijklmnopqrstuvwxyz_-", min_size=1, max_size=4)
++
++
++@st.composite
++def _table_source(draw: st.DrawFn) -> tuple[str, str, dict[str, Any]]:
++    items = draw(st.dictionaries(_bare_keys, st.integers(-1000, 1000), max_size=5))
++    inline = draw(st.booleans())
++    if inline:
++        sep = draw(st.sampled_from([", ", ","]))
++        pad = draw(st.sampled_from(["", " "]))
++        body = sep.join(f"{k} = {v}" for k, v in items.items())
++        text = f"t = {{{pad}{body}{pad}}}\nz = 1\n"
++    else:
++        body = "".join(f"{k} = {v}\n" for k, v in items.items())
++        text = f"z = 1\n\n[t]\n{body}\n[u]\nw = 2\n"
++    return text, "inline" if inline else "table", items
++
++
++# proob:01M62H14JFMNPYCNHS2PFFFVEH
++@given(_table_source(), st.data())
++def test_table_key_edits_keep_valid_toml_with_expected_keys(
++    source: tuple[str, str, dict[str, Any]], data: st.DataObject
++) -> None:
++    text, form, items = source
++    doc = parse(text)
++    t = doc["t"]
++    model = dict(items)
++    for _ in range(data.draw(st.integers(min_value=1, max_value=5))):
++        if model and data.draw(st.booleans()):
++            key = data.draw(st.sampled_from(sorted(model)))
++            del t[key]
++            del model[key]
++        else:
++            key = data.draw(_bare_keys)
++            value = data.draw(_scalars)
++            t[key] = value
++            model[key] = value
++    out = doc.as_string()
++    expected = {"t": model, "z": 1}
++    if form == "table":
++        expected["u"] = {"w": 2}
++    assert parse(out).unwrap() == expected, (text, out, expected)

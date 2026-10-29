@@ -1,0 +1,21 @@
+[package]
+name = "proob-trusted"
+description = "proob's trusted base: SHA-256 and the clock behind uninterpreted Verus specifications"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+vstd.workspace = true
+sha2.workspace = true
+
+# Verus must process this crate so that proob-core can see the specifications
+# below. Its bodies are `external_body`, so `--no-cheating` is never forwarded to
+# it: the verify job passes `--fwd-verus-args-to roots`.
+[package.metadata.verus]
+verify = true
+
+[lints]
+workspace = true

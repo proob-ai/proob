@@ -1,0 +1,6 @@
+id = "01M62J361SHW1TSWTJ38BNPJ6F"
+title = "URL parts in order"
+statement = "In a URL with an authority, the scheme, userinfo, host, port, path, query and fragment appear in that order, and each separator sits exactly where the recorded part boundaries say."
+scope = ["url/src/**"]
+severity = "high"
+rationale = "check_invariants in url/src/lib.rs (lines 714-790) checks the separator bytes against the stored offsets; the debug assertions in url/src/slicing.rs (lines 136-209) and in the accessors rely on them. Drifting offsets make Position slicing return the wrong text or panic on a non-char boundary."

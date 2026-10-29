@@ -1,0 +1,29 @@
+# Labels pull requests by the paths they change (.github/labeler.yml).
+#
+# This runs on `pull_request`, never `pull_request_target`: nothing here ever
+# runs with a write token on a fork's code or config. The cost is that GitHub
+# gives a fork's pull request a read-only token, so for those the job is
+# skipped and a maintainer sets the area labels at triage (CONTRIBUTING.md,
+# "Review and merge"). The labeler reads its config through the API and checks
+# out nothing.
+#
+# Third-party actions are pinned to full commit SHAs; the comment names the tag.
+name: labeler
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  label:
+    name: label by changed paths
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/labeler@bf12e9b00b37c5c0ca2b87b79b2daf7891dbda13 # v7.0.0

@@ -1,0 +1,6 @@
+id = "01M6352CW13CAV0CR71K0PNP43"
+title = "Both ends never repeat a date"
+statement = "Taking dates alternately from the front and the back of one date sequence never returns the same date twice."
+scope = ["src/naive/date/mod.rs"]
+severity = "high"
+rationale = "next and next_back share one cursor (src/naive/date/mod.rs:2221-2226, :2238-2243): next returns d and moves to d+1, next_back then returns d+1 and moves back to d, so the following next returns d+1 again; callers building schedules or reports would get silent duplicates."

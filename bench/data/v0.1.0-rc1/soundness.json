@@ -1,0 +1,11 @@
+{
+  "correct_broken": 14,
+  "correct_holds": 3,
+  "max": 128,
+  "other": 243,
+  "score": 20,
+  "verdicts": 260,
+  "wrong_broken": 0,
+  "wrong_holds": 0,
+  "wrong_holds_steps": []
+}

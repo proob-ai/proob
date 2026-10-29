@@ -1,0 +1,142 @@
+diff --git a/tests/property/test_markers_properties.py b/tests/property/test_markers_properties.py
+new file mode 100644
+index 0000000..aef293e
+--- /dev/null
++++ b/tests/property/test_markers_properties.py
+@@ -0,0 +1,136 @@
++# This file is dual licensed under the terms of the Apache License, Version
++# 2.0, and the BSD License. See the LICENSE file in the root of this repository
++# for complete details.
++
++"""Property tests for ``Marker`` and ``Requirement`` text round-trips,
++equality, composition, and extra-name normalisation."""
++
++from __future__ import annotations
++
++from hypothesis import given
++from hypothesis import strategies as st
++
++from packaging.markers import Marker
++from packaging.requirements import Requirement
++from packaging.utils import canonicalize_name
++
++OS_NAMES = ["posix", "nt", "java"]
++PLATFORMS = ["linux", "win32", "darwin"]
++PY_VERSIONS = ["2.7", "3.8", "3.12", "3.14"]
++EXTRAS = ["", "foo", "bar-baz"]
++
++atoms = st.one_of(
++    st.sampled_from(OS_NAMES).map(lambda v: f'os_name == "{v}"'),
++    st.sampled_from(PLATFORMS).map(lambda v: f'sys_platform != "{v}"'),
++    st.sampled_from(PY_VERSIONS).map(lambda v: f'python_version >= "{v}"'),
++    st.sampled_from(EXTRAS[1:]).map(lambda v: f'extra == "{v}"'),
++)
++
++
++def _extend(children: st.SearchStrategy[str]) -> st.SearchStrategy[str]:
++    return st.one_of(
++        st.tuples(st.integers(1, 3), children).map(lambda t: "(" * t[0] + t[1] + ")" * t[0]),
++        st.tuples(children, st.sampled_from(["and", "or"]), children).map(" ".join),
++    )
++
++
++# Valid marker text with arbitrary, possibly redundant, parenthesis nesting.
++marker_texts = st.recursive(atoms, _extend, max_leaves=8)
++
++environments = st.fixed_dictionaries(
++    {
++        "os_name": st.sampled_from(OS_NAMES),
++        "sys_platform": st.sampled_from(PLATFORMS),
++        "python_version": st.sampled_from(PY_VERSIONS),
++        "extra": st.sampled_from(EXTRAS),
++    }
++)
++
++
++@st.composite
++def markers(draw: st.DrawFn) -> Marker:
++    """A marker parsed from text, or built from two markers with ``&``/``|``."""
++    m = Marker(draw(marker_texts))
++    for _ in range(draw(st.integers(0, 2))):
++        other = Marker(draw(marker_texts))
++        m = draw(st.sampled_from([m & other, m | other, other & m, other | m]))
++    return m
++
++
++# proob:01M63GPFN9TTYJTAKF0HHYHYW4
++@given(markers(), environments)
++def test_marker_text_round_trip_keeps_meaning(m: Marker, env: dict[str, str]) -> None:
++    text = str(m)
++    assert Marker(text).evaluate(env) == m.evaluate(env), (str(m._markers), text, env)
++
++
++# proob:01M63GPFPF0SVHHX9N7WTDREMF
++@given(markers(), markers(), environments)
++def test_equal_markers_decide_alike(m: Marker, other: Marker, env: dict[str, str]) -> None:
++    for candidate in (Marker(str(m)), other):
++        if candidate == m:
++            assert candidate.evaluate(env) == m.evaluate(env), (
++                str(m._markers),
++                str(candidate._markers),
++                str(m),
++                env,
++            )
++
++
++# proob:01M63GPFQJRNEZJ80NR0X83KDB
++@given(markers(), markers(), environments)
++def test_combining_markers_matches_combining_decisions(
++    a: Marker, b: Marker, env: dict[str, str]
++) -> None:
++    ea, eb = a.evaluate(env), b.evaluate(env)
++    assert (a & b).evaluate(env) == (ea and eb), (str(a), str(b), env)
++    assert (a | b).evaluate(env) == (ea or eb), (str(a), str(b), env)
++
++
++_name_parts = st.lists(st.text("abcXYZ019", min_size=1, max_size=4), min_size=1, max_size=4)
++_separators = st.text("-_.", min_size=1, max_size=3)
++
++
++@st.composite
++def extra_spellings(draw: st.DrawFn) -> tuple[str, str]:
++    """Two spellings of one extra name that differ in case and separators."""
++    parts = draw(_name_parts)
++
++    def spell() -> str:
++        out = parts[0]
++        for p in parts[1:]:
++            out += draw(_separators) + p
++        return "".join(c.swapcase() if draw(st.booleans()) else c for c in out)
++
++    return spell(), spell()
++
++
++# proob:01M63GPFRHEXW7JR28DYWKA231
++@given(extra_spellings(), st.booleans())
++def test_extra_names_match_after_normalisation(
++    spellings: tuple[str, str], value_on_left: bool
++) -> None:
++    in_marker, requested = spellings
++    assert canonicalize_name(in_marker) == canonicalize_name(requested)
++    text = f'"{in_marker}" == extra' if value_on_left else f'extra == "{in_marker}"'
++    assert Marker(text).evaluate({"extra": requested}), (text, requested)
++
++
++requirement_texts = st.builds(
++    lambda name, extras, spec, marker: (
++        name + (f"[{','.join(extras)}]" if extras else "") + spec + (f"; {marker}" if marker else "")
++    ),
++    st.sampled_from(["foo", "Foo_Bar", "a.b-c"]),
++    st.lists(st.sampled_from(["x", "Y_z", "w.v"]), max_size=2),
++    st.sampled_from(["", ">=1.0", "==1.0.0,!=1.0.1", "~=2.2"]),
++    st.one_of(st.just(""), marker_texts),
++)
++
++
++# proob:01M63GPFSKQVYPT6XKGV76Z946
++@given(requirement_texts)
++def test_requirement_text_round_trip(text: str) -> None:
++    r = Requirement(text)
++    again = Requirement(str(r))
++    assert again == r, (text, str(r), str(again))
++    assert hash(again) == hash(r), (text, str(r))

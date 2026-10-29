@@ -1,0 +1,7 @@
+id = "01K8V5NQ4A0F3R7Y2M9D6P1XHC"
+title = "Counting evens never exceeds the length"
+statement = "The number of even values in a list is at most the number of values in it."
+scope = ["src/parity.rs"]
+severity = "low"
+rationale = "No test carries this property's token yet, so it renders Not checked (no check)."
+kind = "test"

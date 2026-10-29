@@ -1,0 +1,6 @@
+id = "01M62JS9F0WQHNDV1DCQVBS8E9"
+title = "Peek does not lose an item"
+statement = "Looking ahead at a seekable stream never changes which item comes next, whatever the cache size."
+scope = ["more_itertools/more.py"]
+severity = "high"
+rationale = "The seekable docstring (more_itertools/more.py:3032) promises peek looks ahead without advancing. tests/test_more.py test_simple_peeking covers only the unbounded cache. Reading more.py:3134-3136 with 3109-3111, peek steps the cache index back by one, which with maxlen=0 points before an empty cache, so the peeked item may be dropped silently."

@@ -1,0 +1,14 @@
+{
+  "enabledPlugins": {
+    "proob@proob": true
+  },
+  "extraKnownMarketplaces": {
+    "proob": {
+      "autoUpdate": true,
+      "source": {
+        "repo": "proob-ai/proob",
+        "source": "github"
+      }
+    }
+  }
+}

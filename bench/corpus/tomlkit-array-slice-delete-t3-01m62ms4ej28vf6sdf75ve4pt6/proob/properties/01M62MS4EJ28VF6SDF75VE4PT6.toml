@@ -1,0 +1,6 @@
+id = "01M62MS4EJ28VF6SDF75VE4PT6"
+title = "Unchanged documents round-trip byte for byte"
+statement = "Parsing a valid document and printing it without changes reproduces the original text exactly."
+scope = ["tomlkit/*.py"]
+severity = "high"
+rationale = "tests/test_api.py test_original_string_and_dumped_string_are_equal checks this over the example files, and README.md promises that comments, indentation, whitespace and element ordering are preserved. Breaking it rewrites users files on save."

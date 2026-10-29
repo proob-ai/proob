@@ -1,0 +1,15 @@
+kind = "catch"
+bug = "chrono-naivedate-iter-rev"
+trial = "t3"
+language = "rust"
+repo = "https://github.com/chronotope/chrono"
+buggy_commit = "7fa24eac9514db65eb8bddf7fadeca71b68e414a"
+fix_commit = "7b6436f65e0c7ec2f9a7cdea88af1f3851a01f6f"
+fix_paths = ["src/naive/date/mod.rs"]
+install = ["rustup run 1.99.1 cargo build --tests"]
+toolchain = "1.99.1"
+property = "01M6352CW13CAV0CR71K0PNP43"
+seed = "1793553062151975696"
+expect_buggy = "counterexample"
+expect_fixed = "no_counterexample"
+flaky = false

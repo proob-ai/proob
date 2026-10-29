@@ -1,0 +1,6 @@
+id = "01M62MDT1XX6100RW2KWJEGMCN"
+title = "No raw control characters in opaque hosts"
+statement = "The host of a URL with a non-special scheme never contains a raw control character: NUL, tab, carriage return and line feed are rejected, and every other control character, including DEL, is percent-encoded."
+scope = ["url/src/host.rs", "url/src/parser.rs", "url/src/lib.rs", "url/src/quirks.rs"]
+severity = "high"
+rationale = "A control byte in a host lets two parsers read the same URL differently (request smuggling, log injection). url/src/host.rs rejects NUL, tab, CR and LF in is_invalid_host_char (line 131) and percent-encodes the rest with CONTROLS (line 157), defined as 0x00 to 0x1F plus 0x7F in percent_encoding/src/ascii_set.rs:107. The parser strips tab and newline before this step (url/src/parser.rs:1010), but the host setter in url/src/lib.rs:2050 passes raw input, so the rule must cover both paths."

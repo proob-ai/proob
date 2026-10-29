@@ -1,0 +1,6 @@
+id = "01M62KZ45214Z9V3XYPMSJZSZT"
+title = "Date iterator length matches yield in both directions"
+statement = "A day-by-day or week-by-week date walk always reports a remaining length equal to the number of dates it actually goes on to produce, whether it is walked forward or backward."
+scope = ["src/naive/date/mod.rs"]
+severity = "medium"
+rationale = "The day and week iterators implement both ExactSizeIterator and DoubleEndedIterator (src/naive/date/mod.rs:2235-2237, 2269-2271), which together promise an exact length under reversal, and the docs at src/naive/date/mod.rs:1344-1347 show reversal as a supported use. The length computation at src/naive/date/mod.rs:2229-2232 and 2263-2266 counts only toward the latest date while the backward step walks toward the earliest, so a reversed walk may report a wrong length; callers that pre-allocate or rely on the length would get silently wrong results."

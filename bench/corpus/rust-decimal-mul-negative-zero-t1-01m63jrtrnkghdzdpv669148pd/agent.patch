@@ -1,0 +1,126 @@
+diff --git a/Cargo.toml b/Cargo.toml
+index d175c6f..84b305e 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -59,7 +59,7 @@ bytes = { default-features = false, version = "1.0" }
+ diesel = { default-features = false, features = ["mysql", "postgres"], version = "2.2.3" }
+ futures = { default-features = false, version = "0.3" }
+ postgres = { default-features = false, version = "0.19" }
+-rust_decimal = { path = ".", features = ["macros"] }
++rust_decimal = { path = ".", features = ["macros", "proptest"] }
+ rand-0_9 = { default-features = false, features = ["thread_rng"], package = "rand", version = "0.9" }
+ rand-0_10 = { default-features = false, features = ["thread_rng"], package = "rand", version = "0.10" }
+ rkyv-0_8 = { version = "0.8", package = "rkyv" }
+diff --git a/tests/proptest_tests.rs b/tests/proptest_tests.rs
+index 080f78e..5f8c384 100644
+--- a/tests/proptest_tests.rs
++++ b/tests/proptest_tests.rs
+@@ -1,5 +1,8 @@
++use core::str::FromStr;
+ use proptest::prelude::*;
+ use rust_decimal::Decimal;
++use std::collections::hash_map::DefaultHasher;
++use std::hash::{Hash, Hasher};
+ 
+ proptest! {
+     #[test]
+@@ -7,3 +10,99 @@ proptest! {
+         assert!(num.is_zero() || !num.is_zero());
+     }
+ }
++
++// Mantissa words and scale lean toward their bounds, so tiny values (one word set, scale 28)
++// appear as often as full-width ones; `any::<Decimal>()` almost never produces them.
++fn word() -> impl Strategy<Value = u32> {
++    prop_oneof![Just(0u32), 0u32..1000, any::<u32>()]
++}
++
++fn scale() -> impl Strategy<Value = u32> {
++    prop_oneof![Just(0u32), Just(28u32), 0u32..=28]
++}
++
++fn decimal() -> impl Strategy<Value = Decimal> {
++    (word(), word(), word(), any::<bool>(), scale())
++        .prop_map(|(lo, mid, hi, negative, scale)| Decimal::from_parts(lo, mid, hi, negative, scale))
++}
++
++fn hash_of(d: &Decimal) -> u64 {
++    let mut h = DefaultHasher::new();
++    d.hash(&mut h);
++    h.finish()
++}
++
++proptest! {
++    // proob:01M63JRTRNKGHDZDPV669148PD
++    #[test]
++    fn zero_product_is_never_negative_zero(a in decimal(), b in decimal()) {
++        if let Some(p) = a.checked_mul(b) {
++            prop_assert!(
++                !p.is_zero() || p.is_sign_positive(),
++                "{:?} * {:?} = {} (negative zero)", a, b, p
++            );
++        }
++    }
++
++    // proob:01M63JRTSSFABF35ZYWBAX97SF
++    #[test]
++    fn zero_arithmetic_results_are_positive(a in decimal(), b in decimal()) {
++        let results = [
++            ("+", a.checked_add(b)),
++            ("-", a.checked_sub(b)),
++            ("*", a.checked_mul(b)),
++            ("/", a.checked_div(b)),
++            ("%", a.checked_rem(b)),
++        ];
++        for (op, r) in results {
++            if let Some(r) = r {
++                prop_assert!(
++                    !r.is_zero() || r.is_sign_positive(),
++                    "{:?} {} {:?} = {} (negative zero)", a, op, b, r
++                );
++            }
++        }
++    }
++
++    // proob:01M63JRTTV80GA3PYCDTKX8NV4
++    #[test]
++    fn product_sign_follows_operand_signs(a in decimal(), b in decimal()) {
++        if let Some(p) = a.checked_mul(b) {
++            if !p.is_zero() {
++                prop_assert_eq!(
++                    p.is_sign_negative(),
++                    a.is_sign_negative() ^ b.is_sign_negative(),
++                    "{:?} * {:?} = {}", a, b, p
++                );
++            }
++        }
++    }
++
++    // proob:01M63JRTVZRW6P2KTA84DEPEBW
++    #[test]
++    fn equal_values_hash_equally(a in decimal(), b in decimal(), extra in 0u32..=28) {
++        let mut rescaled = a;
++        rescaled.rescale((a.scale() + extra).min(28));
++        let zero_at_scale = Decimal::from_parts(0, 0, 0, false, a.scale());
++        let pairs = [
++            (a, b),
++            (a, a.normalize()),
++            (a, rescaled),
++            (zero_at_scale, -zero_at_scale),
++            (Decimal::ZERO, -zero_at_scale),
++        ];
++        for (x, y) in pairs {
++            if x == y {
++                prop_assert_eq!(hash_of(&x), hash_of(&y), "{:?} == {:?} but hashes differ", x, y);
++            }
++        }
++    }
++
++    // proob:01M63JRTX4HGG0R79S7P5B1YE6
++    #[test]
++    fn printing_then_parsing_round_trips(a in decimal()) {
++        let text = a.to_string();
++        let parsed = Decimal::from_str(&text);
++        prop_assert_eq!(parsed, Ok(a), "{:?} printed as {:?}", a, text);
++    }
++}

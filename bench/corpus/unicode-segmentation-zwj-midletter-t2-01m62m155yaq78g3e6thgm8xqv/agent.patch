@@ -1,0 +1,160 @@
+diff --git a/tests/test.rs b/tests/test.rs
+index ee31b94..ab5eba0 100644
+--- a/tests/test.rs
++++ b/tests/test.rs
+@@ -433,3 +433,155 @@ fn test_size_hint_is_a_valid_bound() {
+         check!("unicode_sentences", s, || s.unicode_sentences());
+     }
+ }
++
++/// Characters that drive the UAX #29 rules (letters, digits, mid-word and
++/// mid-number punctuation, ZWJ, Extend, Format, emoji, regional indicators,
++/// Prepend, Indic linkers and consonants, Hebrew, Katakana, CR/LF, sentence
++/// terminators), mixed with any other `char` so the whole domain is reachable.
++fn segmentation_char() -> impl proptest::strategy::Strategy<Value = char> {
++    use proptest::prelude::*;
++    const POOL: &[char] = &[
++        'a', 'Z', 'é', 'λ', 'ж', '0', '7', ':', '.', ',', ';', '\'', '"', '·', '\u{2019}', '_',
++        ' ', '\t', '\r', '\n', '!', '?', '\u{85}', '\u{200d}', '\u{200b}', '\u{ad}', '\u{300}',
++        '\u{301}', '\u{fe0f}', '\u{1f600}', '\u{1f468}', '\u{1f3fe}', '\u{2764}', '\u{1f1e6}',
++        '\u{1f1fa}', '\u{600}', '\u{6dd}', '\u{94d}', '\u{93c}', '\u{915}', '\u{5d0}', '\u{30a2}',
++        '\u{3042}', '\u{4e00}', '\u{1100}', '\u{1161}', '\u{11a8}', '\u{ac00}', '\u{e0001}',
++    ];
++    prop_oneof![3 => proptest::sample::select(POOL), 1 => any::<char>()]
++}
++
++fn segmentation_text() -> impl proptest::strategy::Strategy<Value = String> {
++    use proptest::prelude::*;
++    proptest::collection::vec(segmentation_char(), 0..40).prop_map(|v| v.into_iter().collect())
++}
++
++/// Byte offsets where the forward and reverse word-bound iterators start a segment.
++fn word_starts(s: &str) -> (Vec<usize>, Vec<usize>) {
++    let fwd = s.split_word_bound_indices().map(|(i, _)| i).collect();
++    let mut rev: Vec<usize> = s.split_word_bound_indices().rev().map(|(i, _)| i).collect();
++    rev.reverse();
++    (fwd, rev)
++}
++
++/// Asks `GraphemeCursor::is_boundary` at `offset`, handing it only the chunk of
++/// `s` (cut at `cuts`) that contains the offset, plus earlier chunks on request.
++fn chunked_is_boundary(s: &str, cuts: &[usize], offset: usize, is_extended: bool) -> bool {
++    use unicode_segmentation::{GraphemeCursor, GraphemeIncomplete};
++    let chunk_at = |pos: usize| {
++        let start = *cuts.iter().filter(|&&c| c <= pos).max().unwrap();
++        let end = *cuts.iter().filter(|&&c| c > pos).min().unwrap_or(&s.len());
++        (start, end)
++    };
++    let ending_at = |n: usize| *cuts.iter().filter(|&&c| c < n).max().unwrap();
++    let (start, end) = chunk_at(offset);
++    let mut cursor = GraphemeCursor::new(offset, s.len(), is_extended);
++    loop {
++        match cursor.is_boundary(&s[start..end], start) {
++            Ok(b) => return b,
++            Err(GraphemeIncomplete::PreContext(n)) => {
++                let from = ending_at(n);
++                cursor.provide_context(&s[from..n], from);
++            }
++            Err(e) => panic!("{s:?} cuts={cuts:?} offset={offset}: unexpected {e:?}"),
++        }
++    }
++}
++
++proptest::proptest! {
++    // proob:01M62M155YAQ78G3E6THGM8XQV
++    #[test]
++    fn proptest_midletter_zwj_emoji_breaks_from_letters(
++        letters in proptest::collection::vec(
++            proptest::sample::select(&['a', 'Z', 'é', 'λ', 'ж', 'ß'][..]), 1..5),
++        mid in proptest::sample::select(&[':', '.', '\'', '·', '\u{2019}', '\u{fe55}'][..]),
++        joiners in 1usize..3,
++        emoji in proptest::sample::select(&['\u{1f600}', '\u{1f468}', '\u{2764}', '\u{1f44d}'][..]),
++        tail in segmentation_text(),
++    ) {
++        let head: String = letters.into_iter().collect();
++        let s = format!("{head}{mid}{}{emoji}{tail}", "\u{200d}".repeat(joiners));
++        let (fwd, rev) = word_starts(&s);
++        proptest::prop_assert!(
++            fwd.contains(&head.len()),
++            "forward segments of {:?} have no break before {:?} at {}: {:?}",
++            s, mid, head.len(), s.split_word_bounds().collect::<Vec<_>>()
++        );
++        proptest::prop_assert!(
++            rev.contains(&head.len()),
++            "reverse segments of {:?} have no break before {:?} at {}: {:?}",
++            s, mid, head.len(), s.split_word_bounds().rev().collect::<Vec<_>>()
++        );
++    }
++
++    // proob:01M62M156HSZNFPFSRHS3PM59C
++    #[test]
++    fn proptest_forward_reverse_word_bounds_agree(s in segmentation_text()) {
++        let fwd: Vec<(usize, &str)> = s.split_word_bound_indices().collect();
++        let mut rev: Vec<(usize, &str)> = s.split_word_bound_indices().rev().collect();
++        rev.reverse();
++        proptest::prop_assert_eq!(fwd, rev, "word bounds of {:?}", s);
++    }
++
++    // proob:01M62M1572CFZDHSQ4YD5ZZWF7
++    #[test]
++    fn proptest_grapheme_cursor_chunked_matches_whole(
++        s in segmentation_text(),
++        picks in proptest::collection::vec(proptest::prelude::any::<proptest::sample::Index>(), 0..8),
++        is_extended in proptest::prelude::any::<bool>(),
++    ) {
++        let offsets: Vec<usize> = s.char_indices().map(|(i, _)| i).collect();
++        let mut cuts: Vec<usize> = std::iter::once(0)
++            .chain(picks.iter().filter(|_| !offsets.is_empty()).map(|p| *p.get(&offsets)))
++            .collect();
++        cuts.sort_unstable();
++        cuts.dedup();
++        let whole: Vec<usize> = s.grapheme_indices(is_extended).map(|(i, _)| i).collect();
++        for &offset in offsets.iter().skip(1) {
++            let got = chunked_is_boundary(&s, &cuts, offset, is_extended);
++            proptest::prop_assert_eq!(
++                got, whole.contains(&offset),
++                "{:?} cuts={:?} offset={} extended={}", s, cuts, offset, is_extended
++            );
++        }
++    }
++
++    // proob:01M62M157MDDM134JDWEPNPXVC
++    #[test]
++    fn proptest_segments_rejoin_to_original(s in segmentation_text()) {
++        let rejoin_rev = |mut v: Vec<&str>| { v.reverse(); v.concat() };
++        let joined: Vec<(&str, String)> = vec![
++            ("graphemes(true)", s.graphemes(true).collect()),
++            ("graphemes(false)", s.graphemes(false).collect()),
++            ("graphemes(true).rev", rejoin_rev(s.graphemes(true).rev().collect())),
++            ("graphemes(false).rev", rejoin_rev(s.graphemes(false).rev().collect())),
++            ("split_word_bounds", s.split_word_bounds().collect()),
++            ("split_word_bounds.rev", rejoin_rev(s.split_word_bounds().rev().collect())),
++            ("split_sentence_bounds", s.split_sentence_bounds().collect()),
++            ("split_sentence_bound_indices",
++                s.split_sentence_bound_indices().map(|(_, p)| p).collect()),
++        ];
++        for (name, j) in joined {
++            proptest::prop_assert_eq!(&j, &s, "{} of {:?}", name, s);
++        }
++    }
++
++    // proob:01M62M1585SRHRE54EC41QRJTZ
++    #[test]
++    fn proptest_splitters_never_panic(s in segmentation_text()) {
++        use unicode_segmentation::GraphemeCursor;
++        for ext in [true, false] {
++            let _ = s.graphemes(ext).count() + s.graphemes(ext).rev().count();
++            let _ = s.grapheme_indices(ext).count() + s.grapheme_indices(ext).rev().count();
++            let mut c = GraphemeCursor::new(0, s.len(), ext);
++            while let Ok(Some(_)) = c.next_boundary(&s, 0) {}
++            let mut c = GraphemeCursor::new(s.len(), s.len(), ext);
++            while let Ok(Some(_)) = c.prev_boundary(&s, 0) {}
++        }
++        let _ = s.unicode_words().count() + s.unicode_words().rev().count();
++        let _ = s.unicode_word_indices().count() + s.unicode_word_indices().rev().count();
++        let _ = s.split_word_bounds().count() + s.split_word_bounds().rev().count();
++        let _ = s.split_word_bound_indices().count() + s.split_word_bound_indices().rev().count();
++        let _ = s.unicode_sentences().count() + s.split_sentence_bounds().count();
++        let _ = s.split_sentence_bound_indices().count();
++    }
++}

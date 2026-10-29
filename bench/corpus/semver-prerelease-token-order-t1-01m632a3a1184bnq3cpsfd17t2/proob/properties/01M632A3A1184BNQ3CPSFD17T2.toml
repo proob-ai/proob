@@ -1,0 +1,6 @@
+id = "01M632A3A1184BNQ3CPSFD17T2"
+title = "Next prerelease sorts higher"
+statement = "Asking for the next prerelease version always gives a version that sorts strictly higher than the one you started with, or is refused with an error."
+scope = ["src/semver/version.py"]
+severity = "high"
+rationale = "The next_version docstring at src/semver/version.py:508 promises to preserve natural order. tests/test_issue484.py:15 expects 1.2.3-rc9 to become rc10, while tests/test_max-min.py:22 shows rc10 sorts below rc2, and tests/test_bump.py:163 expects alphaXbeta9 with token alpha.beta to become alpha.beta.1, which also sorts lower. changelog.d/484.bugfix.rst and changelog.d/pr495.bugfix.rst are recent fixes in this path. Release tooling that publishes a lower version ships a release package managers rank older."

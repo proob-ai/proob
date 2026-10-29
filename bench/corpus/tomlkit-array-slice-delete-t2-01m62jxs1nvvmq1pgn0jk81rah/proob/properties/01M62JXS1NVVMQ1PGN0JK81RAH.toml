@@ -1,0 +1,6 @@
+id = "01M62JXS1NVVMQ1PGN0JK81RAH"
+title = "Array deletion keeps text in step"
+statement = "Deleting elements from an array, one at a time or as a range, leaves the written text holding exactly the remaining elements in their order."
+scope = ["tomlkit/items.py"]
+severity = "high"
+rationale = "An array keeps its values both as a list and as the formatted groups that are written out (tomlkit/items.py:1405-1416, 1514-1521). Range deletion builds its indices from the raw slice bounds rather than normalizing them (tomlkit/items.py:1689-1692), so negative or reversed ranges look able to drop a different set of groups than of values. tests/test_items.py::test_array_behaves_like_a_list covers only single-index deletion. CHANGELOG 0.15.1 (#499) records a similar array serialization fault."

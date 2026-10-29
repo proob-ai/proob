@@ -1,0 +1,6 @@
+id = "01M62GJ3NT92CB5S1099T1NBKK"
+title = "Next prerelease sorts later"
+statement = "Asking for the next prerelease of a version always gives a version that sorts strictly after the one it started from."
+scope = ["src/semver/version.py"]
+severity = "high"
+rationale = "The docstring at src/semver/version.py:508 promises the next version preserves natural order, but src/semver/version.py:561-565 resets a prerelease from another family to token.1 with no ordering check, and tests/test_bump.py:164 pins 1.2.3-alphaXbeta9 to 1.2.3-alpha.beta.1, which by the comparison at src/semver/version.py:200-208 sorts lower. Three recent fixes in the same function (changelog.d/pr495.bugfix.rst, changelog.d/484.bugfix.rst, changelog.d/pr486.bugfix.rst). Release tooling calling pysemver nextver could publish a version ranked below the one already released."

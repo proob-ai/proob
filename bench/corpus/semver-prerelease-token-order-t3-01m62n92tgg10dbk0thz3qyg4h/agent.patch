@@ -1,0 +1,156 @@
+diff --git a/tests/test_properties.py b/tests/test_properties.py
+new file mode 100644
+index 0000000..8682d5b
+--- /dev/null
++++ b/tests/test_properties.py
+@@ -0,0 +1,150 @@
++"""Property-based checks bound to the properties under proob/properties/."""
++
++import string
++
++from hypothesis import given, strategies as st
++
++from semver import Version
++
++ALNUM_HYPHEN = string.ascii_letters + string.digits + "-"
++
++# Small values make collisions and equal parts likely; large ones cover the
++# arbitrary-size integers the parser admits.
++numbers = st.one_of(st.integers(0, 12), st.integers(0, 10**30))
++
++numeric_identifiers = numbers.map(str)
++alnum_identifiers = st.one_of(
++    st.sampled_from(["rc", "alpha", "beta", "dev", "-"]),
++    st.text(ALNUM_HYPHEN, min_size=1, max_size=8).filter(lambda s: not s.isdigit()),
++)
++identifiers = st.one_of(numeric_identifiers, alnum_identifiers)
++dotted = st.lists(identifiers, min_size=1, max_size=4).map(".".join)
++builds = st.lists(st.text(ALNUM_HYPHEN, min_size=1, max_size=8), min_size=1, max_size=3).map(".".join)
++tokens = st.one_of(st.just("rc"), dotted)
++
++
++@st.composite
++def prereleases(draw, token=None):
++    """A valid prerelease, often in the token's own family (tokenN, token.N)."""
++    token = token if token is not None else draw(tokens)
++    n = draw(numbers)
++    return draw(st.sampled_from([f"{token}{n}", f"{token}.{n}", token, draw(dotted)]))
++
++
++@st.composite
++def versions(draw, token=None):
++    """A version that the strict parser accepts."""
++    pre = draw(st.one_of(st.none(), prereleases(token)))
++    build = draw(st.one_of(st.none(), builds))
++    text = "%d.%d.%d" % (draw(numbers), draw(numbers), draw(numbers))
++    text += f"-{pre}" if pre else ""
++    text += f"+{build}" if build else ""
++    return text
++
++
++parsed_versions = versions().filter(Version.is_valid).map(Version.parse)
++
++
++def sign(x):
++    return (x > 0) - (x < 0)
++
++
++@st.composite
++def steps(draw):
++    """One bump or next-version step as (description, function)."""
++    token = draw(tokens)
++    return draw(
++        st.sampled_from(
++            [
++                ("bump_major", lambda v: v.bump_major()),
++                ("bump_minor", lambda v: v.bump_minor()),
++                ("bump_patch", lambda v: v.bump_patch()),
++                (f"bump_prerelease({token!r})", lambda v: v.bump_prerelease(token)),
++                (f"bump_build({token!r})", lambda v: v.bump_build(token)),
++            ]
++            + [
++                (f"next_version({p!r}, {token!r})", lambda v, p=p: v.next_version(p, token))
++                for p in ("major", "minor", "patch", "prerelease")
++            ]
++        )
++    )
++
++
++# proob:01M62N92Q8T8P6685CGQ2GSMBG
++@given(st.data(), tokens)
++def test_next_prerelease_sorts_strictly_after(data, token):
++    text = data.draw(versions(token).filter(Version.is_valid), label="version")
++    current = Version.parse(text)
++    result = current.next_version("prerelease", token)
++    assert result > current, f"{current} -> next_version('prerelease', {token!r}) = {result}"
++
++
++# proob:01M62N92RCQNHV3FSV9H1B8RMJ
++@given(parsed_versions, parsed_versions, parsed_versions, builds)
++def test_comparison_is_a_consistent_total_order(a, b, c, build):
++    ab, ba = sign(a.compare(b)), sign(b.compare(a))
++    assert ab == -ba, f"{a} vs {b}: compare gives {ab}, reversed gives {ba}"
++    assert a.compare(a) == 0, f"{a} does not compare equal to itself"
++    if a.compare(b) <= 0 and b.compare(c) <= 0:
++        assert a.compare(c) <= 0, f"{a} <= {b} <= {c} but {a} > {c}"
++    rebuilt = a.replace(build=build)
++    assert sign(rebuilt.compare(b)) == ab, f"build {build!r} changed {a} vs {b}"
++
++
++# proob:01M62N92SDRJKY0N1QPSZV7FV5
++@given(
++    st.builds(
++        Version,
++        numbers,
++        numbers,
++        numbers,
++        st.one_of(st.none(), prereleases()),
++        st.one_of(st.none(), builds),
++    ),
++    st.one_of(steps(), st.tuples(st.just("replace"), st.builds(
++        lambda pre, b: lambda v: v.replace(prerelease=pre, build=b),
++        st.one_of(st.none(), dotted),
++        st.one_of(st.none(), builds),
++    ))),
++)
++def test_bumps_never_change_the_original(original, step):
++    name, apply = step
++    before = (original.to_tuple(), str(original), hash(original))
++    try:
++        apply(original)
++    except ValueError:
++        pass  # a rejected step must leave the original alone too
++    after = (original.to_tuple(), str(original), hash(original))
++    assert after == before, f"{name} changed {before} into {after}"
++
++
++@st.composite
++def equal_pairs(draw):
++    """Two constructor-built versions that differ only where comparison ignores."""
++    major, minor, patch = draw(numbers), draw(numbers), draw(numbers)
++    parts = draw(st.lists(identifiers, min_size=1, max_size=4))
++    pad = [p.zfill(len(p) + draw(st.integers(0, 3))) if p.isdigit() else p for p in parts]
++    pre_a = draw(st.one_of(st.none(), st.just(".".join(parts))))
++    pre_b = None if pre_a is None else ".".join(pad)
++    a = Version(major, minor, patch, pre_a, draw(st.one_of(st.none(), builds)))
++    b = Version(major, minor, patch, pre_b, draw(st.one_of(st.none(), builds)))
++    return a, b
++
++
++# proob:01M62N92TGG10DBK0THZ3QYG4H
++@given(st.one_of(equal_pairs(), st.tuples(parsed_versions, parsed_versions)))
++def test_equal_versions_have_equal_hashes(pair):
++    a, b = pair
++    if a == b:
++        assert hash(a) == hash(b), f"{a!r} == {b!r} but hashes differ"
++
++
++# proob:01M62N92VKNKP7KQ4KKG0TGQX3
++@given(parsed_versions, steps())
++def test_bumped_versions_parse_back(original, step):
++    name, apply = step
++    result = apply(original)
++    reparsed = Version.parse(str(result))
++    assert reparsed.to_tuple() == result.to_tuple(), (
++        f"{original}.{name} = {result!r}, which parses back as {reparsed!r}"
++    )

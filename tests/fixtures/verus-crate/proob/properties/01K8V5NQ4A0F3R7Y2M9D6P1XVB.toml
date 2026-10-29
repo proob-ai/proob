@@ -1,0 +1,7 @@
+id = "01K8V5NQ4A0F3R7Y2M9D6P1XVB"
+title = "Picking the smaller value"
+statement = "The smaller of two values is the one returned."
+scope = ["clamp/src/lib.rs"]
+severity = "low"
+rationale = "Bound to an item whose `ensures true` admits any implementation, so every mutant verifies and its score is zero: a specification that cannot fail."
+kind = "proof"

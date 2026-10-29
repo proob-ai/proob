@@ -1,0 +1,6 @@
+id = "01M62GYGDNAWBSGC2V5C81X14R"
+title = "Look-ahead never drops an item"
+statement = "Looking ahead at the next item of a rewindable iterator, or asking whether it is empty, never loses or skips an item, whatever its cache size."
+scope = ["more_itertools/more.py", "tests/test_more.py"]
+severity = "high"
+rationale = "The docstring at more_itertools/more.py:3032-3040 promises look-ahead without advancing. The code at more_itertools/more.py:3134-3136 sets the pending index to len(cache) - 1, which is -1 when the cache size is zero; the next item read at :3109 then hits IndexError and pulls a fresh item, so the looked-at item is lost, and the truth test at :3120 goes through the same path. test_simple_peeking (tests/test_more.py:249) covers only the unbounded cache and test_maxlen_zero (tests/test_more.py:3700) never looks ahead."

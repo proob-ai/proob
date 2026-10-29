@@ -1,0 +1,100 @@
+diff --git a/tests/test_numeric_range_properties.py b/tests/test_numeric_range_properties.py
+new file mode 100644
+index 0000000..bbe393e
+--- /dev/null
++++ b/tests/test_numeric_range_properties.py
+@@ -0,0 +1,94 @@
++from fractions import Fraction
++
++from hypothesis import given, strategies as st
++
++from more_itertools import numeric_range
++
++
++def _ranges(numbers, steps):
++    # Built from a length so ranges stay small; the fractional overshoot puts
++    # stop anywhere between grid points, including exactly on one.
++    @st.composite
++    def build(draw):
++        start = draw(numbers)
++        step = draw(steps)
++        n = draw(st.integers(min_value=0, max_value=200))
++        stop = start + step * n + step * draw(st.sampled_from([0, Fraction(1, 2), 1]))
++        return numeric_range(start, stop, step)
++
++    return build()
++
++
++_floats = st.floats(min_value=-1e6, max_value=1e6, allow_nan=False)
++_float_steps = st.floats(min_value=1e-3, max_value=1e3).flatmap(
++    lambda s: st.sampled_from([s, -s])
++)
++_ints = st.integers(min_value=-10**6, max_value=10**6)
++_int_steps = st.integers(min_value=1, max_value=1000).flatmap(
++    lambda s: st.sampled_from([s, -s])
++)
++_fractions = st.fractions(min_value=-1000, max_value=1000, max_denominator=50)
++_fraction_steps = st.fractions(
++    min_value=Fraction(1, 50), max_value=100, max_denominator=50
++).flatmap(lambda s: st.sampled_from([s, -s]))
++
++numeric_ranges = st.one_of(
++    _ranges(_floats, _float_steps),
++    _ranges(_ints, _int_steps),
++    _ranges(_fractions, _fraction_steps),
++)
++
++# A small grid, so independently drawn ranges are often equal.
++_small = st.sampled_from([-2, -1, 0, 1, 2, 3, -1.0, 0.0, -0.0, 0.5, 1.0, 2.5])
++_small_steps = st.sampled_from([-2, -1, 1, 2, -0.5, 0.5, 1.0, -1.0])
++small_ranges = st.builds(numeric_range, _small, _small, _small_steps)
++
++
++# proob:01M63HQ9K80PDY1WFK24G734GA
++@given(numeric_ranges)
++def test_reversed_is_forward_items_reversed(r):
++    forward = list(r)
++    backward = list(reversed(r))
++    assert backward == forward[::-1], (r, forward, backward)
++
++
++# proob:01M63HQ9MBB0FMJKA6DN62T0Q8
++@given(numeric_ranges)
++def test_len_and_index_match_items(r):
++    items = list(r)
++    assert len(r) == len(items), (r, len(r), items)
++    for i, item in enumerate(items):
++        assert r[i] == item, (r, i, r[i], item)
++        assert r[i - len(items)] == item, (r, i - len(items), item)
++
++
++# proob:01M63HQ9NENKD4ANQHGKFGQVZ4
++@given(numeric_ranges)
++def test_items_are_members_at_their_position(r):
++    for i, item in enumerate(r):
++        assert item in r, (r, i, item)
++        assert r.index(item) == i, (r, item, r.index(item), i)
++
++
++# proob:01M63HQ9PFPBN5W5TCYMM0SVAG
++@given(
++    numeric_ranges,
++    st.none() | st.integers(min_value=-250, max_value=250),
++    st.none() | st.integers(min_value=-250, max_value=250),
++    st.none()
++    | st.integers(min_value=1, max_value=5).flatmap(
++        lambda s: st.sampled_from([s, -s])
++    ),
++)
++def test_slice_matches_list_slice(r, start, stop, step):
++    key = slice(start, stop, step)
++    sliced = list(r[key])
++    expected = list(r)[key]
++    assert sliced == expected, (r, key, sliced, expected)
++
++
++# proob:01M63HQ9QJBN6D6TS053ZRJY29
++@given(small_ranges, small_ranges)
++def test_equal_ranges_hash_equally(a, b):
++    if a == b:
++        assert hash(a) == hash(b), (a, b, hash(a), hash(b))

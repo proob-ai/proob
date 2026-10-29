@@ -1,0 +1,15 @@
+kind = "catch"
+bug = "bytes-try-get-int-sign-extend"
+trial = "t1"
+language = "rust"
+repo = "https://github.com/tokio-rs/bytes"
+buggy_commit = "d5c8ad3227afe459c09f1d0d85455abf00f0381a"
+fix_commit = "7930d93d583757e922014312d4aa3e58a415131f"
+fix_paths = ["src/buf/buf_impl.rs"]
+install = ["rustup run 1.99.1 cargo test --no-run --lib --tests"]
+toolchain = "1.99.1"
+property = "01M63JF7YN69SH2SQ2NXX1SS73"
+seed = "1793195720261377168"
+expect_buggy = "counterexample"
+expect_fixed = "no_counterexample"
+flaky = false

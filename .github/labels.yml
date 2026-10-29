@@ -1,0 +1,139 @@
+# Every label of this repository, as code. .github/workflows/labels.yml syncs
+# this file on each push to master that changes it: labels are created or
+# updated to match, a GitHub default label named in `from_name` is renamed
+# into the label that replaces it (its issues keep it), and nothing else is
+# deleted. Edit labels here, never in the web UI. Colors are hex without `#`.
+
+# Type: what kind of change or report. One per issue or pull request.
+- name: "type: bug"
+  from_name: bug
+  color: "d73a4a"
+  description: Something does not work as documented
+- name: "type: feature"
+  from_name: enhancement
+  color: "a2eeef"
+  description: New capability or a request for one
+- name: "type: docs"
+  from_name: documentation
+  color: "0075ca"
+  description: Documentation only
+- name: "type: refactor"
+  color: "c5def5"
+  description: Restructuring with no change in behavior
+- name: "type: performance"
+  color: "fbca04"
+  description: Faster or smaller, same behavior
+- name: "type: test"
+  color: "bfd4f2"
+  description: Tests, fixtures, or the simulation only
+- name: "type: ci"
+  color: "5319e7"
+  description: Workflows, xtask, or release tooling
+- name: "type: security"
+  color: "b60205"
+  description: A security fix or hardening (report vulnerabilities privately, see SECURITY.md)
+
+# Area: which part of proob. As many as apply; the PR labeler sets most of them.
+- name: "area: core"
+  color: "0052cc"
+  description: crates/proob-core, the Verus-verified core
+- name: "area: facts"
+  color: "0052cc"
+  description: crates/proob-facts, parsing and fact types
+- name: "area: effects"
+  color: "0052cc"
+  description: crates/proob-effects, GitHub, git, and the cache
+- name: "area: adapters"
+  color: "0052cc"
+  description: crates/proob-adapters, the adapter contract and shared code
+- name: "area: adapter-rust"
+  color: "0052cc"
+  description: The Rust adapter (cargo-nextest, proptest, cargo-mutants)
+- name: "area: adapter-verus"
+  color: "0052cc"
+  description: The Verus adapter
+- name: "area: adapter-python"
+  color: "0052cc"
+  description: The Python adapter (pytest, Hypothesis, mutmut)
+- name: "area: cli"
+  color: "0052cc"
+  description: crates/proob, the command line
+- name: "area: action"
+  color: "0052cc"
+  description: action.yml and the gate and evidence workflows
+- name: "area: skills"
+  color: "0052cc"
+  description: The Claude Code plugin skills and their evals
+- name: "area: hooks"
+  color: "0052cc"
+  description: The Claude Code hooks
+- name: "area: shadow"
+  color: "0052cc"
+  description: Shadow mode (/proob:try, proob shadow)
+- name: "area: bench"
+  color: "0052cc"
+  description: The benchmark, regression corpus, and soundness matrix
+- name: "area: docs"
+  color: "0052cc"
+  description: README, docs/, and contributor documentation
+- name: "area: i18n"
+  color: "0052cc"
+  description: README translations
+
+# Priority: set at triage.
+- name: "priority: critical"
+  color: "b60205"
+  description: Wrong Holds, data loss, or a security issue; fix before anything else
+- name: "priority: high"
+  color: "d93f0b"
+  description: Blocks real use; next in line
+- name: "priority: medium"
+  color: "fbca04"
+  description: Should be fixed; scheduled
+- name: "priority: low"
+  color: "0e8a16"
+  description: Nice to have
+
+# Status: where an issue is in triage.
+- name: "status: needs-triage"
+  color: "ededed"
+  description: Not yet looked at by a maintainer
+- name: "status: needs-info"
+  color: "d876e3"
+  description: Waiting on the reporter for more information
+- name: "status: accepted"
+  color: "0e8a16"
+  description: Confirmed and wanted; open to a pull request
+- name: "status: blocked"
+  color: "b60205"
+  description: Waiting on something else; the issue says what
+- name: "status: wontfix"
+  from_name: wontfix
+  color: "ffffff"
+  description: Will not be worked on; the issue says why
+- name: "status: duplicate"
+  from_name: duplicate
+  color: "cfd3d7"
+  description: Already tracked; the issue links the original
+
+# Contributor: GitHub's own names, which its contributor pages look for.
+- name: good first issue
+  color: "7057ff"
+  description: Small, well-scoped, and a good way to learn the codebase
+- name: help wanted
+  color: "008672"
+  description: A maintainer would welcome a pull request
+
+# proob-specific.
+- name: soundness
+  color: "b60205"
+  description: proob could render Holds when the property does not hold; always priority critical
+- name: false-alarm
+  color: "f9d0c4"
+  description: proob reported a counterexample that is not a real bug
+- name: missed-bug
+  color: "d93f0b"
+  description: A real bug proob did not find
+- name: new-adapter
+  color: "a2eeef"
+  description: Support for a new language, test runner, or verifier

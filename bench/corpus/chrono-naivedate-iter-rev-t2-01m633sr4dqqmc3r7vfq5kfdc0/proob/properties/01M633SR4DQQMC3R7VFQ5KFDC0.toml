@@ -1,0 +1,6 @@
+id = "01M633SR4DQQMC3R7VFQ5KFDC0"
+title = "Taking dates from both ends never repeats a date"
+statement = "Taking dates alternately from the front and the back of a run of days or weeks never gives the same date twice."
+scope = ["src/naive/date/mod.rs"]
+severity = "medium"
+rationale = "Both ends of each iterator move one shared cursor (src/naive/date/mod.rs:2214-2216, 2250-2252): next returns a date and steps forward, next_back then returns the following date and steps back, so the next call to next returns the first date again. Schedule-style loops that consume from both ends would see duplicates or never finish."

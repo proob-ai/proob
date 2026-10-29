@@ -1,0 +1,6 @@
+id = "01M633SR0SX43DE5FGCKPVA0JX"
+title = "Backward day and week iteration mirrors forward"
+statement = "Reading a run of days or weeks from the back gives exactly the dates reading it from the front gives, in reverse order."
+scope = ["src/naive/date/mod.rs"]
+severity = "medium"
+rationale = "The day and week iterators implement DoubleEndedIterator (src/naive/date/mod.rs:2235-2246, 2269-2279), whose contract is that the back end yields the same items as the front end in reverse. next walks up toward the maximum date from the start date while next_back walks down toward the minimum date from that same start date, so rev yields a different sequence. The iter_days doc example near src/naive/date/mod.rs:1344 and test_day_iterator_limit in src/naive/date/tests.rs rely on the backward walk, so the team must decide which meaning is intended."

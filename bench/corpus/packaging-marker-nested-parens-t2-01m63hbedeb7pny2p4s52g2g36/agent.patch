@@ -1,0 +1,174 @@
+diff --git a/tests/property/test_markers.py b/tests/property/test_markers.py
+new file mode 100644
+index 0000000..cb5ceb3
+--- /dev/null
++++ b/tests/property/test_markers.py
+@@ -0,0 +1,85 @@
++# This file is dual licensed under the terms of the Apache License, Version
++# 2.0, and the BSD License. See the LICENSE file in the root of this repository
++# for complete details.
++
++from __future__ import annotations
++
++from hypothesis import given
++from hypothesis import strategies as st
++
++from packaging.markers import Marker
++from packaging.utils import canonicalize_name
++
++# Not marked `property`: proob runs bound tests by node id under the default addopts.
++_NAMES = ["os_name", "sys_platform", "implementation_name"]
++_VALUES = ["a", "b", "c"]
++
++_atoms = st.builds(
++    lambda name, op, value: f'{name} {op} "{value}"',
++    st.sampled_from(_NAMES),
++    st.sampled_from(["==", "!="]),
++    st.sampled_from(_VALUES),
++)
++
++
++def _bracket(text: str, depth: int) -> str:
++    return "(" * depth + text + ")" * depth
++
++
++@st.composite
++def _group(draw: st.DrawFn, children: st.SearchStrategy[str]) -> str:
++    parts = draw(st.lists(children, min_size=1, max_size=3))
++    text = parts[0]
++    for part in parts[1:]:
++        text += f" {draw(st.sampled_from(['and', 'or']))} {part}"
++    return _bracket(text, draw(st.integers(min_value=0, max_value=3)))
++
++
++# Marker texts with "and"/"or" chains and 0-3 levels of brackets per group.
++marker_texts = st.recursive(_atoms, _group, max_leaves=8)
++environments = st.fixed_dictionaries({n: st.sampled_from(_VALUES) for n in _NAMES})
++
++
++# proob:01M63HBEDEB7PNY2P4S52G2G36
++@given(text=marker_texts, env=environments)
++def test_marker_text_round_trip_keeps_meaning(text: str, env: dict[str, str]) -> None:
++    marker = Marker(text)
++    printed = str(marker)
++    assert Marker(printed).evaluate(env) == marker.evaluate(env), (
++        f"{text!r} printed as {printed!r} decides differently in {env!r}"
++    )
++
++
++_extra_names = st.from_regex(r"[A-Za-z0-9]([A-Za-z0-9._-]{0,6}[A-Za-z0-9])?", fullmatch=True)
++
++
++# proob:01M63HBEGQJVBM985YKTHV1TF7
++@given(written=_extra_names, requested=_extra_names, flip=st.booleans())
++def test_extra_names_match_after_normalisation(
++    written: str, requested: str, flip: bool
++) -> None:
++    text = f'"{written}" == extra' if flip else f'extra == "{written}"'
++    matches = Marker(text).evaluate({"extra": requested})
++    expected = canonicalize_name(written) == canonicalize_name(requested)
++    assert matches == expected, (
++        f"{text!r} with extra={requested!r} gave {matches}, expected {expected}"
++    )
++
++
++# proob:01M63HBEHTG6M0QQAQY65GEJRV
++@given(
++    left=marker_texts,
++    right=marker_texts,
++    join=st.sampled_from(["and", "or"]),
++    env=environments,
++)
++def test_combining_markers_matches_joined_text(
++    left: str, right: str, join: str, env: dict[str, str]
++) -> None:
++    a, b = Marker(left), Marker(right)
++    combined = a & b if join == "and" else a | b
++    joined = Marker(f"({left}) {join} ({right})")
++    assert combined.evaluate(env) == joined.evaluate(env), (
++        f"{left!r} {join} {right!r}: combined {combined.evaluate(env)}, "
++        f"joined {joined.evaluate(env)} in {env!r}"
++    )
+diff --git a/tests/property/test_requirements.py b/tests/property/test_requirements.py
+new file mode 100644
+index 0000000..175f1c9
+--- /dev/null
++++ b/tests/property/test_requirements.py
+@@ -0,0 +1,41 @@
++# This file is dual licensed under the terms of the Apache License, Version
++# 2.0, and the BSD License. See the LICENSE file in the root of this repository
++# for complete details.
++
++from __future__ import annotations
++
++from hypothesis import given
++from hypothesis import strategies as st
++
++from packaging.requirements import Requirement
++from tests.property.strategies import pep440_specifier_strings
++from tests.property.test_markers import marker_texts
++
++# Not marked `property`: proob runs bound tests by node id under the default addopts.
++_names = st.from_regex(r"[A-Za-z0-9]([A-Za-z0-9._-]{0,6}[A-Za-z0-9])?", fullmatch=True)
++
++
++@st.composite
++def requirement_texts(draw: st.DrawFn) -> str:
++    text = draw(_names)
++    extras = draw(st.lists(_names, max_size=3))
++    if extras:
++        text += "[" + ",".join(extras) + "]"
++    if draw(st.booleans()):
++        text += " @ " + draw(st.sampled_from(
++            ["https://example.com/pkg.whl", "file:///tmp/pkg.tar.gz"]
++        )) + " "
++    elif draw(st.booleans()):
++        text += draw(pep440_specifier_strings())
++    if draw(st.booleans()):
++        text += "; " + draw(marker_texts)
++    return text
++
++
++# proob:01M63HBEEHTGYVNZ7YHV6H4XD5
++@given(text=requirement_texts())
++def test_requirement_text_round_trip(text: str) -> None:
++    req = Requirement(text)
++    printed = str(req)
++    again = Requirement(printed)
++    assert again == req, f"{text!r} printed as {printed!r} reads back as {str(again)!r}"
+diff --git a/tests/property/test_version_total_order.py b/tests/property/test_version_total_order.py
+new file mode 100644
+index 0000000..58e57ef
+--- /dev/null
++++ b/tests/property/test_version_total_order.py
+@@ -0,0 +1,30 @@
++# This file is dual licensed under the terms of the Apache License, Version
++# 2.0, and the BSD License. See the LICENSE file in the root of this repository
++# for complete details.
++
++from __future__ import annotations
++
++import itertools
++
++from hypothesis import given
++
++from packaging.version import Version
++from tests.property.strategies import pep440_versions
++
++# Not marked `property`: proob runs bound tests by node id under the default addopts.
++
++
++# proob:01M63HBEFMB4512908ZTMRQ7C1
++@given(a=pep440_versions(), b=pep440_versions(), c=pep440_versions())
++def test_version_order_is_total_and_consistent(
++    a: Version, b: Version, c: Version
++) -> None:
++    for x, y in itertools.permutations([a, b, c], 2):
++        outcomes = [x < y, x == y, x > y]
++        assert outcomes.count(True) == 1, f"{x} vs {y}: <,==,> gave {outcomes}"
++        assert (x <= y) == (x < y or x == y), f"{x} <= {y} disagrees with < or =="
++        if x == y:
++            assert hash(x) == hash(y), f"{x} == {y} but hashes differ"
++    for x, y, z in itertools.permutations([a, b, c]):
++        if x <= y and y <= z:
++            assert x <= z, f"{x} <= {y} <= {z} but not {x} <= {z}"

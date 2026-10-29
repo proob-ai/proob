@@ -1,0 +1,15 @@
+kind = "catch"
+bug = "more-itertools-numeric-range-reversed"
+trial = "t1"
+language = "python"
+repo = "https://github.com/more-itertools/more-itertools"
+buggy_commit = "3ea9b009b19db0e01a83d51cee43e9935c0d657f"
+fix_commit = "8a930acd4fa0222af8209ae84806c18f260ee9a3"
+fix_paths = ["more_itertools/more.py"]
+install = ["uv venv --python 3.13 .venv", "uv pip install --python .venv/bin/python -e . pytest"]
+python = "3.13"
+property = "01M63HQ9K80PDY1WFK24G734GA"
+seed = "1793404272960668096"
+expect_buggy = "counterexample"
+expect_fixed = "no_counterexample"
+flaky = false

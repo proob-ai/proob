@@ -1,0 +1,6 @@
+id = "01M62MZW430RVZ2K0ABF33AW5Y"
+title = "File size rolls over to the next unit"
+statement = "A file size never shows a number that has rounded up to the base, such as 1000.0 kB or 1024.0 KiB, when a larger unit exists; it moves to the next unit instead."
+scope = ["src/humanize/filesize.py"]
+severity = "medium"
+rationale = "src/humanize/filesize.py lines 99-101 choose the unit before rounding, so 999999 bytes reads 1000.0 kB. The sibling intword (src/humanize/number.py line 257) and metric (src/humanize/number.py line 549) both correct for this, with tests in tests/test_number.py lines 104, 135 and 260-262; tests/test_filesize.py has no case just under a unit boundary."

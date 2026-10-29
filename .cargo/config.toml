@@ -1,0 +1,5 @@
+# `cargo xtask <cmd>`: the one entry point for proob's local and CI exec
+# commands (build, test, verify, graph check, shell test suites, declaration
+# check, plugin validate). The commands and their prerequisites: xtask/README.md.
+[alias]
+xtask = "run --quiet --package xtask --"

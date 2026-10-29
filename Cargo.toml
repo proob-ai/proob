@@ -1,0 +1,65 @@
+# proob workspace. The crate graph is the layering rule: see
+# tools/crate-graph-check.sh. Only `proob-core` is verified; it may depend on
+# nothing but `vstd` and `proob-trusted`.
+[workspace]
+resolver = "2"
+members = [
+  "crates/proob-trusted",
+  "crates/proob-core",
+  "crates/proob-facts",
+  "crates/proob-spawn",
+  "crates/proob-effects",
+  "crates/proob-adapters",
+  "crates/proob",
+  # The developer entry point (`cargo xtask`): std only, no proob crate depends
+  # on it, and dist skips it (xtask/Cargo.toml).
+  "xtask",
+  # `cargo xtask sim`: proob end to end against local stand-ins for the outside
+  # world. Dev-only like xtask: unpublished, skipped by dist, no proob crate dep.
+  "sim",
+]
+# Standalone fixture packages have their own lockfiles and target directories.
+exclude = ["tests/fixtures/rust-repo", "tests/fixtures/verus-crate"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+repository = "https://github.com/proob-ai/proob"
+rust-version = "1.99.1"
+
+[workspace.dependencies]
+# Pinned as a set with the Verus release in tools/get-verus.sh and the channel in
+# rust-toolchain.toml. Bump all of them together, in one reviewed PR.
+vstd = "=0.0.0-2026-10-25-0158"
+proob-trusted = { path = "crates/proob-trusted", version = "0.1.0" }
+proob-core = { path = "crates/proob-core", version = "0.1.0" }
+proob-facts = { path = "crates/proob-facts", version = "0.1.0" }
+proob-spawn = { path = "crates/proob-spawn", version = "0.1.0" }
+proob-effects = { path = "crates/proob-effects", version = "0.1.0" }
+proob-adapters = { path = "crates/proob-adapters", version = "0.1.0" }
+sha2 = "0.10"
+clap = { version = "4.5", features = ["derive"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "1.1"
+proptest = "1.7"
+tempfile = "3"
+wait-timeout = "0.2"
+globset = { version = "0.4", default-features = false }
+# rustls only, with the ring provider: no OpenSSL anywhere in the binary.
+reqwest = { version = "0.13", default-features = false, features = ["blocking", "rustls-no-provider", "json", "query", "charset", "http2"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+# Reading evidence artifacts: deflate through zlib-rs, pure Rust.
+zip = { version = "9", default-features = false, features = ["deflate-flate2-zlib-rs"] }
+
+[workspace.lints.rust]
+# `verus_only` is a cfg that Verus sets during verification and never declares in
+# Cargo.toml; this stops rustc warning about it. See
+# https://verus-lang.github.io/verus/guide/erasure.html
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(verus_only)'] }
+
+# The profile that 'dist' will build with
+[profile.dist]
+inherits = "release"
+lto = "thin"

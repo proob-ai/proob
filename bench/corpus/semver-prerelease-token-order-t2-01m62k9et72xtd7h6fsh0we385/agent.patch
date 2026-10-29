@@ -1,0 +1,98 @@
+diff --git a/tests/test_properties.py b/tests/test_properties.py
+new file mode 100644
+index 0000000..1771863
+--- /dev/null
++++ b/tests/test_properties.py
+@@ -0,0 +1,92 @@
++"""Property-based tests for the declared properties under proob/properties/."""
++
++from hypothesis import given, strategies as st
++
++from semver import Version
++
++numeric_ids = st.integers(min_value=0, max_value=10**30).map(str)
++alnum_ids = st.from_regex(r"[0-9]*[a-zA-Z-][0-9a-zA-Z-]*", fullmatch=True)
++prerelease_ids = st.one_of(numeric_ids, alnum_ids)
++dotted = lambda ids: st.lists(ids, min_size=1, max_size=4).map(".".join)
++prereleases = st.one_of(st.none(), dotted(prerelease_ids))
++builds = st.one_of(
++    st.none(), dotted(st.from_regex(r"[0-9a-zA-Z-]+", fullmatch=True))
++)
++# Small numbers mixed in so equal and adjacent cores actually occur.
++numbers = st.one_of(
++    st.integers(min_value=0, max_value=2), st.integers(min_value=0, max_value=2**64)
++)
++versions = st.builds(Version, numbers, numbers, numbers, prereleases, builds)
++tokens = st.one_of(st.just(""), dotted(prerelease_ids))
++
++
++def sign(x):
++    return (x > 0) - (x < 0)
++
++
++# proob:01M62K9ER2A5WW5CKTTZV5ZSVM
++@given(versions, st.one_of(st.none(), tokens))
++def test_next_prerelease_never_goes_backwards(version, token):
++    result = (
++        version.next_version("prerelease")
++        if token is None
++        else version.next_version("prerelease", token)
++    )
++    assert result > version, f"{version} with token {token!r} -> {result}"
++
++
++# proob:01M62K9ERMEC7K2BN10EN6FBVX
++@given(
++    versions,
++    st.sampled_from(["major", "minor", "patch", "prerelease", "build", "next"]),
++    st.sampled_from(["major", "minor", "patch", "prerelease"]),
++    st.one_of(st.none(), tokens),
++)
++def test_bumps_produce_valid_versions(version, how, part, token):
++    if how == "next":
++        result = (
++            version.next_version(part)
++            if token is None
++            else version.next_version(part, token)
++        )
++    elif how == "prerelease":
++        result = version.bump_prerelease(token)
++    elif how == "build":
++        result = version.bump_build(token)
++    else:
++        result = getattr(version, "bump_" + how)()
++    assert Version.is_valid(str(result)), f"{version} {how} {part} {token!r} -> {result}"
++
++
++# proob:01M62K9ES605N7PQSB42XHQXNC
++@given(versions, versions, versions)
++def test_version_ordering_is_consistent(a, b, c):
++    ab, ba = a.compare(b), b.compare(a)
++    assert sign(ab) == -sign(ba), f"{a} vs {b}: {ab} but reversed {ba}"
++    assert a.compare(a) == 0, f"{a} not equal to itself"
++    assert (a == b) == (ab == 0), f"{a} == {b} disagrees with compare {ab}"
++    if a <= b and b <= c:
++        assert a <= c, f"{a} <= {b} <= {c} but not {a} <= {c}"
++
++
++# proob:01M62K9ESQ00TYVPM0EP0C7SMY
++@given(versions)
++def test_text_round_trip(version):
++    parsed = Version.parse(str(version))
++    assert parsed.to_tuple() == version.to_tuple(), f"{version!r} -> {parsed!r}"
++
++
++# proob:01M62K9ET72XTD7H6FSH0WE385
++@given(versions, versions, st.integers(min_value=0, max_value=3))
++def test_equal_versions_hash_equally(a, b, zeros):
++    # The constructor keeps leading zeros in numeric prerelease identifiers,
++    # so also compare a against a zero-padded copy of itself.
++    padded = a.replace(
++        prerelease=a.prerelease
++        and ".".join(
++            "0" * zeros + p if p.isdigit() else p for p in a.prerelease.split(".")
++        )
++    )
++    for x, y in ((a, b), (a, padded)):
++        if x == y:
++            assert hash(x) == hash(y), f"{x!r} == {y!r} but hashes differ"

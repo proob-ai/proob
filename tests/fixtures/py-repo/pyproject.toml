@@ -1,0 +1,10 @@
+# The Python fixture proob's adapter is tested against: a plain package with
+# pytest and Hypothesis tests, nothing to install. The pytest table below is
+# the config file pytest reads here, and so a member of every binding set.
+[project]
+name = "py-repo"
+version = "0.1.0"
+requires-python = ">=3.10"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -1,0 +1,15 @@
+kind = "catch"
+bug = "url-control-host-roundtrip"
+trial = "t2"
+language = "rust"
+repo = "https://github.com/servo/rust-url"
+buggy_commit = "22b925f93ad505a830f1089538a9ed6f5fd90612"
+fix_commit = "9771ab51f0aaa02ca1884f88c577260e9b86f9b6"
+fix_paths = ["url/src/host.rs"]
+install = ["rustup run 1.99.1 cargo build -p url --tests"]
+toolchain = "1.99.1"
+property = "01M62MDT1XX6100RW2KWJEGMCN"
+seed = "1793004495354477104"
+expect_buggy = "counterexample"
+expect_fixed = "no_counterexample"
+flaky = false

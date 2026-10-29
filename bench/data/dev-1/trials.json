@@ -1,0 +1,724 @@
+{
+ "change": "sense/declare: state the laws of standard interfaces (dev split only)",
+ "compared_to": "v0.0.1 trials on the same dev bugs",
+ "result": {
+  "v0.0.1": "10/18",
+  "dev-1": "14/18",
+  "fisher_one_sided_p": 0.144,
+  "targeted_bugs": {
+   "bidict+chrono v0.0.1": "1/6",
+   "dev-1": "6/6",
+   "fisher_one_sided_p": 0.008
+  },
+  "regressions": {
+   "more-itertools": "3/3 -> 2/3, p=0.5",
+   "rust-url": "1/3 -> 0/3, p=0.5, 7 failures from other real bugs"
+  },
+  "control": "23 credited catches stable, 0 unstable",
+  "decision": "accepted: no significant regression"
+ },
+ "trials": [
+  {
+   "trial": "t1",
+   "bug": "bidict-values-order",
+   "model": "claude-opus-5-5",
+   "wall_s": 603,
+   "cost_usd": 2.5438496,
+   "properties": [
+    {
+     "id": "01M632S6M4FHPEP9YW6PMFWTA3",
+     "buggy": "no_counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": false
+    },
+    {
+     "id": "01M632S6NBFFEE750FH0Y4WE5F",
+     "buggy": "no_counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": false
+    },
+    {
+     "id": "01M632S6PA6ZATYCYS1NVK2JDD",
+     "buggy": "counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": true
+    },
+    {
+     "id": "01M632S6QDS3TEAB71S9936V16",
+     "buggy": "no_counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": false
+    },
+    {
+     "id": "01M632S6RDW5F97RAWEDC1P3X8",
+     "buggy": "no_counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": false
+    }
+   ]
+  },
+  {
+   "trial": "t1",
+   "bug": "chrono-naivedate-iter-rev",
+   "model": "claude-opus-5-5",
+   "wall_s": 797,
+   "cost_usd": 1.5042221999999998,
+   "properties": [
+    {
+     "id": "01M632PN78QFX967MGYA3QMKF2",
+     "buggy": "counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": true
+    },
+    {
+     "id": "01M632PN9KDMT5JB2V894X9HE9",
+     "buggy": "no_counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": false
+    },
+    {
+     "id": "01M632PNBM2NJNQZQ343PVEBZ7",
+     "buggy": "counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": true
+    },
+    {
+     "id": "01M632PNDCJN65JDTNHQ7GAPDB",
+     "buggy": "counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": true
+    },
+    {
+     "id": "01M632PNFNM0MYXEYDWSDCWGA0",
+     "buggy": "counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": true
+    }
+   ]
+  },
+  {
+   "trial": "t1",
+   "bug": "humanize-naturalsize-rollover",
+   "model": "claude-opus-5-5",
+   "wall_s": 279,
+   "cost_usd": 1.4895793999999996,
+   "properties": [
+    {
+     "id": "01M632AKM51D9B8MPJZ4XC92R9",
+     "buggy": "counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": true
+    },
+    {
+     "id": "01M632AKNB714RPFDE6C4RYJRW",
+     "buggy": "no_counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": false
+    },
+    {
+     "id": "01M632AKPFW3NWHS3XD80SET8Q",
+     "buggy": "no_counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": false
+    },
+    {
+     "id": "01M632AKQNK2J1YYSYJYJKNKDH",
+     "buggy": "no_counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": false
+    },
+    {
+     "id": "01M632AKRRAXZ15ZMWFV7F1AQF",
+     "buggy": "no_counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": false
+    }
+   ]
+  },
+  {
+   "trial": "t1",
+   "bug": "more-itertools-seekable-maxlen0",
+   "model": "claude-opus-5-5",
+   "wall_s": 757,
+   "cost_usd": 1.5085692000000002,
+   "properties": [
+    {
+     "id": "01M632CEQ01H1SKR7NFKP581GM",
+     "buggy": "no_counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": false
+    },
+    {
+     "id": "01M632CER53JTD7EXYBPDB2QN2",
+     "buggy": "no_counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": false
+    },
+    {
+     "id": "01M632CES8NRWHWE0FSRDZ2J32",
+     "buggy": "no_counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": false
+    },
+    {
+     "id": "01M632CETAR4WCSNYZZW2M8772",
+     "buggy": "no_counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": false
+    },
+    {
+     "id": "01M632CEVD8AGC5WC04WQE7R86",
+     "buggy": "counterexample",
+     "fixed": "counterexample",
+     "caught_real_bug": false
+    }
+   ]
+  },
+  {
+   "trial": "t1",
+   "bug": "semver-prerelease-token-order",
+   "model": "claude-opus-5-5",
+   "wall_s": 244,
+   "cost_usd": 1.5059786000000002,
+   "properties": [
+    {
+     "id": "01M632A3A1184BNQ3CPSFD17T2",
+     "buggy": "counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": true
+    },
+    {
+     "id": "01M632A3AXCAY62AWN1YMT72AT",
+     "buggy": "no_counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": false
+    },
+    {
+     "id": "01M632A3BH1602BM78DV4B76XZ",
+     "buggy": "no_counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": false
+    },
+    {
+     "id": "01M632A3C50ECNHHWVJ1YK165Q",
+     "buggy": "no_counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": false
+    },
+    {
+     "id": "01M632A3CS1ZV6EEBVCKGXMFCZ",
+     "buggy": "counterexample",
+     "fixed": "counterexample",
+     "caught_real_bug": false
+    }
+   ]
+  },
+  {
+   "trial": "t1",
+   "bug": "url-control-host-roundtrip",
+   "model": "claude-opus-5-5",
+   "wall_s": 410,
+   "cost_usd": 1.962488999999999,
+   "properties": [
+    {
+     "id": "01M6334SCV9W7YMFC59S47RN5B",
+     "buggy": "no_counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": false
+    },
+    {
+     "id": "01M6334SDHGZ72AJ4N75GNPP5H",
+     "buggy": "no_counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": false
+    },
+    {
+     "id": "01M6334SE7V9BSAQWH0HPP357S",
+     "buggy": "no_counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": false
+    },
+    {
+     "id": "01M6334SEX4SPDCA5TYME190VW",
+     "buggy": "counterexample",
+     "fixed": "counterexample",
+     "caught_real_bug": false
+    },
+    {
+     "id": "01M6334SFKRQHXVQXW2R7JENQY",
+     "buggy": "counterexample",
+     "fixed": "counterexample",
+     "caught_real_bug": false
+    }
+   ]
+  },
+  {
+   "trial": "t2",
+   "bug": "bidict-values-order",
+   "model": "claude-opus-5-5",
+   "wall_s": 492,
+   "cost_usd": 2.8074535999999997,
+   "properties": [
+    {
+     "id": "01M633NPH5TJXK2P5T7RRTSSS3",
+     "buggy": "no_counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": false
+    },
+    {
+     "id": "01M633NPJZBTHSXYSGS82TFY14",
+     "buggy": "no_counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": false
+    },
+    {
+     "id": "01M633NPMX5D04934ECSHDVGNF",
+     "buggy": "no_counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": false
+    },
+    {
+     "id": "01M633NPPY6W288N0HRY74BR2A",
+     "buggy": "counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": true
+    },
+    {
+     "id": "01M633NPSM886QNZH9PMD1D617",
+     "buggy": "no_counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": false
+    }
+   ]
+  },
+  {
+   "trial": "t2",
+   "bug": "chrono-naivedate-iter-rev",
+   "model": "claude-opus-5-5",
+   "wall_s": 408,
+   "cost_usd": 1.5881856,
+   "properties": [
+    {
+     "id": "01M633SR0SX43DE5FGCKPVA0JX",
+     "buggy": "counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": true
+    },
+    {
+     "id": "01M633SR2K2XRT01SXHZ21E8GF",
+     "buggy": "counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": true
+    },
+    {
+     "id": "01M633SR4DQQMC3R7VFQ5KFDC0",
+     "buggy": "counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": true
+    },
+    {
+     "id": "01M633SR6J002PA5J0RD43B9JK",
+     "buggy": "no_counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": false
+    },
+    {
+     "id": "01M633SR8VM17MCKW58YGXP705",
+     "buggy": "no_counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": false
+    }
+   ]
+  },
+  {
+   "trial": "t2",
+   "bug": "humanize-naturalsize-rollover",
+   "model": "claude-opus-5-5",
+   "wall_s": 315,
+   "cost_usd": 1.4427882000000003,
+   "properties": [
+    {
+     "id": "01M633BQVXA83YKYB61YCBC37S",
+     "buggy": "counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": true
+    },
+    {
+     "id": "01M633BQY928FHRA09HFFS82ZE",
+     "buggy": "counterexample",
+     "fixed": "counterexample",
+     "caught_real_bug": false
+    },
+    {
+     "id": "01M633BR0A65MG06H0ENVYKFCA",
+     "buggy": "no_counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": false
+    },
+    {
+     "id": "01M633BR2HVYAMM6VK8NNTEQCB",
+     "buggy": "no_counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": false
+    },
+    {
+     "id": "01M633BR51WGPH629MKYB8VFC6",
+     "buggy": "no_counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": false
+    }
+   ]
+  },
+  {
+   "trial": "t2",
+   "bug": "more-itertools-seekable-maxlen0",
+   "model": "claude-opus-5-5",
+   "wall_s": 485,
+   "cost_usd": 1.5526864,
+   "properties": [
+    {
+     "id": "01M6336H00Z2CSG7A9N9A9G6Q6",
+     "buggy": "counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": true
+    },
+    {
+     "id": "01M6336H14Y65PWQTFT1TQR6SG",
+     "buggy": "counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": true
+    },
+    {
+     "id": "01M6336H275X5R5GBHYQ25QGHH",
+     "buggy": "no_counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": false
+    },
+    {
+     "id": "01M6336H37QFZ6A5SDMNZMHWBC",
+     "buggy": "no_counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": false
+    },
+    {
+     "id": "01M6336H49V55X409HGA21MBX8",
+     "buggy": "no_counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": false
+    }
+   ]
+  },
+  {
+   "trial": "t2",
+   "bug": "semver-prerelease-token-order",
+   "model": "claude-opus-5-5",
+   "wall_s": 427,
+   "cost_usd": 1.4784035999999998,
+   "properties": [
+    {
+     "id": "01M633K9AFJB1W2XM4VSFT0826",
+     "buggy": "counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": true
+    },
+    {
+     "id": "01M633K9CSX7NXSA1DZV0ZG75B",
+     "buggy": "no_counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": false
+    },
+    {
+     "id": "01M633K9EHFA9FRSFWRA045HX4",
+     "buggy": "no_counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": false
+    },
+    {
+     "id": "01M633K9GND24NWYYXZBR384KF",
+     "buggy": "counterexample",
+     "fixed": "counterexample",
+     "caught_real_bug": false
+    },
+    {
+     "id": "01M633K9JS4TFTDBMF4RF5NTS3",
+     "buggy": "no_counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": false
+    }
+   ]
+  },
+  {
+   "trial": "t2",
+   "bug": "url-control-host-roundtrip",
+   "model": "claude-opus-5-5",
+   "wall_s": 848,
+   "cost_usd": 2.4131188,
+   "properties": [
+    {
+     "id": "01M63436FP40JZAAWZR6P6ZC1N",
+     "buggy": "no_counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": false
+    },
+    {
+     "id": "01M63436G9EDPRTKF4RAJQ6W6Q",
+     "buggy": "counterexample",
+     "fixed": "counterexample",
+     "caught_real_bug": false
+    },
+    {
+     "id": "01M63436GWG6C4KQR6XK3JTREC",
+     "buggy": "no_counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": false
+    },
+    {
+     "id": "01M63436HG1ZCZ62KKRXEF6M3A",
+     "buggy": "no_counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": false
+    },
+    {
+     "id": "01M63436J3GY5CZ8W7F1JCCCWR",
+     "buggy": "counterexample",
+     "fixed": "counterexample",
+     "caught_real_bug": false
+    }
+   ]
+  },
+  {
+   "trial": "t3",
+   "bug": "bidict-values-order",
+   "model": "claude-opus-5-5",
+   "wall_s": 367,
+   "cost_usd": 2.2055930000000004,
+   "properties": [
+    {
+     "id": "01M634R8EEBEVH1YN4K8Q5NJCA",
+     "buggy": "no_counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": false
+    },
+    {
+     "id": "01M634R8FWSFFSE1ASZNXH5CZ0",
+     "buggy": "no_counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": false
+    },
+    {
+     "id": "01M634R8HR8HXZ0FY7V413YJJ2",
+     "buggy": "no_counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": false
+    },
+    {
+     "id": "01M634R8KCNXGSKD29VE588PNZ",
+     "buggy": "counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": true
+    },
+    {
+     "id": "01M634R8N27Y6W0HS37CW6N6ER",
+     "buggy": "no_counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": false
+    }
+   ]
+  },
+  {
+   "trial": "t3",
+   "bug": "chrono-naivedate-iter-rev",
+   "model": "claude-opus-5-5",
+   "wall_s": 400,
+   "cost_usd": 1.412385,
+   "properties": [
+    {
+     "id": "01M6352CV18JTCGW23WTYBEST6",
+     "buggy": "counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": true
+    },
+    {
+     "id": "01M6352CW13CAV0CR71K0PNP43",
+     "buggy": "counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": true
+    },
+    {
+     "id": "01M6352CX6F1SNST7H5GVTA1NM",
+     "buggy": "counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": true
+    },
+    {
+     "id": "01M6352CY4YMENP9HC1AV9B7CP",
+     "buggy": "no_counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": false
+    },
+    {
+     "id": "01M6352CZ5GT589B0HC0MJAM5J",
+     "buggy": "no_counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": false
+    }
+   ]
+  },
+  {
+   "trial": "t3",
+   "bug": "humanize-naturalsize-rollover",
+   "model": "claude-opus-5-5",
+   "wall_s": 233,
+   "cost_usd": 1.3239132000000002,
+   "properties": [
+    {
+     "id": "01M6343Q05Q5HQKC9Y44MKPNR2",
+     "buggy": "counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": true
+    },
+    {
+     "id": "01M6343Q1QXV3Z0Y8C1THJDS9H",
+     "buggy": "no_counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": false
+    },
+    {
+     "id": "01M6343Q3EQKTVMC4ZP2A8GTDR",
+     "buggy": "no_counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": false
+    },
+    {
+     "id": "01M6343Q4QYN8HPEXAQ0X2Q5K2",
+     "buggy": "counterexample",
+     "fixed": "counterexample",
+     "caught_real_bug": false
+    },
+    {
+     "id": "01M6343Q6F5XVCA224D6BVWA0Q",
+     "buggy": "no_counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": false
+    }
+   ]
+  },
+  {
+   "trial": "t3",
+   "bug": "more-itertools-seekable-maxlen0",
+   "model": "claude-opus-5-5",
+   "wall_s": 911,
+   "cost_usd": 1.7543415999999998,
+   "properties": [
+    {
+     "id": "01M6342HN38MEJA0EJH1XNX320",
+     "buggy": "counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": true
+    },
+    {
+     "id": "01M6342HP5PN90250A4BDMB64N",
+     "buggy": "counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": true
+    },
+    {
+     "id": "01M6342HQ87K6KD890RE5HF377",
+     "buggy": "no_counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": false
+    },
+    {
+     "id": "01M6342HRB602NF6D80XXFS61H",
+     "buggy": "no_counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": false
+    },
+    {
+     "id": "01M6342HSD8KP4K8QZA2520AQ6",
+     "buggy": "no_counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": false
+    }
+   ]
+  },
+  {
+   "trial": "t3",
+   "bug": "semver-prerelease-token-order",
+   "model": "claude-opus-5-5",
+   "wall_s": 822,
+   "cost_usd": 1.5737456,
+   "properties": [
+    {
+     "id": "01M634FKC4AKFM32CFXKJF4DNQ",
+     "buggy": "counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": true
+    },
+    {
+     "id": "01M634FKE5AP8THX4330KBT03W",
+     "buggy": "no_counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": false
+    },
+    {
+     "id": "01M634FKG125H674VHTK5J6D3G",
+     "buggy": "no_counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": false
+    },
+    {
+     "id": "01M634FKHZ2KEP9W6SPH7AVV23",
+     "buggy": "counterexample",
+     "fixed": "counterexample",
+     "caught_real_bug": false
+    },
+    {
+     "id": "01M634FKKQ1NJYW1BBGQRHEC80",
+     "buggy": "no_counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": false
+    }
+   ]
+  },
+  {
+   "trial": "t3",
+   "bug": "url-control-host-roundtrip",
+   "model": "claude-opus-5-5",
+   "wall_s": 847,
+   "cost_usd": 2.208469,
+   "properties": [
+    {
+     "id": "01M63595V46QQ51V67WA56T1TH",
+     "buggy": "counterexample",
+     "fixed": "counterexample",
+     "caught_real_bug": false
+    },
+    {
+     "id": "01M63595VTQ3FC53EFAEMRH1HB",
+     "buggy": "no_counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": false
+    },
+    {
+     "id": "01M63595WG7N9E9DM44AP86JWE",
+     "buggy": "counterexample",
+     "fixed": "counterexample",
+     "caught_real_bug": false
+    },
+    {
+     "id": "01M63595X8K2SD0GGPCN296CNB",
+     "buggy": "no_counterexample",
+     "fixed": "no_counterexample",
+     "caught_real_bug": false
+    },
+    {
+     "id": "01M63595Y4MJ7VF0GBPXX3WAE4",
+     "buggy": "counterexample",
+     "fixed": "counterexample",
+     "caught_real_bug": false
+    }
+   ]
+  }
+ ]
+}

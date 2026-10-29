@@ -1,0 +1,15 @@
+kind = "catch"
+bug = "toml-serde-key-quoting"
+trial = "t3"
+language = "rust"
+repo = "https://github.com/toml-rs/toml"
+buggy_commit = "711b1ba1ecb11e61df9a1609e24fa3b17d11d961"
+fix_commit = "76484d005a0e68e8c1876f8a3417b71a3921623f"
+fix_paths = ["crates/toml/src/ser/document/array_of_tables.rs", "crates/toml/src/ser/document/map.rs", "crates/toml/src/ser/document/mod.rs"]
+install = ["rustup run 1.99.1 cargo build -p toml --tests"]
+toolchain = "1.99.1"
+property = "01M62P1DF4W2B5RQ895M7MXCPN"
+seed = "1793162498598243232"
+expect_buggy = "counterexample"
+expect_fixed = "no_counterexample"
+flaky = false

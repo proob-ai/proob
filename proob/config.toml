@@ -1,0 +1,73 @@
+# proob/config.toml: proob's own declaration (U14). This file is governed: it
+# takes effect only once the pull request that introduced it merges with an
+# eligible review; until then the built-in defaults apply and the headline
+# reads Re-approve (config amended).
+schema_version = 1
+
+# proob has one maintainer, so no merge into this repository can carry an
+# eligible review: every approval here is the author's own. With `true` such a
+# merge counts as a self-signed approval, and governed content renders Checked
+# (self-signed) or Not checked (self-signed): never Holds, which needs a second
+# human with write access, and never Proposed. The day a second maintainer
+# exists, set this to false and have them approve the declaration; only then
+# can a property on this repository read Holds.
+allow_self_signed = true
+
+# Days after approval during which an unchecked property stays silent. The
+# evidence workflow runs on every push to the default branch, so a week is
+# long enough for the first push run and short enough to notice a broken one.
+grace_days = 7
+# Age beyond which score evidence (the nightly run) is stale: two nightly
+# runs may be missed before a property drops from Holds to Checked.
+freshness_days = 14
+# Mutants a bound check must kill to count as able to fail; at least 1.
+kill_floor = 1
+# Most proposals declare writes per pull request.
+proposal_cap = 5
+# Scope commits since approval above which guard proposes re-affirmation.
+drift_threshold = 10
+# GitHub calls per run; files beyond it render Unverified (rate limited).
+call_budget = 200
+# How much of a counterexample evidence carries: "full" or "seed_only".
+witness = "full"
+# The longest a waiver may run, in days.
+waiver_max_days = 90
+# Cases per property-based test in the scheduled evidence run; the gate and
+# the push run use the adapter's own default (256 for proptest).
+scheduled_cases = 2000
+
+# The test-backed properties: proptest tests in the unverified crates, run
+# through cargo-nextest, scored with cargo-mutants.
+[[adapters]]
+root = "."
+language = "rust"
+runner = "nextest"
+mutation_tool = "cargo-mutants"
+
+# The proof-backed properties: items of the verified crate (proob-core), run
+# through cargo-verus, scored by mutation-under-proof.
+[[adapters]]
+root = "."
+language = "verus"
+runner = "cargo-verus"
+mutation_tool = "mutants-under-proof"
+# Mutation-under-proof verifies each mutant of a bound item with a fresh
+# `cargo verus focus` run on proob-core, tens of seconds each. The nightly
+# evidence run scores every proof-backed property, so this cap bounds that
+# run to roughly (properties x (1 + max_mutants)) focus runs; the mutants
+# beyond it are reported as unsampled. Raise it once the nightly runtime is
+# known.
+max_mutants = 12
+
+# The gate policy, total over the verdicts. Only broken_affected may block: a
+# pull request is blocked only by a Broken property it affects.
+[policy]
+holds = "pass"
+checked = "pass"
+proposed = "pass"
+waived = "pass"
+not_checked_within_grace = "pass"
+not_checked_after_grace = "warn"
+re_approve = "warn"
+broken_affected = "block"
+broken_unaffected = "pass"

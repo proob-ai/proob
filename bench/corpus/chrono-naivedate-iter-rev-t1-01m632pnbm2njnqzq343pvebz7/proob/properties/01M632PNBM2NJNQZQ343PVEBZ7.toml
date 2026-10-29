@@ -1,0 +1,6 @@
+id = "01M632PNBM2NJNQZQ343PVEBZ7"
+title = "Iterator length is exact"
+statement = "The length a run of days or weeks reports equals the number of dates it actually yields, whether read from the front or the back."
+scope = ["src/naive/date/mod.rs"]
+severity = "medium"
+rationale = "Both date iterators in src/naive/date/mod.rs claim an exact size, computed as the distance to the latest representable date, while next_back walks toward the earliest one. test_day_iterator_limit and test_week_iterator_limit in src/naive/date/tests.rs check only the forward count near the maximum. A wrong exact length misleads preallocation and any caller that trusts len."

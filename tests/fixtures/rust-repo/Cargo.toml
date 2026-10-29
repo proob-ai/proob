@@ -1,0 +1,13 @@
+# The Rust fixture proob's adapter is tested against. A standalone package:
+# the proob workspace excludes this directory, and the empty [workspace] table
+# below keeps cargo from looking any further up.
+[package]
+name = "rust-repo"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dev-dependencies]
+proptest = "1.12"

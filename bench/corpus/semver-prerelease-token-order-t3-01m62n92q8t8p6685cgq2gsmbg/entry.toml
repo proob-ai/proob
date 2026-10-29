@@ -1,0 +1,12 @@
+kind = "live"
+bug = "semver-prerelease-token-order"
+trial = "t3"
+language = "python"
+repo = "https://github.com/python-semver/python-semver"
+buggy_commit = "94debf9d3e714ccb08ca7c0199b5bce96cfd7687"
+install = ["uv venv --python 3.13 .venv", "uv pip install --python .venv/bin/python -e . pytest pytest-cov"]
+python = "3.13"
+property = "01M62N92Q8T8P6685CGQ2GSMBG"
+seed = "1793187874538003720"
+expect_buggy = "counterexample"
+flaky = false

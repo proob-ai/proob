@@ -1,0 +1,112 @@
+diff --git a/test_requirements.txt b/test_requirements.txt
+index fb072e0..5e9b5e3 100644
+--- a/test_requirements.txt
++++ b/test_requirements.txt
+@@ -4,3 +4,4 @@ pytest==3.9.3; python_version<='3.5'
+ more-itertools==4.0.0; python_version=='3.5'
+ whatever==0.7
+ typing; python_version=='3.4'
++hypothesis; python_version>='3.8'
+diff --git a/tests/test_colls.py b/tests/test_colls.py
+index 9049edf..8a96cd7 100644
+--- a/tests/test_colls.py
++++ b/tests/test_colls.py
+@@ -369,3 +369,71 @@ def test_pluck_attr():
+ 
+ def test_invoke():
+     assert linvoke(['abc', 'def', 'b'], 'find', 'b') == [1, -1, 0]
++
++
++# Property-based checks
++from collections import Counter, OrderedDict
++from hypothesis import given, strategies as st
++
++DICT_KINDS = {
++    'dict': dict,
++    'OrderedDict': OrderedDict,
++    'Counter': Counter,
++    'defaultdict(int)': lambda d: defaultdict(int, d),
++    'defaultdict(None)': lambda d: defaultdict(None, d),
++}
++dict_kinds = st.sampled_from(sorted(DICT_KINDS))
++plain_dicts = st.dictionaries(st.one_of(st.integers(), st.text(max_size=3)), st.integers())
++
++def make_dict(kind, d):
++    return DICT_KINDS[kind](d)
++
++# proob:01M63JA9X6H9WVS3BK86D2253G
++@given(dict_kinds, plain_dicts)
++def test_walk_identity_keeps_kind_and_contents(kind, d):
++    coll = make_dict(kind, d)
++    result = walk(lambda pair: pair, coll)
++    assert eq(result, coll), (kind, coll, result)
++
++# proob:01M63JA9YGMA7M9000T4A8NAGN
++@given(dict_kinds, plain_dicts)
++def test_walk_values_keeps_keys_and_kind(kind, d):
++    coll = make_dict(kind, d)
++    calls = []
++    def f(v):
++        calls.append(v)
++        return v + 1
++    result = walk_values(f, coll)
++    assert type(result) is type(coll), (kind, coll, result)
++    assert dict(result) == {k: v + 1 for k, v in d.items()}, (kind, coll, result)
++    assert len(calls) == len(d), (kind, coll, calls)
++
++# proob:01M63JA9ZT3D8DXRJ8N2R8VAAZ
++@given(dict_kinds, st.lists(plain_dicts, min_size=1, max_size=4))
++def test_merge_last_value_wins(kind, ds):
++    colls = [make_dict(kind, d) for d in ds]
++    expected = {}
++    for d in ds:
++        expected.update(d)
++    result = merge(*colls)
++    assert type(result) is type(colls[0]), (kind, colls, result)
++    assert dict(result) == expected, (kind, colls, result)
++
++# proob:01M63JAA11KQNE1F19QZEC86VF
++@given(dict_kinds, plain_dicts, st.lists(st.one_of(st.integers(), st.text(max_size=3))))
++def test_select_project_omit_keep_kind_and_values(kind, d, keys):
++    coll = make_dict(kind, d)
++    keys = set(keys)
++    expected = {
++        'project': {k: v for k, v in d.items() if k in keys},
++        'omit': {k: v for k, v in d.items() if k not in keys},
++        'select_keys': {k: v for k, v in d.items() if k in keys},
++    }
++    results = {
++        'project': project(coll, keys),
++        'omit': omit(coll, keys),
++        'select_keys': select_keys(lambda k: k in keys, coll),
++    }
++    for name, result in results.items():
++        assert type(result) is type(coll), (name, kind, coll, keys, result)
++        assert dict(result) == expected[name], (name, kind, coll, keys, result)
+diff --git a/tests/test_seqs.py b/tests/test_seqs.py
+index fceaf84..61d6ef7 100644
+--- a/tests/test_seqs.py
++++ b/tests/test_seqs.py
+@@ -236,3 +236,22 @@ def test_without():
+     assert lwithout([]) == []
+     assert lwithout([1, 2, 3, 4]) == [1, 2, 3, 4]
+     assert lwithout([1, 2, 1, 0, 3, 1, 4], 0, 1) == [2, 3, 4]
++
++
++# Property-based checks
++from hypothesis import given, strategies as st
++
++# proob:01M63JAA2BYH8BTG6NR72M0X82
++@given(st.lists(st.integers()), st.integers(1, 6), st.one_of(st.none(), st.integers(1, 8)))
++def test_partition_chunks_part_sizes(xs, n, step):
++    args = (n,) if step is None else (n, step)
++    parts = lpartition(*args, xs)
++    assert all(len(p) == n for p in parts), (xs, n, step, parts)
++    assert parts == lpartition(*args, iter(xs)), (xs, n, step, parts)
++    chunked = lchunks(*args, xs)
++    assert chunked == lchunks(*args, iter(xs)), (xs, n, step, chunked)
++    assert all(len(p) == n for p in chunked[:-1]) and all(len(p) <= n for p in chunked), \
++        (xs, n, step, chunked)
++    if step is None:
++        assert [x for p in chunked for x in p] == xs, (xs, n, chunked)
++        assert [x for p in parts for x in p] == xs[:len(xs) // n * n], (xs, n, parts)

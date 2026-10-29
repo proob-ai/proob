@@ -1,0 +1,45 @@
+name: False alarm
+description: proob reported a counterexample that is not a real bug in the code.
+labels: ["false-alarm", "status: needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A false alarm is a counterexample to a property the library never promised: the property, not the code, is wrong.
+        These reports are how the declare and falsify skills learn what a library actually guarantees.
+  - type: input
+    id: version
+    attributes:
+      label: proob version
+      description: The output of `proob --version`.
+    validations:
+      required: true
+  - type: textarea
+    id: property
+    attributes:
+      label: Property statement
+      description: The property's id and its `statement`, as in `proob/properties/<id>.toml`.
+    validations:
+      required: true
+  - type: textarea
+    id: witness
+    attributes:
+      label: Witness
+      description: The counterexample proob printed, with its `replay:` line (seed included).
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why it is not a bug
+      description: What the code is allowed to do here, and why the input or the expected result is outside that.
+    validations:
+      required: true
+  - type: input
+    id: docs
+    attributes:
+      label: Library documentation
+      description: A link to the documentation, docstring, or specification that says this behavior is allowed.
+    validations:
+      required: true

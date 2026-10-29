@@ -1,0 +1,6 @@
+id = "01M62N30FMK3SYF5BH9MQ9WGVC"
+title = "Resize evicts only what it must"
+statement = "Replacing a stored value with a larger one evicts only as many other items as the extra size requires."
+scope = ["src/cachetools/__init__.py"]
+severity = "medium"
+rationale = "docs/index.rst:40-43 says the cache pops items until there is enough room for the new item, but src/cachetools/__init__.py:82-84 compares against a total that still counts the old size of the key being replaced, so an LRUCache(maxsize=10) holding b=4 and a=3 evicts b when a becomes 5, although 9 fits. tests/__init__.py:253-257 (_test_getsizeof) only resizes where an eviction is needed anyway. Callers who set getsizeof silently lose live entries."

@@ -1,0 +1,15 @@
+kind = "catch"
+bug = "more-itertools-seekable-maxlen0"
+trial = "t2"
+language = "python"
+repo = "https://github.com/more-itertools/more-itertools"
+buggy_commit = "ca711220a6657a22655f6fa497524d006a735c5f"
+fix_commit = "6b1907de293a655fb77881bf81948f95fd15bd7c"
+fix_paths = ["more_itertools/more.py"]
+install = ["uv venv --python 3.13 .venv", "uv pip install --python .venv/bin/python -e . pytest"]
+python = "3.13"
+property = "01M6336H00Z2CSG7A9N9A9G6Q6"
+seed = "1793432237815105760"
+expect_buggy = "counterexample"
+expect_fixed = "no_counterexample"
+flaky = false

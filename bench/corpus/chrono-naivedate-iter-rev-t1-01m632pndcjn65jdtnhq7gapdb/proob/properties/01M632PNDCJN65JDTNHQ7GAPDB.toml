@@ -1,0 +1,6 @@
+id = "01M632PNDCJN65JDTNHQ7GAPDB"
+title = "No date read twice"
+statement = "Mixing reads from the front and the back of a run of days or weeks never returns the same date twice."
+scope = ["src/naive/date/mod.rs"]
+severity = "high"
+rationale = "In src/naive/date/mod.rs next returns the cursor and advances it, and next_back returns the cursor and moves it back, so next then next_back then next returns the first date twice. Duplicate dates corrupt schedules and counts built from these iterators."

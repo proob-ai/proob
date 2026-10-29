@@ -1,0 +1,16 @@
+# Who reviews what. GitHub requests a review from the owners of every path a
+# pull request changes; with "Require review from Code Owners" on, their
+# approval is needed to merge. The last matching pattern wins.
+
+*                       @proob-ai
+
+# The verified core and the trusted base it rests on: a change here can
+# change what Holds means.
+/crates/proob-core/     @proob-ai
+/crates/proob-trusted/  @proob-ai
+
+# proob's own declaration and the workflows that gate and evidence it.
+/proob/                 @proob-ai
+/.github/workflows/     @proob-ai
+/action.yml             @proob-ai
+/.github/CODEOWNERS     @proob-ai

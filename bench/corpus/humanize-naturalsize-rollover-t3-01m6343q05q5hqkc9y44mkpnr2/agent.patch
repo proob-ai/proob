@@ -1,0 +1,110 @@
+diff --git a/tests/test_filesize.py b/tests/test_filesize.py
+index 04774d9..b0d3b96 100644
+--- a/tests/test_filesize.py
++++ b/tests/test_filesize.py
+@@ -4,7 +4,11 @@
+ 
+ from __future__ import annotations
+ 
++import re
++
+ import pytest
++from hypothesis import given
++from hypothesis import strategies as st
+ 
+ import humanize
+ 
+@@ -94,3 +98,60 @@ def test_naturalsize(test_args: list[int] | list[int | bool], expected: str) ->
+         test_args[0] = f"-{test_args[0]}"
+ 
+     assert humanize.naturalsize(*test_args) == "-" + expected
++
++
++_near_boundary = st.builds(
++    lambda base, exp, offset, sign: sign * max(base**exp + offset, 0),
++    st.sampled_from([1000, 1024]),
++    st.integers(min_value=1, max_value=12),
++    st.integers(min_value=-(10**6), max_value=10**6),
++    st.sampled_from([1, -1]),
++)
++_sizes = st.one_of(st.integers(min_value=-(10**40), max_value=10**40), _near_boundary)
++_modes = st.sampled_from(
++    [
++        {"binary": False, "gnu": False},
++        {"binary": True, "gnu": False},
++        {"binary": False, "gnu": True},
++    ]
++)
++_LARGEST = {"QB", "QiB", "Q"}
++_UNITS = ["B", "K", "M", "G", "T", "P", "E", "Z", "Y", "R", "Q"]
++
++
++def _split(text: str) -> tuple[float, str]:
++    match = re.fullmatch(r"(-?[0-9.]+) ?([A-Za-z]+)", text)
++    assert match, text
++    return float(match.group(1)), match.group(2)
++
++
++def _rank(unit: str) -> int:
++    return 0 if unit in ("B", "Byte", "Bytes") else _UNITS.index(unit[0].upper())
++
++
++# proob:01M6343Q05Q5HQKC9Y44MKPNR2
++@given(_sizes, _modes)
++def test_naturalsize_never_shows_full_next_unit(value: int, mode: dict) -> None:
++    text = humanize.naturalsize(value, **mode)
++    number, unit = _split(text)
++    base = 1024 if (mode["binary"] or mode["gnu"]) else 1000
++    if unit not in _LARGEST:
++        assert abs(number) < base, (value, mode, text)
++
++
++# proob:01M6343Q1QXV3Z0Y8C1THJDS9H
++@given(_sizes.map(abs).filter(bool), _modes)
++def test_naturalsize_negative_mirrors_positive(value: int, mode: dict) -> None:
++    positive = humanize.naturalsize(value, **mode)
++    negative = humanize.naturalsize(-value, **mode)
++    assert negative == "-" + positive, (value, mode, positive, negative)
++
++
++# proob:01M6343Q3EQKTVMC4ZP2A8GTDR
++@given(_sizes.map(abs), _sizes.map(abs), _modes)
++def test_naturalsize_larger_never_smaller_unit(a: int, b: int, mode: dict) -> None:
++    small, large = sorted((a, b))
++    small_text = humanize.naturalsize(small, **mode)
++    large_text = humanize.naturalsize(large, **mode)
++    small_unit, large_unit = _split(small_text)[1], _split(large_text)[1]
++    assert _rank(large_unit) >= _rank(small_unit), (small, large, mode, small_text, large_text)
+diff --git a/tests/test_number.py b/tests/test_number.py
+index 244dee0..54f1f38 100644
+--- a/tests/test_number.py
++++ b/tests/test_number.py
+@@ -6,6 +6,8 @@ import math
+ import typing
+ 
+ import pytest
++from hypothesis import given
++from hypothesis import strategies as st
+ 
+ import humanize
+ from humanize import number
+@@ -314,3 +316,19 @@ def test_clamp(test_args: list[typing.Any], expected: str) -> None:
+ )
+ def test_metric(test_args: list[typing.Any], expected: str) -> None:
+     assert humanize.metric(*test_args) == expected
++
++
++# proob:01M6343Q4QYN8HPEXAQ0X2Q5K2
++@given(st.integers(min_value=-(10**101), max_value=10**101))
++def test_intword_never_shows_thousand_of_a_unit(value: int) -> None:
++    text = humanize.intword(value)
++    head = text.split(" ")[0].lstrip("-")
++    if " " in text:
++        assert float(head) < 1000, (value, text)
++
++
++# proob:01M6343Q6F5XVCA224D6BVWA0Q
++@given(st.integers())
++def test_intcomma_round_trips(value: int) -> None:
++    text = humanize.intcomma(value)
++    assert int(text.replace(",", "")) == value, (value, text)

@@ -1,0 +1,7 @@
+id = "01K8V5NQ4A0F3R7Y2M9D6P1XPB"
+title = "A token bucket never goes negative"
+statement = "However tokens are taken, the bucket's balance is never below zero."
+scope = ["interval/bucket.py"]
+severity = "high"
+rationale = "Rate limits assume a non-negative balance; the current implementation debits before it checks."
+kind = "test"

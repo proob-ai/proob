@@ -1,0 +1,6 @@
+id = "01M63JR83F3FP8RCCMDSMKKNZ9"
+title = "Mixed equality with raw floats matches wrapped equality"
+statement = "Comparing an ordered float with a plain float gives the same answer as comparing it with that plain float wrapped, including when the value is NaN."
+scope = ["src/lib.rs", "src/impl_rkyv_08.rs"]
+severity = "high"
+rationale = "Wrapped equality treats every NaN as equal to itself (src/lib.rs:306-315, doc src/lib.rs:42-43, tests/test.rs:88), but the mixed comparison at src/lib.rs:317-322 uses plain IEEE equality, and archived comparison reuses it (src/impl_rkyv_08.rs:64-72)."

@@ -1,0 +1,27 @@
+# idem: a small idempotency-key service, the proob Python demo.
+#
+# This is the "before proob" state: pytest is configured, Hypothesis is a dev
+# dependency, and nothing here mentions proob. The walk-through in README.md
+# starts from this tree.
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "idem"
+version = "0.1.0"
+description = "An idempotency-key store with a time to live, for services that must not run a retried request twice."
+requires-python = ">=3.10"
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest", "hypothesis"]
+
+[tool.setuptools]
+packages = ["idem"]
+
+# The pytest table pytest reads for every test here; proob counts this file as
+# part of each bound test's binding set because of it.
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

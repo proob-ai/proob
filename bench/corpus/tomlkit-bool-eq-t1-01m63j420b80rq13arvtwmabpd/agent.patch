@@ -1,0 +1,218 @@
+diff --git a/pyproject.toml b/pyproject.toml
+index ee29442..6dc7a5c 100644
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -28,6 +28,7 @@ include = [
+ dev = [
+     "pytest~=7.2",
+     "pytest-cov~=4.0",
++    "hypothesis>=6.0",
+     "PyYAML~=6.0",
+     "pre-commit~=2.20",
+     "mypy==1.19.1",
+diff --git a/tests/test_properties.py b/tests/test_properties.py
+new file mode 100644
+index 0000000..a2c2ad5
+--- /dev/null
++++ b/tests/test_properties.py
+@@ -0,0 +1,200 @@
++"""Property-based tests bound to the declarations under proob/properties/."""
++
++import copy
++import pickle
++import tomllib
++
++from hypothesis import given
++from hypothesis import strategies as st
++
++import tomlkit
++
++from tomlkit.exceptions import TOMLKitError
++
++
++# Text fragments, so whitespace and comments vary as they do in hand-written files.
++_ws = st.sampled_from(["", " ", "  ", "\t"])
++_comment = st.sampled_from(["", " # note", "  #", "\t# a # b"])
++_bare_key = st.from_regex(r"[A-Za-z_][A-Za-z0-9_-]{0,6}", fullmatch=True)
++_key = st.one_of(
++    _bare_key,
++    _bare_key.map(lambda k: f'"{k} x"'),
++    _bare_key.map(lambda k: f"'{k}.y'"),
++)
++_scalar_text = st.one_of(
++    st.sampled_from(["true", "false"]),
++    st.integers(-(2**63), 2**63 - 1).map(str),
++    st.sampled_from(["1_000", "0xDEAD_beef", "0o755", "0b1010", "+7", "-0"]),
++    st.floats(allow_nan=False, allow_infinity=False).map(repr),
++    st.sampled_from(["inf", "-inf", "nan", "1e10", "6.626e-34", "-0.0"]),
++    st.text(st.characters(codec="utf-8", exclude_categories=("Cc", "Cs")), max_size=8).map(
++        lambda s: '"' + s.replace("\\", "\\\\").replace('"', '\\"') + '"'
++    ),
++    st.from_regex(r"[a-z .\\]{0,8}", fullmatch=True).map(lambda s: f"'{s}'"),
++    st.sampled_from(["1979-05-27T07:32:00Z", "1979-05-27", "07:32:00", "1979-05-27T00:32:00.999999-07:00"]),
++)
++
++
++@st.composite
++def _value_text(draw, depth=2):
++    if depth == 0:
++        return draw(_scalar_text)
++    kind = draw(st.sampled_from(["scalar", "scalar", "array", "inline"]))
++    if kind == "scalar":
++        return draw(_scalar_text)
++    if kind == "array":
++        items = draw(st.lists(_value_text(depth - 1), max_size=3))
++        sep = draw(st.sampled_from([",", ", ", " , "]))
++        trailing = draw(st.sampled_from(["", ","])) if items else ""
++        return f"[{draw(_ws)}{sep.join(items)}{trailing}{draw(_ws)}]"
++    keys = draw(st.lists(_bare_key, max_size=3, unique=True))
++    pairs = [f"{k} = {draw(_value_text(depth - 1))}" for k in keys]
++    return "{" + (" " + ", ".join(pairs) + " " if pairs else "") + "}"
++
++
++@st.composite
++def _pairs_text(draw):
++    keys = draw(st.lists(_key, max_size=4, unique_by=lambda k: k.strip("'\"")))
++    return "".join(
++        f"{draw(_ws)}{k}{draw(_ws)}={draw(_ws)}{draw(_value_text())}{draw(_comment)}\n"
++        + draw(st.sampled_from(["", "\n", "# c\n"]))
++        for k in keys
++    )
++
++
++@st.composite
++def toml_texts(draw):
++    """Valid TOML documents: top-level pairs, then uniquely named tables."""
++    body = draw(_pairs_text())
++    names = draw(st.lists(_bare_key.map(lambda k: "tbl_" + k), max_size=3, unique=True))
++    for name in names:
++        header = draw(st.sampled_from([f"[{name}]", f"[ {name} ]", f"[[{name}]]"]))
++        body += f"{header}{draw(_comment)}\n{draw(_pairs_text())}"
++    return body
++
++
++def _is_valid(text):
++    try:
++        tomllib.loads(text)
++    except tomllib.TOMLDecodeError:
++        return False
++    return True
++
++
++# proob:01M63J41ZA5FM8MSPJ9W99FA8V
++@given(toml_texts())
++def test_parse_then_print_gives_back_the_same_text(text):
++    assert _is_valid(text), text
++    printed = tomlkit.parse(text).as_string()
++    assert printed == text, f"input {text!r} printed as {printed!r}"
++
++
++# proob:01M63J420B80RQ13ARVTWMABPD
++@given(st.booleans(), st.booleans())
++def test_booleans_with_the_same_truth_value_compare_equal(a, b):
++    doc = tomlkit.parse(f"s = {str(a).lower()}\narr = [{str(a).lower()}, {str(b).lower()}]\n")
++    standalone = [tomlkit.item(a), doc["s"], doc["arr"][0]]
++    other = tomlkit.item(b)
++    for x in standalone:
++        assert (x == a) and (a == x), f"{x!r} vs plain {a!r}"
++        for y in standalone:
++            assert x == y, f"{x!r} ({type(x).__name__}) != {y!r} ({type(y).__name__}) for value {a}"
++            assert hash(x) == hash(y), (x, y)
++        assert (x == other) == (a == b), f"{x!r} == {other!r} gave {x == other}, values {a}, {b}"
++    assert (doc["arr"][1] == doc["arr"][0]) == (a == b), (a, b)
++
++
++_edit_keys = st.sampled_from(["a", "b", "t", "u"])
++_plain_scalar = st.one_of(
++    st.booleans(),
++    st.integers(-(2**63), 2**63 - 1),
++    st.floats(allow_nan=False, allow_infinity=False),
++    st.text(max_size=5),
++)
++_plain_value = st.recursive(
++    _plain_scalar,
++    lambda inner: st.one_of(
++        st.lists(_plain_scalar, max_size=3),
++        st.dictionaries(_edit_keys, inner, max_size=3),
++        st.lists(st.dictionaries(_edit_keys, _plain_scalar, min_size=1, max_size=2), min_size=1, max_size=2),
++    ),
++    max_leaves=6,
++)
++_ops = st.lists(
++    st.one_of(
++        st.tuples(st.just("set"), st.lists(_edit_keys, min_size=1, max_size=2), _plain_value),
++        st.tuples(st.just("del"), st.lists(_edit_keys, min_size=1, max_size=2), st.none()),
++    ),
++    max_size=6,
++)
++_seed_docs = st.sampled_from(
++    [
++        "",
++        "a = 1\n",
++        "a.b = 1\nt.x = true\n",
++        "[t]\nx = 1\n[t.u]\ny = 2\n",
++        "a = {b = 1}\n[[u]]\nb = 1\n[[u]]\nb = 2\n",
++        "t.a = 1\n\n[u]\nb = 'x'\n",
++    ]
++)
++
++
++def _container_at(doc, path):
++    node = doc
++    for k in path:
++        child = node.get(k)
++        if not isinstance(child, dict):
++            return None
++        node = child
++    return node
++
++
++# proob:01M63J421ES9KWYEHRAES76DDH
++@given(_seed_docs, _ops)
++def test_edits_survive_printing_and_parsing_again(seed, ops):
++    doc = tomlkit.parse(seed)
++    for op, path, value in ops:
++        parent = _container_at(doc, path[:-1])
++        if parent is None:
++            continue
++        if op == "set":
++            parent[path[-1]] = value
++        elif path[-1] in parent:
++            del parent[path[-1]]
++        printed = doc.as_string()
++        reparsed = tomlkit.parse(printed).unwrap()
++        assert reparsed == doc.unwrap(), (
++            f"seed {seed!r}, after {op} {path} {value!r}: printed {printed!r} "
++            f"re-parses to {reparsed!r}, document holds {doc.unwrap()!r}"
++        )
++
++
++# proob:01M63J422J8G4VVWRFXNGYGF64
++@given(toml_texts())
++def test_copies_equal_the_original(text):
++    doc = tomlkit.parse(text)
++    copies = {
++        "copy": copy.copy(doc),
++        "deepcopy": copy.deepcopy(doc),
++        "pickle": pickle.loads(pickle.dumps(doc)),
++    }
++    for how, other in copies.items():
++        assert other == doc, f"{how} of {text!r} is not equal to the original"
++        assert other.as_string() == doc.as_string(), f"{how} of {text!r} prints differently"
++
++
++_toml_alphabet = st.sampled_from(list("abc=[]{}.,\"'#\n \t01+-_:eTZx\\") + ["true", "inf", "nan", "\r", "\x00", "1979-05-27"])
++
++
++# proob:01M63J423JSVWW0MZ7SDK7KHDX
++@given(st.one_of(st.lists(_toml_alphabet, max_size=20).map("".join), toml_texts().flatmap(
++    lambda t: st.tuples(st.integers(0, len(t)), _toml_alphabet).map(lambda p: t[: p[0]] + p[1] + t[p[0]:])
++)))
++def test_invalid_text_is_rejected(text):
++    if _is_valid(text):
++        return
++    try:
++        doc = tomlkit.parse(text)
++    except TOMLKitError:
++        return
++    raise AssertionError(f"invalid TOML {text!r} parsed as {doc.unwrap()!r}")

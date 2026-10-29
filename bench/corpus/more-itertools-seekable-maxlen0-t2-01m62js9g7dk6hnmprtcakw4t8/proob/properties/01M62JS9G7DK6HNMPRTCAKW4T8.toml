@@ -1,0 +1,6 @@
+id = "01M62JS9G7DK6HNMPRTCAKW4T8"
+title = "Truth test does not consume"
+statement = "Checking whether a seekable stream has items left never consumes an item."
+scope = ["more_itertools/more.py"]
+severity = "high"
+rationale = "The docstring at more_itertools/more.py:3042-3051 shows bool followed by list returning every item. Truth testing goes through peek (more.py:3120-3125), so the bounded-cache path above applies too. tests/test_more.py test_truthiness covers only the unbounded cache. Guards like if it: are common."

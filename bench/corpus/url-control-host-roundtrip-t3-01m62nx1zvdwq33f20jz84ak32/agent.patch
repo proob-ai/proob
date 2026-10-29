@@ -1,0 +1,336 @@
+diff --git a/url/Cargo.toml b/url/Cargo.toml
+index 06a7149..a4c33f2 100644
+--- a/url/Cargo.toml
++++ b/url/Cargo.toml
+@@ -21,6 +21,7 @@ serde = "1.0"
+ serde_derive = "1.0"
+ serde_json = "1.0"
+ bencher = "0.1"
++proptest = "1"
+ 
+ [target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dev-dependencies]
+ wasm-bindgen-test = "0.3"
+diff --git a/url/tests/props.rs b/url/tests/props.rs
+new file mode 100644
+index 0000000..7ef6413
+--- /dev/null
++++ b/url/tests/props.rs
+@@ -0,0 +1,318 @@
++// Copyright 2013-2014 The rust-url developers.
++//
++// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
++// http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
++// <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
++// option. This file may not be copied, modified, or distributed
++// except according to those terms.
++
++//! Property-based tests bound to proob properties.
++
++use proptest::prelude::*;
++use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
++use url::{Host, Url};
++
++const SPECIAL: &[&str] = &["http", "https", "ws", "wss", "ftp", "file"];
++const NON_SPECIAL: &[&str] = &["foo", "git+ssh", "data", "mailto", "javascript", "x-y.z"];
++
++/// Mostly ASCII (controls, delimiters and `%` included), sometimes any char.
++fn any_char() -> impl Strategy<Value = char> {
++    prop_oneof![
++        4 => (0u8..=0x7f).prop_map(char::from),
++        1 => any::<char>(),
++    ]
++}
++
++fn text(max: usize) -> impl Strategy<Value = String> {
++    prop::collection::vec(any_char(), 0..max).prop_map(|v| v.into_iter().collect())
++}
++
++fn scheme() -> impl Strategy<Value = String> {
++    prop_oneof![
++        prop::sample::select(SPECIAL).prop_map(str::to_owned),
++        prop::sample::select(NON_SPECIAL).prop_map(str::to_owned),
++    ]
++}
++
++/// IPv4 spellings the parser accepts: dotted decimal, hex, octal, fewer parts.
++fn ipv4_text() -> impl Strategy<Value = String> {
++    (any::<u32>(), 0usize..4).prop_map(|(n, form)| {
++        let [a, b, c, d] = n.to_be_bytes();
++        match form {
++            0 => format!("{a}.{b}.{c}.{d}"),
++            1 => format!("0x{n:x}"),
++            2 => format!("0{a:o}.0x{b:X}.{c}.{d}"),
++            _ => format!("{n}"),
++        }
++    })
++}
++
++/// IPv6 spellings: full, uppercase, zero-padded, compressed, embedded IPv4.
++fn ipv6_text() -> impl Strategy<Value = String> {
++    let segment = prop_oneof![2 => Just(0u16), 3 => any::<u16>()];
++    (prop::array::uniform8(segment), 0usize..4).prop_map(|(s, form)| {
++        let addr = Ipv6Addr::from(s);
++        match form {
++            0 => format!("[{addr}]"),
++            1 => format!("[{}]", addr.to_string().to_uppercase()),
++            2 => format!(
++                "[{}]",
++                s.iter().map(|x| format!("{x:04x}")).collect::<Vec<_>>().join(":")
++            ),
++            _ => {
++                let v4 = Ipv4Addr::from(((s[6] as u32) << 16) | s[7] as u32);
++                let head: Vec<_> = s[..6].iter().map(|x| format!("{x:x}")).collect();
++                format!("[{}:{v4}]", head.join(":"))
++            }
++        }
++    })
++}
++
++fn host_text() -> impl Strategy<Value = String> {
++    prop_oneof![
++        3 => text(10),
++        1 => "[a-zA-Z0-9.-]{1,12}",
++        1 => ipv4_text(),
++        1 => ipv6_text(),
++    ]
++}
++
++/// URL-shaped input built from components, plus arbitrary text.
++fn url_input() -> impl Strategy<Value = String> {
++    let structured = (
++        scheme(),
++        prop::option::of((prop::option::of((text(5), prop::option::of(text(5)))), host_text())),
++        prop::option::of(any::<u16>()),
++        text(14),
++        prop::option::of(text(8)),
++        prop::option::of(text(8)),
++    )
++        .prop_map(|(scheme, authority, port, path, query, fragment)| {
++            let mut s = format!("{scheme}:");
++            if let Some((userinfo, host)) = authority {
++                s.push_str("//");
++                if let Some((user, pass)) = userinfo {
++                    s.push_str(&user);
++                    if let Some(p) = pass {
++                        s.push(':');
++                        s.push_str(&p);
++                    }
++                    s.push('@');
++                }
++                s.push_str(&host);
++                if let Some(p) = port {
++                    s.push_str(&format!(":{p}"));
++                }
++            }
++            s.push_str(&path);
++            if let Some(q) = query {
++                s.push('?');
++                s.push_str(&q);
++            }
++            if let Some(f) = fragment {
++                s.push('#');
++                s.push_str(&f);
++            }
++            s
++        });
++    prop_oneof![6 => structured, 1 => text(30)]
++}
++
++fn parsed_url() -> impl Strategy<Value = Url> {
++    url_input().prop_filter_map("input did not parse", |s| Url::parse(&s).ok())
++}
++
++#[derive(Debug, Clone)]
++enum Setter {
++    Scheme(String),
++    Username(String),
++    Password(Option<String>),
++    Host(Option<String>),
++    IpHost(IpAddr),
++    Port(Option<u16>),
++    Path(String),
++    Query(Option<String>),
++    Fragment(Option<String>),
++    PushSegments(Vec<String>),
++    AppendPair(String, String),
++}
++
++fn setter() -> impl Strategy<Value = Setter> {
++    prop_oneof![
++        scheme().prop_map(Setter::Scheme),
++        text(6).prop_map(Setter::Username),
++        prop::option::of(text(6)).prop_map(Setter::Password),
++        prop::option::of(host_text()).prop_map(Setter::Host),
++        any::<IpAddr>().prop_map(Setter::IpHost),
++        prop::option::of(any::<u16>()).prop_map(Setter::Port),
++        text(12).prop_map(Setter::Path),
++        prop::option::of(text(8)).prop_map(Setter::Query),
++        prop::option::of(text(8)).prop_map(Setter::Fragment),
++        prop::collection::vec(text(5), 0..3).prop_map(Setter::PushSegments),
++        (text(5), text(5)).prop_map(|(k, v)| Setter::AppendPair(k, v)),
++    ]
++}
++
++/// Apply a setter; a rejected change is fine, only the resulting URL matters.
++fn apply(url: &mut Url, op: &Setter) {
++    let _ = match op {
++        Setter::Scheme(s) => url.set_scheme(s),
++        Setter::Username(s) => url.set_username(s),
++        Setter::Password(s) => url.set_password(s.as_deref()),
++        Setter::Host(s) => url.set_host(s.as_deref()).map_err(|_| ()),
++        Setter::IpHost(a) => url.set_ip_host(*a),
++        Setter::Port(p) => url.set_port(*p),
++        Setter::Path(s) => Ok(url.set_path(s)),
++        Setter::Query(s) => Ok(url.set_query(s.as_deref())),
++        Setter::Fragment(s) => Ok(url.set_fragment(s.as_deref())),
++        Setter::PushSegments(v) => url.path_segments_mut().map(|mut p| {
++            p.extend(v);
++        }),
++        Setter::AppendPair(k, v) => {
++            url.query_pairs_mut().append_pair(k, v);
++            Ok(())
++        }
++    };
++}
++
++/// Re-parse `url`'s own text and compare every part and every offset.
++fn assert_reparses_to_itself(url: &Url) -> Result<(), TestCaseError> {
++    let again = Url::parse(url.as_str())
++        .map_err(|e| TestCaseError::fail(format!("{:?} does not re-parse: {e}", url.as_str())))?;
++    prop_assert_eq!(url.as_str(), again.as_str());
++    prop_assert_eq!(url.scheme(), again.scheme());
++    prop_assert_eq!(url.username(), again.username());
++    prop_assert_eq!(url.password(), again.password());
++    // whatwg/url#79: no host re-parses as an empty host.
++    prop_assert!(
++        url.host() == again.host() || (url.host_str(), again.host_str()) == (None, Some("")),
++        "host {:?} re-parsed as {:?} for {:?}",
++        url.host(),
++        again.host(),
++        url.as_str()
++    );
++    prop_assert_eq!(url.port(), again.port());
++    prop_assert_eq!(url.path(), again.path());
++    prop_assert_eq!(url.query(), again.query());
++    prop_assert_eq!(url.fragment(), again.fragment());
++    // Offsets, host kind and port against the text, then the same re-parse by offset.
++    url.check_invariants()
++        .map_err(|e| TestCaseError::fail(format!("{:?}: {e}", url.as_str())))?;
++    Ok(())
++}
++
++fn is_forbidden_in_opaque_host(c: char) -> bool {
++    c.is_ascii_control()
++        || matches!(
++            c,
++            ' ' | '#' | '/' | ':' | '<' | '>' | '?' | '@' | '[' | '\\' | ']' | '^' | '|'
++        )
++}
++
++/// RFC 5952 text: lowercase hex, no leading zeros, longest run (>= 2) of zeros as `::`.
++fn rfc5952(addr: Ipv6Addr) -> String {
++    let s = addr.segments();
++    let (mut best, mut run) = ((0, 0), (0, 0));
++    for (i, &x) in s.iter().enumerate() {
++        run = if x == 0 { (if run.1 == 0 { i } else { run.0 }, run.1 + 1) } else { (0, 0) };
++        if run.1 > best.1 {
++            best = run;
++        }
++    }
++    let hex = |v: &[u16]| v.iter().map(|x| format!("{x:x}")).collect::<Vec<_>>().join(":");
++    if best.1 < 2 {
++        format!("[{}]", hex(&s))
++    } else {
++        format!("[{}::{}]", hex(&s[..best.0]), hex(&s[best.0 + best.1..]))
++    }
++}
++
++proptest! {
++    // proob:01M62NX1ZVDWQ33F20JZ84AK32
++    #[test]
++    fn setters_keep_url_reparsable(
++        mut url in parsed_url(),
++        ops in prop::collection::vec(setter(), 1..4),
++    ) {
++        for op in &ops {
++            apply(&mut url, op);
++            assert_reparses_to_itself(&url)?;
++        }
++    }
++
++    // proob:01M62NX219TKTQ4DVQ4DQK2DZR
++    #[test]
++    fn parsed_url_round_trips(url in parsed_url()) {
++        assert_reparses_to_itself(&url)?;
++    }
++
++    // proob:01M62NX22E7YD3EPS9BH6CD04F
++    #[test]
++    fn opaque_host_has_no_raw_control_or_delimiter(
++        scheme in prop::sample::select(NON_SPECIAL),
++        host in host_text(),
++        rest in text(8),
++        new_host in prop::option::of(host_text()),
++    ) {
++        let input = format!("{scheme}://{host}/{rest}");
++        if let Ok(mut url) = Url::parse(&input) {
++            let check = |url: &Url| -> Result<(), TestCaseError> {
++                if let Some(Host::Domain(h)) = url.host() {
++                    prop_assert!(
++                        !h.chars().any(is_forbidden_in_opaque_host),
++                        "host {:?} of {:?}", h, url.as_str()
++                    );
++                }
++                Ok(())
++            };
++            check(&url)?;
++            let _ = url.set_host(new_host.as_deref());
++            check(&url)?;
++        }
++    }
++
++    // proob:01M62NX23G8ESY0GAGP4A32B3S
++    #[test]
++    fn special_url_has_host_and_rooted_path(
++        mut url in parsed_url(),
++        op in prop::option::of(setter()),
++    ) {
++        let is_listed = |u: &Url| matches!(u.scheme(), "http" | "https" | "ws" | "wss" | "ftp");
++        // set_scheme never crosses special and non-special, so only these can end up listed.
++        if let (true, Some(op)) = (SPECIAL.contains(&url.scheme()), &op) {
++            apply(&mut url, op);
++        }
++        if is_listed(&url) {
++            prop_assert!(
++                url.host_str().map_or(false, |h| !h.is_empty()),
++                "empty host in {:?}", url.as_str()
++            );
++            prop_assert!(url.path().starts_with('/'), "path {:?} of {:?}", url.path(), url.as_str());
++        }
++    }
++
++    // proob:01M62NX24NC4RTX9PAG4BFDR7H
++    #[test]
++    fn ip_host_text_is_canonical(
++        scheme in prop::sample::select(SPECIAL),
++        host in prop_oneof![ipv4_text(), ipv6_text()],
++        new_ip in prop::option::of(any::<IpAddr>()),
++    ) {
++        if let Ok(mut url) = Url::parse(&format!("{scheme}://{host}/")) {
++            if let Some(ip) = new_ip {
++                let _ = url.set_ip_host(ip);
++            }
++            let text = url.host_str().unwrap_or("").to_owned();
++            match url.host() {
++                Some(Host::Ipv4(a)) => {
++                    let [p, q, r, s] = a.octets();
++                    prop_assert_eq!(&text, &format!("{p}.{q}.{r}.{s}"), "from {:?}", host);
++                }
++                Some(Host::Ipv6(a)) => {
++                    prop_assert_eq!(&text, &rfc5952(a), "from {:?}", host);
++                }
++                _ => {}
++            }
++        }
++    }
++}

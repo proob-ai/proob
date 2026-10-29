@@ -1,0 +1,37 @@
+{
+    "exit_code_by_key": {
+        "interval.bucket.x\u01c1TokenBucket\u01c1__init____mutmut_1": 33,
+        "interval.bucket.x\u01c1TokenBucket\u01c1__init____mutmut_2": 33,
+        "interval.bucket.x\u01c1TokenBucket\u01c1refill__mutmut_1": 33,
+        "interval.bucket.x\u01c1TokenBucket\u01c1refill__mutmut_2": 33,
+        "interval.bucket.x\u01c1TokenBucket\u01c1refill__mutmut_3": 33,
+        "interval.bucket.x\u01c1TokenBucket\u01c1refill__mutmut_4": 33,
+        "interval.bucket.x\u01c1TokenBucket\u01c1refill__mutmut_5": 33,
+        "interval.bucket.x\u01c1TokenBucket\u01c1refill__mutmut_6": 33,
+        "interval.bucket.x\u01c1TokenBucket\u01c1take__mutmut_1": 33,
+        "interval.bucket.x\u01c1TokenBucket\u01c1take__mutmut_2": 33,
+        "interval.bucket.x\u01c1TokenBucket\u01c1take__mutmut_3": 33,
+        "interval.bucket.x\u01c1TokenBucket\u01c1take__mutmut_4": 33
+    },
+    "hash_by_function_name": {
+        "x\u01c1TokenBucket\u01c1__init__": "fd904d5441bb",
+        "x\u01c1TokenBucket\u01c1refill": "6e3e06b62e33",
+        "x\u01c1TokenBucket\u01c1take": "1394fbbf65d1"
+    },
+    "type_check_error_by_key": {},
+    "durations_by_key": {},
+    "estimated_durations_by_key": {
+        "interval.bucket.x\u01c1TokenBucket\u01c1__init____mutmut_1": 0,
+        "interval.bucket.x\u01c1TokenBucket\u01c1__init____mutmut_2": 0,
+        "interval.bucket.x\u01c1TokenBucket\u01c1refill__mutmut_1": 0,
+        "interval.bucket.x\u01c1TokenBucket\u01c1refill__mutmut_2": 0,
+        "interval.bucket.x\u01c1TokenBucket\u01c1refill__mutmut_3": 0,
+        "interval.bucket.x\u01c1TokenBucket\u01c1refill__mutmut_4": 0,
+        "interval.bucket.x\u01c1TokenBucket\u01c1refill__mutmut_5": 0,
+        "interval.bucket.x\u01c1TokenBucket\u01c1refill__mutmut_6": 0,
+        "interval.bucket.x\u01c1TokenBucket\u01c1take__mutmut_1": 0,
+        "interval.bucket.x\u01c1TokenBucket\u01c1take__mutmut_2": 0,
+        "interval.bucket.x\u01c1TokenBucket\u01c1take__mutmut_3": 0,
+        "interval.bucket.x\u01c1TokenBucket\u01c1take__mutmut_4": 0
+    }
+}

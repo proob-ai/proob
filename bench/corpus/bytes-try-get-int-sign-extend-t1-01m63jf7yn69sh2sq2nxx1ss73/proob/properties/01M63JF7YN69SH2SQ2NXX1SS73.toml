@@ -1,0 +1,6 @@
+id = "01M63JF7YN69SH2SQ2NXX1SS73"
+title = "Checked signed reads match unchecked ones"
+statement = "Reading a signed whole number of a given byte width through the checked reader gives the same value as the unchecked reader, so negative numbers come back negative."
+scope = ["src/buf/buf_impl.rs"]
+severity = "high"
+rationale = "src/buf/buf_impl.rs get_int and get_int_le sign-extend the unsigned read, while try_get_int and try_get_int_le read the bytes into an i64 without sign extension; both are documented as returning the same signed value. tests/test_buf.rs exercises sign extension only for get_int, and no test calls the try_get readers. CHANGELOG.md records earlier fixes to get_int (#732, #806)."

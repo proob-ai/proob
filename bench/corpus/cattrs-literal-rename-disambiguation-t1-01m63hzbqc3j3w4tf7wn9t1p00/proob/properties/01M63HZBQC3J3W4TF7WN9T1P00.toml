@@ -1,0 +1,6 @@
+id = "01M63HZBQC3J3W4TF7WN9T1P00"
+title = "Renamed Literal discriminator picks the right class"
+statement = "A union of classes told apart by a fixed-value field picks the class that matches the payload even when that field is serialized under a renamed or aliased key."
+scope = ["src/cattrs/disambiguators.py", "src/cattrs/gen/**"]
+severity = "high"
+rationale = "src/cattrs/disambiguators.py:117 looks up the payload by the Python field name, while the rename and alias overrides gathered at :60-65 are applied only in the unique-key branch (:125-128). HISTORY.md:232 says the default union handler takes renamed fields into account; tests/test_disambiguators.py::test_field_renaming covers unique keys only."

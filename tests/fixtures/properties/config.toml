@@ -1,0 +1,33 @@
+# proob/config.toml as init writes it: the defaults, plus the detected adapter.
+schema_version = 1
+
+# A merge with no eligible review renders Checked (self-signed) or Not checked
+# (self-signed), never Holds. Set to false once a second maintainer reviews.
+allow_self_signed = true
+
+grace_days = 7
+freshness_days = 14
+kill_floor = 1
+proposal_cap = 5
+drift_threshold = 10
+call_budget = 200
+witness = "full"
+waiver_max_days = 90
+
+[[adapters]]
+root = "."
+language = "rust"
+runner = "nextest"
+mutation_tool = "cargo-mutants"
+
+# The gate policy. Total: every row must be present.
+[policy]
+holds = "pass"
+checked = "pass"
+proposed = "pass"
+waived = "pass"
+not_checked_within_grace = "pass"
+not_checked_after_grace = "warn"
+re_approve = "warn"
+broken_affected = "block"
+broken_unaffected = "pass"

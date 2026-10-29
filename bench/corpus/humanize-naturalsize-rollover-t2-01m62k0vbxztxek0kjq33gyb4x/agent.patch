@@ -1,0 +1,137 @@
+diff --git a/pyproject.toml b/pyproject.toml
+index b277739..0c62f5f 100644
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -37,6 +37,7 @@ classifiers = [
+ dynamic = [ "version" ]
+ optional-dependencies.tests = [
+   "freezegun",
++  "hypothesis",
+   "pytest>=9",
+   "pytest-benchmark",
+   "pytest-codspeed",
+diff --git a/tests/test_filesize.py b/tests/test_filesize.py
+index 04774d9..0f89751 100644
+--- a/tests/test_filesize.py
++++ b/tests/test_filesize.py
+@@ -94,3 +94,59 @@ def test_naturalsize(test_args: list[int] | list[int | bool], expected: str) ->
+         test_args[0] = f"-{test_args[0]}"
+ 
+     assert humanize.naturalsize(*test_args) == "-" + expected
++
++
++# Property-based checks bound to proob properties.
++from hypothesis import given, strategies as st  # noqa: E402
++
++_modes = st.sampled_from([(False, False), (True, False), (False, True)])  # (binary, gnu)
++_formats = st.sampled_from(["%.0f", "%.1f", "%.2f", "%.3f"])
++
++
++def _number_part(text: str, gnu: bool) -> float:
++    return float(text.rstrip("KMGTPEZYRQ") if gnu else text.split(" ")[0])
++
++
++# proob:01M62K0VBXZTXEK0KJQ33GYB4X
++@given(_modes, _formats, st.data())
++def test_naturalsize_rolls_over_to_next_unit(
++    mode: tuple[bool, bool], fmt: str, data: st.DataObject
++) -> None:
++    binary, gnu = mode
++    base = 1024 if (binary or gnu) else 1000
++    # Below the largest unit: the top unit (index 10) has no next unit to move to.
++    uniform = st.integers(min_value=base, max_value=base**10 - 1)
++    # Just below a unit boundary, where rounding can reach the next unit.
++    near_boundary = st.integers(min_value=2, max_value=10).flatmap(
++        lambda k: st.integers(min_value=base**k - base ** (k - 1), max_value=base**k - 1)
++    )
++    value = data.draw(st.one_of(uniform, near_boundary))
++    text = humanize.naturalsize(value, binary, gnu, fmt)
++    shown = _number_part(text, gnu)
++    assert shown < base, (value, binary, gnu, fmt, text)
++
++
++# proob:01M62K0VF5DW8JQWS87YWV417F
++@given(
++    _modes,
++    st.one_of(
++        st.integers(min_value=1, max_value=10**40),
++        st.floats(min_value=0, max_value=1e40, exclude_min=True),
++    ),
++)
++def test_naturalsize_negation_only_adds_sign(
++    mode: tuple[bool, bool], value: float
++) -> None:
++    binary, gnu = mode
++    positive = humanize.naturalsize(value, binary, gnu)
++    negative = humanize.naturalsize(-value, binary, gnu)
++    assert negative == "-" + positive, (value, binary, gnu, positive, negative)
++
++
++# proob:01M62K0VG68594PTHTJAMX7F73
++@given(st.booleans(), st.data())
++def test_naturalsize_one_byte_is_singular(binary: bool, data: st.DataObject) -> None:
++    count = data.draw(st.integers(min_value=0, max_value=(1024 if binary else 1000) - 1))
++    expected = "1 Byte" if count == 1 else f"{count} Bytes"
++    text = humanize.naturalsize(count, binary)
++    assert text == expected, (count, binary, text)
+diff --git a/tests/test_number.py b/tests/test_number.py
+index 244dee0..a51a8ea 100644
+--- a/tests/test_number.py
++++ b/tests/test_number.py
+@@ -314,3 +314,56 @@ def test_clamp(test_args: list[typing.Any], expected: str) -> None:
+ )
+ def test_metric(test_args: list[typing.Any], expected: str) -> None:
+     assert humanize.metric(*test_args) == expected
++
++
++# Property-based checks bound to proob properties.
++from fractions import Fraction  # noqa: E402
++
++from hypothesis import given, strategies as st  # noqa: E402
++
++
++# proob:01M62K0VD0MG1PK2T5M5FQRWKQ
++@given(
++    st.one_of(
++        st.floats(min_value=1e-30, max_value=1e33, exclude_max=True),
++        # Just below a prefix boundary, where rounding can reach 1000.
++        st.tuples(
++            st.floats(min_value=999, max_value=1000, exclude_max=True),
++            st.integers(min_value=-10, max_value=10),
++        ).map(lambda t: t[0] * 10.0 ** (3 * t[1])),
++    ),
++    st.booleans(),
++    st.integers(min_value=1, max_value=6),
++)
++def test_metric_rolls_over_to_next_prefix(
++    magnitude: float, negative: bool, precision: int
++) -> None:
++    # Outside [1e-30, 1e33) metric falls back to scientific notation.
++    value = -magnitude if negative else magnitude
++    text = humanize.metric(value, "V", precision)
++    shown = abs(float(text.split(" ")[0]))
++    assert shown < 1000, (value, precision, text)
++
++
++# proob:01M62K0VE2ZGKRTGZK8H0C9G4M
++@given(
++    st.one_of(
++        st.integers(min_value=10**3, max_value=10**100 - 1),
++        # Just below a named power, where rounding can reach it.
++        st.sampled_from(number.powers[1:]).flatmap(
++            lambda p: st.integers(min_value=p - p // 1000, max_value=p - 1)
++        ),
++    ),
++    st.booleans(),
++    st.sampled_from(["%.0f", "%.1f", "%.2f", "%.3f"]),
++)
++def test_intword_rolls_over_to_next_power(
++    magnitude: int, negative: bool, fmt: str
++) -> None:
++    value = -magnitude if negative else magnitude
++    text = humanize.intword(value, fmt)
++    shown, word = text.lstrip("-").split(" ")
++    names = [plural for _, plural in number.human_powers]
++    i = names.index(word)
++    # The number shown times its power must stay below the next named power.
++    assert Fraction(shown) * number.powers[i] < number.powers[i + 1], (value, fmt, text)

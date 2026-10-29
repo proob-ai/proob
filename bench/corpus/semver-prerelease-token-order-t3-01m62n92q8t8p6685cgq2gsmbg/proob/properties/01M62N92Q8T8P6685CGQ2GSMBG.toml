@@ -1,0 +1,6 @@
+id = "01M62N92Q8T8P6685CGQ2GSMBG"
+title = "Next prerelease sorts later"
+statement = "Moving a version to its next prerelease always gives a version that sorts strictly after the one it came from."
+scope = ["src/semver/version.py", "tests/test_issue484.py", "tests/test_bump.py"]
+severity = "high"
+rationale = "The next-version docstring in src/semver/version.py promises natural order is preserved; docs/usage/raise-parts-of-a-version.rst explains the .0 suffix exists so rc9 does not sort below rc10; tests/test_max-min.py shows rc10 sorts below rc2, yet tests/test_issue484.py expects 1.2.3-rc9 to become 1.2.3-rc10. Three recent fixes (changelog.d/484.bugfix.rst, pr486.bugfix.rst, pr489.bugfix.rst) touched this path. Release tooling that picks the latest prerelease would pick the wrong build."

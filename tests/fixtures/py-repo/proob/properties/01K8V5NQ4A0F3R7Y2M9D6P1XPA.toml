@@ -1,0 +1,7 @@
+id = "01K8V5NQ4A0F3R7Y2M9D6P1XPA"
+title = "Merged intervals are disjoint and lose nothing"
+statement = "Merging intervals yields sorted, pairwise-disjoint intervals that cover every input interval and no point outside them."
+scope = ["interval/merge.py"]
+severity = "medium"
+rationale = "Schedulers union busy periods through merge; an overlap or a dropped interval double-books or frees time that is taken."
+kind = "test"

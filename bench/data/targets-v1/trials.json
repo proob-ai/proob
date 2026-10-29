@@ -1,0 +1,300 @@
+{
+ "benchmark": "targets",
+ "version": 1,
+ "proob_binary": "455c609",
+ "trials": [
+  {
+   "target": "attrs",
+   "trial": "attrs-1",
+   "report": true,
+   "proposed": 5,
+   "bound": 5,
+   "scored": 4,
+   "able_to_fail": 4,
+   "median_kill_ratio": 0.278,
+   "errored": 0,
+   "failures": [
+    {
+     "id": "01M632D3VBA0TWY991SDXWC634",
+     "title": "Boolean flags accept only documented spellings",
+     "statement": "Converting a flag to a boolean accepts only the documented spellings and rejects every other value.",
+     "witness": "val=0.0; AssertionError: (0.0, False, <class 'ValueError'>)",
+     "seed": "1793080954863084696",
+     "replay": "proob --shadow run check 01M632D3VBA0TWY991SDXWC634 --json --seed 1793080954863084696"
+    }
+   ],
+   "wall_s": 616,
+   "cost_usd": 1.2081498,
+   "turns": 3,
+   "zero_footprint": true,
+   "complete": true,
+   "rc": 0
+  },
+  {
+   "target": "attrs",
+   "trial": "attrs-2",
+   "report": true,
+   "proposed": 5,
+   "bound": 5,
+   "scored": 4,
+   "able_to_fail": 4,
+   "median_kill_ratio": 0.246,
+   "errored": 0,
+   "failures": [
+    {
+     "id": "01M63577WQMGWP8DHMTN4A8CQ0",
+     "title": "Equal version and tuple hash equal",
+     "statement": "A version and a tuple that compare equal always have the same hash.",
+     "witness": "vi=VersionInfo(0, 0, 0, 'dev0'), length=1; AssertionError: (VersionInfo(year=0, minor=0, micro=0, releaselevel='dev0'), …",
+     "seed": "1793554656190673960",
+     "replay": "proob --shadow run check 01M63577WQMGWP8DHMTN4A8CQ0 --json --seed 1793554656190673960"
+    }
+   ],
+   "wall_s": 794,
+   "cost_usd": 1.1988944000000001,
+   "turns": 2,
+   "zero_footprint": true,
+   "complete": true,
+   "rc": 0
+  },
+  {
+   "target": "attrs",
+   "trial": "attrs-3",
+   "report": true,
+   "proposed": 5,
+   "bound": 5,
+   "scored": 3,
+   "able_to_fail": 3,
+   "median_kill_ratio": 0.272,
+   "errored": 0,
+   "failures": [
+    {
+     "id": "01M634839ZXZP0MD91QTQ5T02X",
+     "title": "Copy without changes is equal",
+     "statement": "Copying an instance with no changes gives an instance equal to the original.",
+     "witness": "inst=HypConv(a=0, b=0, c=2); AssertionError: (HypConv(a=0, b=0, c=2), HypConv(a=0, b=0, c=4))",
+     "seed": "1793141724934151672",
+     "replay": "proob --shadow run check 01M634839ZXZP0MD91QTQ5T02X --json --seed 1793141724934151672"
+    },
+    {
+     "id": "01M63483C6MCFV3FKVW6P0XZ65",
+     "title": "Excluded fields stay out of dicts",
+     "statement": "A field excluded from serialisation never appears in the produced dict, and every other field does.",
+     "witness": "C=tests.strategies.HypClass, data=data(...); TypeError: unhashable type: 'dict'",
+     "seed": "1793165156189168056",
+     "replay": "proob --shadow run check 01M63483C6MCFV3FKVW6P0XZ65 --json --seed 1793165156189168056"
+    }
+   ],
+   "wall_s": 804,
+   "cost_usd": 1.0788084,
+   "turns": 2,
+   "zero_footprint": true,
+   "complete": true,
+   "rc": 0
+  },
+  {
+   "target": "indexmap",
+   "trial": "indexmap-1",
+   "report": true,
+   "proposed": 5,
+   "bound": 5,
+   "scored": 2,
+   "able_to_fail": 2,
+   "median_kill_ratio": 0.163,
+   "errored": 0,
+   "failures": [],
+   "wall_s": 7386,
+   "cost_usd": 1.8565792,
+   "turns": 3,
+   "zero_footprint": true,
+   "complete": true,
+   "rc": 0
+  },
+  {
+   "target": "attrs",
+   "trial": "killed-attrs-2",
+   "report": true,
+   "proposed": 5,
+   "bound": 5,
+   "scored": 3,
+   "able_to_fail": 3,
+   "median_kill_ratio": 0.279,
+   "errored": 0,
+   "failures": [
+    {
+     "id": "01M6336H3SM4BYSW3MTW052MYG",
+     "title": "Boolean strings convert strictly",
+     "statement": "Converting a text or number to a boolean accepts only the documented spellings in any letter case and rejects every other value.",
+     "witness": "val=0.0; Failed: to_bool(0.0) returned False",
+     "seed": "1793456787903826864",
+     "replay": "proob --shadow run check 01M6336H3SM4BYSW3MTW052MYG --json --seed 1793456787903826864"
+    }
+   ],
+   "wall_s": 868,
+   "cost_usd": null,
+   "turns": null,
+   "zero_footprint": null,
+   "complete": false,
+   "rc": "killed: disk guard, under 2 GB free"
+  },
+  {
+   "target": "vaultwarden",
+   "trial": "killed-vaultwarden-1",
+   "report": true,
+   "proposed": 5,
+   "bound": 5,
+   "scored": 1,
+   "able_to_fail": 1,
+   "median_kill_ratio": 0.172,
+   "errored": 0,
+   "failures": [
+    {
+     "id": "01M632F5BEXM73HDH5E4E7YJEP",
+     "title": "Masked email hides the name",
+     "statement": "The masked email shown during two-factor login reveals at most the first two characters of the name and always shows the domain unchanged.",
+     "witness": "name = \"ࠀ¡0A\", domain = \"a\"; assertion failed: self.is_char_boundary(new_len)",
+     "seed": "1793058194564687168",
+     "replay": "proob --shadow run check 01M632F5BEXM73HDH5E4E7YJEP --json --seed 1793058194564687168"
+    }
+   ],
+   "wall_s": 1649,
+   "cost_usd": null,
+   "turns": null,
+   "zero_footprint": null,
+   "complete": false,
+   "rc": "killed: disk guard, under 2 GB free"
+  },
+  {
+   "target": "rich",
+   "trial": "rich-1",
+   "report": true,
+   "proposed": 5,
+   "bound": 5,
+   "scored": 2,
+   "able_to_fail": 0,
+   "median_kill_ratio": 0.0,
+   "errored": 0,
+   "failures": [
+    {
+     "id": "01M6330699MEY9PPXE9EMPBWMR",
+     "title": "Escaping preserves text",
+     "statement": "Text that has been escaped renders back to exactly the original text, with no markup applied and nothing added or lost.",
+     "witness": "text='\\r'; AssertionError: ('\\r', '\\r', '')",
+     "seed": "1793556066839687848",
+     "replay": "proob --shadow run check 01M6330699MEY9PPXE9EMPBWMR --json --seed 1793556066839687848"
+    },
+    {
+     "id": "01M633069X5HSJ5Q7WZSKBBJBE",
+     "title": "Ratio distribution sums to total",
+     "statement": "Splitting a width among parts by ratio gives parts that add up to exactly that width whenever the width covers every part's minimum.",
+     "witness": "args=(4, [1, 1], [1, 3]); AssertionError: (4, [1, 1], [1, 3], [2, 3])",
+     "seed": "1793555708548782984",
+     "replay": "proob --shadow run check 01M633069X5HSJ5Q7WZSKBBJBE --json --seed 1793555708548782984"
+    },
+    {
+     "id": "01M63306BM037191PD0KVKAXBF",
+     "title": "Folding keeps text and width",
+     "statement": "Folding text to a positive width never loses or reorders characters, and no folded line is wider than the width.",
+     "witness": "text='\\x1f', width=1; AssertionError: ('\\x1f', 1, [])",
+     "seed": "1793554484525209328",
+     "replay": "proob --shadow run check 01M63306BM037191PD0KVKAXBF --json --seed 1793554484525209328"
+    }
+   ],
+   "wall_s": 134,
+   "cost_usd": 0.9834375999999998,
+   "turns": 16,
+   "zero_footprint": true,
+   "complete": true,
+   "rc": 0,
+   "mutation_scores_valid": false
+  },
+  {
+   "target": "rich",
+   "trial": "rich-2",
+   "report": true,
+   "proposed": 5,
+   "bound": 5,
+   "scored": 3,
+   "able_to_fail": 0,
+   "median_kill_ratio": 0.0,
+   "errored": 0,
+   "failures": [
+    {
+     "id": "01M6342YW5537ZM89AEM7WE35N",
+     "title": "Escaped markup round-trips",
+     "statement": "Text escaped for markup renders back to exactly the original text.",
+     "witness": "text='\\x08'; AssertionError: ('\\x08', '\\x08', '')",
+     "seed": "1793184859611176424",
+     "replay": "proob --shadow run check 01M6342YW5537ZM89AEM7WE35N --json --seed 1793184859611176424"
+    },
+    {
+     "id": "01M6342YX9XVTDKS3CV1Z0FYB9",
+     "title": "Folding loses nothing",
+     "statement": "Folding text into lines of a given width keeps every character in order, and no line is wider than the width.",
+     "witness": "ExceptionGroup: Hypothesis found 2 distinct failures. (2 sub-exceptions)",
+     "seed": "1793178538569345528",
+     "replay": "proob --shadow run check 01M6342YX9XVTDKS3CV1Z0FYB9 --json --seed 1793178538569345528"
+    }
+   ],
+   "wall_s": 152,
+   "cost_usd": 1.098131,
+   "turns": 18,
+   "zero_footprint": true,
+   "complete": true,
+   "rc": 0,
+   "mutation_scores_valid": false
+  },
+  {
+   "target": "rich",
+   "trial": "rich-3",
+   "report": true,
+   "proposed": 5,
+   "bound": 5,
+   "scored": 1,
+   "able_to_fail": 0,
+   "median_kill_ratio": 0.0,
+   "errored": 0,
+   "failures": [
+    {
+     "id": "01M6351FZ26RMH4ZS93P7X4PY9",
+     "title": "Ratio parts sum to total",
+     "statement": "Splitting a total into parts by ratios, with minimums that fit inside the total, gives parts that add up exactly to the total.",
+     "witness": "ExceptionGroup: Hypothesis found 2 distinct failures. (2 sub-exceptions)",
+     "seed": "1793014760772670672",
+     "replay": "proob --shadow run check 01M6351FZ26RMH4ZS93P7X4PY9 --json --seed 1793014760772670672"
+    },
+    {
+     "id": "01M6351FZN3BM8A7P2EP6PVP9B",
+     "title": "Fitted text has exact width",
+     "statement": "Fitting text to a number of cells always gives text exactly that many cells wide.",
+     "witness": "text='\\u200d', total=1; AssertionError: ('\\u200d', 1, '\\u200d ', 0)",
+     "seed": "1793013840633936736",
+     "replay": "proob --shadow run check 01M6351FZN3BM8A7P2EP6PVP9B --json --seed 1793013840633936736"
+    },
+    {
+     "id": "01M6351G08XB49PV8XXDFHVW5Y",
+     "title": "Folded lines fit and rejoin",
+     "statement": "Folding text to a width at least as wide as its widest character gives lines that each fit the width and together spell the original text.",
+     "witness": "args=('\\x1f', 1); AssertionError: ('\\x1f', 1, [])",
+     "seed": "1793013559088494200",
+     "replay": "proob --shadow run check 01M6351G08XB49PV8XXDFHVW5Y --json --seed 1793013559088494200"
+    },
+    {
+     "id": "01M6351G1CJ1TY0HVBS2ZJEYWB",
+     "title": "Escaped markup renders verbatim",
+     "statement": "Escaped text rendered as console markup shows exactly the original text.",
+     "witness": "text='\\x08'; AssertionError: ('\\x08', '\\x08', '')",
+     "seed": "1793019313739378544",
+     "replay": "proob --shadow run check 01M6351G1CJ1TY0HVBS2ZJEYWB --json --seed 1793019313739378544"
+    }
+   ],
+   "wall_s": 165,
+   "cost_usd": 1.0857324000000002,
+   "turns": 17,
+   "zero_footprint": true,
+   "complete": true,
+   "rc": 0,
+   "mutation_scores_valid": false
+  }
+ ]
+}

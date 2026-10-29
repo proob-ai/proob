@@ -1,0 +1,6 @@
+id = "01M634FKC4AKFM32CFXKJF4DNQ"
+title = "Next prerelease never goes backwards"
+statement = "Asking for the next prerelease of a version never gives a version that sorts lower than the one you started from."
+scope = ["src/semver/version.py", "src/semver/cli.py"]
+severity = "high"
+rationale = "The next-version docstring promises to preserve natural order (src/semver/version.py:508). The legacy counter branch builds rc10 from rc9 without a dot, and text identifiers compare in ASCII order (src/semver/version.py:552-559, tests/test_issue484.py). The token-family reset to token.1 can also sort lower (src/semver/version.py:561-565, tests/test_bump.py:163). Changelog entries 484, pr486 and pr489 record earlier bugs here."

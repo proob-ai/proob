@@ -1,0 +1,15 @@
+kind = "catch"
+bug = "rust-decimal-mul-negative-zero"
+trial = "t1"
+language = "rust"
+repo = "https://github.com/paupino/rust-decimal"
+buggy_commit = "591a7b1d36da1e8e501992e643fe2fae9b414ac2"
+fix_commit = "45b666926f86db2d5e1b7bb850d80c30071d332e"
+fix_paths = ["src/ops/mul.rs"]
+install = ["export MYSQLCLIENT_LIB_DIR=<any existing dir> MYSQLCLIENT_VERSION=8.0.0", "rustup run 1.99.1 cargo test --no-run --lib --tests"]
+toolchain = "1.99.1"
+property = "01M63JRTRNKGHDZDPV669148PD"
+seed = "1793137440246539880"
+expect_buggy = "counterexample"
+expect_fixed = "no_counterexample"
+flaky = false

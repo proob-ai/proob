@@ -1,0 +1,15 @@
+kind = "catch"
+bug = "packaging-marker-nested-parens"
+trial = "t3"
+language = "python"
+repo = "https://github.com/pypa/packaging"
+buggy_commit = "c4fb81ff6eba16fdd24d50e9d9d002fdbece6dd4"
+fix_commit = "0a85b41e24c9b55b83f05ae696d73e8294a5b094"
+fix_paths = ["src/packaging/markers.py"]
+install = ["uv venv --python 3.13 .venv", "uv pip install --python .venv/bin/python -e . pytest hypothesis pretend pip tomli_w"]
+python = "3.13"
+property = "01M62NCERM8825CS7JEJZYEWAV"
+seed = "1793181107389063632"
+expect_buggy = "counterexample"
+expect_fixed = "no_counterexample"
+flaky = false

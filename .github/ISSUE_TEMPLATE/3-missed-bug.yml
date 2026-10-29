@@ -1,0 +1,45 @@
+name: Missed bug
+description: A real bug existed in code proob covered, and proob did not find it.
+labels: ["missed-bug", "status: needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Missed bugs become benchmark entries ([bench/README.md](https://github.com/proob-ai/proob/blob/master/bench/README.md)),
+        so the commit before the fix and the fix itself matter most.
+  - type: input
+    id: version
+    attributes:
+      label: proob version
+      description: The output of `proob --version`.
+    validations:
+      required: true
+  - type: input
+    id: repository
+    attributes:
+      label: Repository
+      description: A public repository URL.
+      placeholder: https://github.com/owner/name
+    validations:
+      required: true
+  - type: input
+    id: commit
+    attributes:
+      label: Buggy commit
+      description: The full commit SHA where the bug is present. Add the fix commit or pull request if there is one.
+    validations:
+      required: true
+  - type: textarea
+    id: bug
+    attributes:
+      label: The bug
+      description: What goes wrong, an input that shows it, and the issue that reported it if any.
+    validations:
+      required: true
+  - type: textarea
+    id: proposed
+    attributes:
+      label: What proob proposed
+      description: The properties proob declared for that code (statements and ids), and what `proob run check` reported for each.
+    validations:
+      required: true

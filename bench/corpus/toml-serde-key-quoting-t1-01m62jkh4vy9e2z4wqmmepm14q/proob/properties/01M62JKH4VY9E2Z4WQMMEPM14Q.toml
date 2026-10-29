@@ -1,0 +1,6 @@
+id = "01M62JKH4VY9E2Z4WQMMEPM14Q"
+title = "Serialized keys read back unchanged"
+statement = "Every key the serializer writes, including the names in table and array-of-tables headers, reads back as the same key."
+scope = ["crates/toml/src/ser/**"]
+severity = "high"
+rationale = "In crates/toml/src/ser/document/map.rs a field holding a plain value is encoded via dst.key, but the table and array-of-tables branches pass the raw field name into a buffer (crates/toml/src/ser/document/buffer.rs) that expects encoded keys. The test attr_key in crates/toml/tests/serde/general.rs records output with an unquoted header that fails to parse back, and a dotted name that silently becomes nested tables, while crates/toml_writer/tests/string.rs (dotted_path) shows the writer quotes such keys."

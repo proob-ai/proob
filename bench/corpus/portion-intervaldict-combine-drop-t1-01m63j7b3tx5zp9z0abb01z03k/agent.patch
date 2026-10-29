@@ -1,0 +1,157 @@
+diff --git a/tests/strategies.py b/tests/strategies.py
+new file mode 100644
+index 0000000..57a2468
+--- /dev/null
++++ b/tests/strategies.py
+@@ -0,0 +1,35 @@
++from fractions import Fraction
++
++from hypothesis import strategies as st
++
++import portion as P
++
++# Integer bounds in [-R, R]; membership between two integers is constant, so
++# every integer and every half-integer in [-R-1, R+1] decides set equality.
++R = 10
++POINTS = [Fraction(k, 2) for k in range(-2 * R - 2, 2 * R + 3)]
++
++_bound = st.sampled_from([P.CLOSED, P.OPEN])
++_lower = st.one_of(st.integers(-R, R), st.just(-P.inf))
++_upper = st.one_of(st.integers(-R, R), st.just(P.inf))
++
++
++@st.composite
++def atomics(draw):
++    lo, hi = sorted([draw(_lower), draw(_upper)])
++    return P.Interval.from_atomic(draw(_bound), lo, hi, draw(_bound))
++
++
++intervals = st.lists(atomics(), max_size=4).map(lambda xs: P.Interval(*xs))
++values = st.sampled_from("abcd")
++pairs = st.lists(st.tuples(intervals, values), max_size=6)
++dicts = pairs.map(P.IntervalDict)
++
++
++def points_of(i):
++    return frozenset(p for p in POINTS if p in i)
++
++
++def lookup(d, p):
++    """The value d gives point p, or None when p is outside its domain."""
++    return d[p] if p in d.domain() else None
+diff --git a/tests/test_dict.py b/tests/test_dict.py
+index 12fa559..3fa4d01 100644
+--- a/tests/test_dict.py
++++ b/tests/test_dict.py
+@@ -1,7 +1,10 @@
+ import pytest
++from hypothesis import given
+ 
+ import portion as P
+ 
++from tests.strategies import POINTS, dicts, intervals, lookup, pairs
++
+ 
+ class TestIntervalDict:
+     def test_with_single_values(self):
+@@ -664,3 +667,36 @@ class TestIntervalDict:
+     def test_init_repeating_values(self, benchmark, size):
+         tuples = [(P.closed(i, i + 1), i % 2) for i in range(size)]
+         benchmark(P.IntervalDict, tuples)
++
++
++# proob:01M63J7B3TX5ZP9Z0ABB01Z03K
++@given(dicts, dicts)
++def test_combine_keeps_every_covered_point(d1, d2):
++    combined = d1.combine(d2, lambda x, y: (x, y))
++    for p in POINTS:
++        v1, v2 = lookup(d1, p), lookup(d2, p)
++        expected = (v1, v2) if v1 and v2 else v1 or v2
++        assert lookup(combined, p) == expected, (d1, d2, p, combined)
++
++
++# proob:01M63J7B4TWJGJJ8EATM14MCZM
++@given(dicts, pairs, intervals, dicts)
++def test_keys_never_overlap_and_values_are_distinct(d, more, removed, other):
++    d.update(more)
++    del d[removed]
++    for result in (d, d.combine(other, lambda x, y: x + y)):
++        items = list(result.items())
++        for n, (k1, v1) in enumerate(items):
++            for k2, v2 in items[n + 1 :]:
++                assert (k1 & k2).empty, (result, k1, k2)
++                assert v1 != v2, (result, k1, k2, v1)
++
++
++# proob:01M63J7B83DBD65W70RQT47QWB
++@given(dicts, pairs)
++def test_later_values_win_on_update(d, updates):
++    before = {p: lookup(d, p) for p in POINTS}
++    d.update(updates)
++    for p in POINTS:
++        expected = next((v for i, v in reversed(updates) if p in i), before[p])
++        assert lookup(d, p) == expected, (updates, p, d)
+diff --git a/tests/test_interval.py b/tests/test_interval.py
+index f964f4f..69ddb29 100644
+--- a/tests/test_interval.py
++++ b/tests/test_interval.py
+@@ -1,7 +1,13 @@
++import functools
++import operator
++
+ import pytest
++from hypothesis import given, strategies as st
+ 
+ import portion as P
+ 
++from tests.strategies import atomics, intervals, points_of
++
+ 
+ class TestHelpers:
+     def test_bounds(self):
+@@ -799,3 +805,19 @@ class TestIntervalIteration:
+         assert list(P.empty()) == []
+         with pytest.raises(IndexError):
+             P.empty()[0]
++
++
++# proob:01M63J7B5WYQ30R9D47JM92RS8
++@given(st.lists(atomics(), max_size=4), st.data())
++def test_same_points_compare_equal_and_hash_equal(xs, data):
++    i = P.Interval(*xs)
++    same = [
++        P.Interval(*data.draw(st.permutations(xs))),
++        functools.reduce(operator.or_, xs, P.empty()),
++        ~~i,
++        i - P.empty(),
++        data.draw(intervals),
++    ]
++    for j in same:
++        if points_of(i) == points_of(j):
++            assert i == j and hash(i) == hash(j), (xs, i, j)
+diff --git a/tests/test_io.py b/tests/test_io.py
+index 7fc91a3..737c21d 100644
+--- a/tests/test_io.py
++++ b/tests/test_io.py
+@@ -1,7 +1,10 @@
+ import pytest
++from hypothesis import given
+ 
+ import portion as P
+ 
++from tests.strategies import intervals
++
+ 
+ class TestToString:
+     def test_bounds(self):
+@@ -212,3 +215,10 @@ class TestDataIdentity:
+         assert P.from_data(P.to_data(i3)) == i3
+         assert P.from_data(P.to_data(i4)) == i4
+         assert P.from_data(P.to_data(i1)) == i1
++
++
++# proob:01M63J7B6Z6Z14F0P1KXVAGWVQ
++@given(intervals)
++def test_text_round_trip_keeps_the_interval(i):
++    text = P.to_string(i)
++    assert P.from_string(text, int) == i, (i, text)

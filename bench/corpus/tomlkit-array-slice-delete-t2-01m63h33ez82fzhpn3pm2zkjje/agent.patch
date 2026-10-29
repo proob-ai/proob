@@ -1,0 +1,221 @@
+diff --git a/pyproject.toml b/pyproject.toml
+index ee29442..6dc7a5c 100644
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -28,6 +28,7 @@ include = [
+ dev = [
+     "pytest~=7.2",
+     "pytest-cov~=4.0",
++    "hypothesis>=6.0",
+     "PyYAML~=6.0",
+     "pre-commit~=2.20",
+     "mypy==1.19.1",
+diff --git a/tests/test_properties.py b/tests/test_properties.py
+new file mode 100644
+index 0000000..d880477
+--- /dev/null
++++ b/tests/test_properties.py
+@@ -0,0 +1,203 @@
++from __future__ import annotations
++
++from typing import Any
++
++from hypothesis import given
++from hypothesis import strategies as st
++
++from tomlkit import dumps
++from tomlkit import parse
++from tomlkit.items import Array
++
++
++def _array(values: list[int]) -> Array:
++    return parse(f"a = {values}")["a"]
++
++
++def _reparsed(a: Array) -> Any:
++    return parse(f"a = {a.as_string()}")["a"].unwrap()
++
++
++ints = st.lists(st.integers(-(2**63), 2**63 - 1), max_size=20)
++bounds = st.none() | st.integers(-25, 25)
++slices = st.builds(
++    slice, bounds, bounds, st.none() | st.integers(-5, 5).filter(bool)
++)
++
++
++# proob:01M63H33EZ82FZHPN3PM2ZKJJE
++@given(ints, slices)
++def test_deleting_any_slice_keeps_printed_array_in_step(
++    values: list[int], key: slice
++) -> None:
++    a = _array(values)
++    expected = list(values)
++    del a[key]
++    del expected[key]
++    assert a == expected, (values, key, list(a))
++    assert _reparsed(a) == expected, (values, key, a.as_string())
++
++
++@st.composite
++def _edits(draw: st.DrawFn, start: list[int]) -> list[tuple[Any, ...]]:
++    size, edits = len(start), []
++    for _ in range(draw(st.integers(0, 10))):
++        kinds = ["append", "insert", "extend", "clear"] + (
++            ["set", "del", "pop", "remove", "del_slice"] if size else []
++        )
++        kind = draw(st.sampled_from(kinds))
++        x = draw(st.integers(-1000, 1000))
++        i = draw(st.integers(-size, size - 1)) if size else 0
++        if kind == "insert":
++            i = draw(st.integers(-size - 2, size + 2))
++        if kind == "extend":
++            x = draw(st.lists(st.integers(-1000, 1000), max_size=4))
++        if kind == "del_slice":
++            i = draw(slices)
++        edits.append((kind, i, x))
++        size = len(_apply(list(range(size)), (kind, i, x)))
++    return edits
++
++
++_EDITS = {
++    "append": lambda lst, i, x: lst.append(x),
++    "insert": lambda lst, i, x: lst.insert(i, x),
++    "extend": lambda lst, i, x: lst.extend(x),
++    "clear": lambda lst, i, x: lst.clear(),
++    "set": lambda lst, i, x: lst.__setitem__(i, x),
++    "del": lambda lst, i, x: lst.__delitem__(i),
++    "del_slice": lambda lst, i, x: lst.__delitem__(i),
++    "pop": lambda lst, i, x: lst.pop(i),
++    "remove": lambda lst, i, x: lst.remove(lst[i]),
++}
++
++
++def _apply(lst: Any, edit: tuple[Any, ...]) -> Any:
++    kind, i, x = edit
++    _EDITS[kind](lst, i, x)
++    return lst
++
++
++# proob:01M63H33G24RF2S967NTWCCQDB
++@given(st.data())
++def test_array_edits_match_plain_list_and_reparse(data: st.DataObject) -> None:
++    start = data.draw(st.lists(st.integers(-1000, 1000), max_size=8))
++    edits = data.draw(_edits(start))
++    a, expected = _array(start), list(start)
++    for edit in edits:
++        _apply(a, edit)
++        _apply(expected, edit)
++        assert a == expected, (start, edits, list(a))
++        assert _reparsed(a) == expected, (start, edits, a.as_string())
++
++
++ws = st.sampled_from(["", " ", "  ", "\t"])
++comment = st.sampled_from(["", " # note", "  #", "\t# a # b"])
++# Quoted keys hold a space or dot and table names are upper case, so no two spellings name one key.
++bare_key = st.from_regex(r"[a-z0-9_-]{1,6}", fullmatch=True)
++table_name = st.from_regex(r"[A-Z]{1,4}", fullmatch=True)
++quoted_key = st.from_regex(r"[a-z]{0,3}[ .][a-z ]{0,3}", fullmatch=True).map(lambda s: f'"{s}"')
++scalar = st.one_of(
++    st.integers(-(10**6), 10**6).map(str),
++    st.sampled_from(["0x1F", "0o17", "0b101", "1_000", "+7", "-0"]),
++    st.sampled_from(["1.5", "-0.0", "1e10", "6.02E+23", "inf", "-nan", "3_1.4_1"]),
++    st.sampled_from(["true", "false"]),
++    st.from_regex(r"[a-z \\#'=]{0,8}", fullmatch=True).map(
++        lambda s: '"' + s.replace("\\", "\\\\") + '"'
++    ),
++    st.from_regex(r"[a-z \"#=]{0,8}", fullmatch=True).map(lambda s: f"'{s}'"),
++    st.sampled_from(["1979-05-27T07:32:00Z", "1979-05-27", "07:32:00"]),
++)
++
++
++@st.composite
++def _value(draw: st.DrawFn, depth: int = 0) -> str:
++    kind = draw(st.sampled_from(["scalar"] + (["array", "inline"] if depth < 2 else [])))
++    if kind == "scalar":
++        return draw(scalar)
++    items = draw(st.lists(_value(depth + 1), max_size=4))
++    if kind == "array":
++        sep = draw(st.sampled_from([",", ", ", " , ", ",\n  ", ", # c\n"]))
++        trail = draw(st.sampled_from(["", ","])) if items else ""
++        return "[" + draw(ws) + sep.join(items) + trail + draw(ws) + "]"
++    keys = draw(st.lists(bare_key, max_size=len(items), unique=True))
++    pairs = [f"{k}{draw(ws)}={draw(ws)}{v}" for k, v in zip(keys, items)]
++    return "{" + draw(ws) + ", ".join(pairs) + draw(ws) + "}"
++
++
++@st.composite
++def _body(draw: st.DrawFn) -> str:
++    keys = draw(st.lists(bare_key | quoted_key, max_size=5, unique=True))
++    lines = [
++        f"{draw(ws)}{k}{draw(ws)}={draw(ws)}{draw(_value())}{draw(comment)}"
++        for k in keys
++    ]
++    lines += draw(st.lists(st.sampled_from(["", "# standalone", "   "]), max_size=2))
++    return "".join(line + draw(st.sampled_from(["\n", "\r\n"])) for line in lines)
++
++
++@st.composite
++def _document(draw: st.DrawFn) -> str:
++    names = draw(st.lists(table_name, max_size=3, unique=True))
++    tables = [
++        f"{draw(ws)}[{draw(ws)}{n}{draw(ws)}]{draw(comment)}\n{draw(_body())}"
++        for n in names
++    ]
++    return draw(_body()) + "".join(tables)
++
++
++# proob:01M63H33H5TNW7S7B8BFF041BG
++@given(_document())
++def test_parse_then_print_returns_original_text(text: str) -> None:
++    assert parse(text).as_string() == text, text
++
++
++keys = st.sampled_from(["a", "b", "c", "d"])
++values = st.recursive(
++    st.integers(-1000, 1000) | st.booleans() | st.text(max_size=5),
++    lambda inner: st.lists(inner, max_size=3)
++    | st.dictionaries(keys, inner, max_size=3),
++    max_leaves=8,
++)
++documents = st.dictionaries(keys, values, max_size=4)
++
++
++def _tables(node: dict[str, Any], path: tuple[str, ...] = ()) -> list[tuple[str, ...]]:
++    return [path] + [
++        p
++        for k, v in node.items()
++        if isinstance(v, dict)
++        for p in _tables(v, (*path, k))
++    ]
++
++
++def _at(node: Any, path: tuple[str, ...]) -> Any:
++    for k in path:
++        node = node[k]
++    return node
++
++
++# proob:01M63H33J55MPG1MKE53D2GPFQ
++@given(documents, st.data())
++def test_key_edits_reparse_to_edited_mapping(
++    start: dict[str, Any], data: st.DataObject
++) -> None:
++    doc, expected, edits = parse(dumps(start)), parse(dumps(start)).unwrap(), []
++    for _ in range(data.draw(st.integers(1, 6))):
++        path = data.draw(st.sampled_from(_tables(expected)))
++        key = data.draw(keys)
++        target, model = _at(doc, path), _at(expected, path)
++        if key in model and data.draw(st.booleans()):
++            edits.append(("del", path, key))
++            del target[key]
++            del model[key]
++        else:
++            value = data.draw(values)
++            edits.append(("set", path, key, value))
++            target[key] = value
++            model[key] = value
++        assert parse(doc.as_string()).unwrap() == expected, (
++            start,
++            edits,
++            doc.as_string(),
++        )

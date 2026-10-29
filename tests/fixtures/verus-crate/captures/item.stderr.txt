@@ -1,0 +1,4 @@
+    Checking clamp v0.1.0 (<workspace>/clamp)
+note: verifying root module (selected functions)
+
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.45s

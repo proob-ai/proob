@@ -1,0 +1,54 @@
+# proob/config.toml, written by `proob init`. This file is governed: it takes
+# effect only once the pull request that introduced it merges with an eligible
+# review; until then the built-in defaults (these values) apply.
+schema_version = 1
+
+# A merge with no eligible review (a single-maintainer repository, or the author
+# merging their own change) is a weaker signature. With `true` such content
+# renders Checked (self-signed) or Not checked (self-signed): never Holds, and
+# never Proposed. Set it to false once a second maintainer with write access
+# reviews, and the same content reads Proposed until they approve it.
+allow_self_signed = true
+
+# Days after approval during which an unchecked property stays silent.
+grace_days = 7
+# Age beyond which score evidence (the nightly mutation run) is stale.
+freshness_days = 14
+# Mutants a bound check must kill to count as able to fail; at least 1.
+kill_floor = 1
+# Most proposals declare writes per pull request.
+proposal_cap = 5
+# Scope commits since approval above which guard proposes re-affirmation.
+drift_threshold = 10
+# GitHub calls per run; files beyond it render Unverified (rate limited).
+call_budget = 200
+# How much of a counterexample evidence carries: "full" or "seed_only".
+witness = "full"
+# The longest a waiver may run, in days.
+waiver_max_days = 90
+# Cases per property-based test in the scheduled evidence run; the gate and
+# the push run use the adapter's own default (256 for proptest).
+scheduled_cases = 2000
+# Changed source files that need no property, as scope globs (generated or
+# vendored code). `proob check` lists other new code that no property covers;
+# proob/, .github/, tests/fixtures/, and examples/ are always left out.
+# uncovered_ignore = ["src/generated/**"]
+
+[[adapters]]
+root = "."
+language = "rust"
+runner = "nextest"
+mutation_tool = "cargo-mutants"
+
+# The gate policy, total over the verdicts. Only broken_affected may block: a
+# pull request is blocked only by a Broken property it affects.
+[policy]
+holds = "pass"
+checked = "pass"
+proposed = "pass"
+waived = "pass"
+not_checked_within_grace = "pass"
+not_checked_after_grace = "warn"
+re_approve = "warn"
+broken_affected = "block"
+broken_unaffected = "pass"

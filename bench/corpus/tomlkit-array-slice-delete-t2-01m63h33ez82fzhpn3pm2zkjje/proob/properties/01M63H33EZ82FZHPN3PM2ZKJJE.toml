@@ -1,0 +1,6 @@
+id = "01M63H33EZ82FZHPN3PM2ZKJJE"
+title = "Array slice deletion keeps output in step"
+statement = "Deleting any slice from an array, including slices with negative bounds or a negative step, leaves the printed TOML listing exactly the elements that remain."
+scope = ["tomlkit/items.py"]
+severity = "high"
+rationale = "tomlkit/items.py:1690-1699 builds the indices to drop from the raw slice bounds without normalising them and silently skips missing indices for slices, so the list and its printed form can drift apart; tests/test_items.py:371 and :384 cover only integer deletion; CHANGELOG.md:85-86 (#405, #408) record earlier array-removal serialization bugs. A saved config would silently keep deleted values."

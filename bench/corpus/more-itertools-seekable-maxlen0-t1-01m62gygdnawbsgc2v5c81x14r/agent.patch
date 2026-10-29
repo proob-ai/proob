@@ -1,0 +1,102 @@
+diff --git a/requirements/testing.txt b/requirements/testing.txt
+index a975870..6e2c305 100644
+--- a/requirements/testing.txt
++++ b/requirements/testing.txt
+@@ -1,2 +1,3 @@
+ coverage
+ ruff
++hypothesis
+diff --git a/tests/test_more.py b/tests/test_more.py
+index 38345a0..49e9d99 100644
+--- a/tests/test_more.py
++++ b/tests/test_more.py
+@@ -38,6 +38,8 @@ from time import sleep
+ from typing import NamedTuple
+ from unittest import TestCase, mock
+ 
++from hypothesis import given, strategies as st
++
+ import more_itertools as mi
+ 
+ 
+@@ -3737,6 +3739,80 @@ class SeekableTest(PeekableMixinTests, TestCase):
+         self.assertEqual(s[0], '3')
+ 
+ 
++
++# proob:01M62GYGDNAWBSGC2V5C81X14R
++@given(
++    st.lists(st.integers()),
++    st.none() | st.integers(min_value=0, max_value=10),
++    st.lists(st.sampled_from(['next', 'peek', 'bool'])),
++)
++def test_lookahead_never_drops_item(items, maxlen, ops):
++    s = mi.seekable(items, maxlen=maxlen)
++    end = object()
++    pos = 0
++    for op in ops:
++        if op == 'next':
++            actual = next(s, end)
++            expected = items[pos] if pos < len(items) else end
++            pos += pos < len(items)
++        elif op == 'peek':
++            actual = s.peek(end)
++            expected = items[pos] if pos < len(items) else end
++        else:
++            actual, expected = bool(s), pos < len(items)
++        assert actual == expected, (items, maxlen, ops, op, pos, actual)
++    rest = list(s)
++    assert rest == items[pos:], (items, maxlen, ops, rest)
++
++
++# proob:01M62GYGEYZQB0BZPKJXPFVZ7R
++@given(
++    st.lists(st.integers()),
++    st.integers(min_value=0, max_value=10),
++    st.integers(min_value=0, max_value=200),
++)
++def test_bounded_cache_keeps_latest(items, maxlen, k):
++    s = mi.seekable(items, maxlen=maxlen)
++    consumed = mi.take(k, s)
++    expected = consumed[max(len(consumed) - maxlen, 0) :] if maxlen else []
++    cached = list(s.elements())
++    assert cached == expected, (items, maxlen, k, cached)
++
++
++# proob:01M62GYGG7QK15G46NR70MC508
++@given(
++    st.lists(st.integers()),
++    st.integers(min_value=0, max_value=200),
++    st.integers(min_value=0, max_value=200),
++)
++def test_rewind_replays_in_order(items, k, extra):
++    s = mi.seekable(items)
++    mi.take(k, s)
++    s.seek(0)
++    replayed = mi.take(k + extra, s)
++    expected = items[: k + extra]
++    assert replayed == expected, (items, k, extra, replayed)
++
++
++# proob:01M62GYGHEZQ0W5KY21EFGNXDZ
++@given(
++    st.lists(st.integers(), min_size=1),
++    st.none() | st.integers(min_value=0, max_value=10),
++    st.integers(min_value=0, max_value=200),
++    st.integers(min_value=0, max_value=200),
++)
++def test_relative_seek_stays_after_start(items, maxlen, k, back):
++    s = mi.seekable(items, maxlen=maxlen)
++    k = min(k, len(items) - 1)
++    mi.take(k, s)
++    cached = list(s.elements())
++    s.relative_seek(-back)
++    actual = next(s)
++    # first remembered item sits at source position k - len(cached)
++    expected = items[k - len(cached) + max(len(cached) - back, 0)]
++    assert actual == expected, (items, maxlen, k, back, cached, actual)
++
++
+ class SequenceViewTests(TestCase):
+     def test_init(self):
+         view = mi.SequenceView((1, 2, 3))

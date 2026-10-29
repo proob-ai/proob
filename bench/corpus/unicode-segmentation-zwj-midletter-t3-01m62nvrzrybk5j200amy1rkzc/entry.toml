@@ -1,0 +1,12 @@
+kind = "live"
+bug = "unicode-segmentation-zwj-midletter"
+trial = "t3"
+language = "rust"
+repo = "https://github.com/unicode-rs/unicode-segmentation"
+buggy_commit = "e445e101b129862148127c9e41ab4486b0125232"
+install = ["rustup run 1.99.1 cargo build --tests"]
+toolchain = "1.99.1"
+property = "01M62NVRZRYBK5J200AMY1RKZC"
+seed = "1793257021694110576"
+expect_buggy = "counterexample"
+flaky = false

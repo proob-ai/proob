@@ -1,0 +1,226 @@
+diff --git a/tests/test_cache_properties.py b/tests/test_cache_properties.py
+new file mode 100644
+index 0000000..cedb493
+--- /dev/null
++++ b/tests/test_cache_properties.py
+@@ -0,0 +1,146 @@
++"""Property-based tests for the cache classes (bound to proob properties)."""
++
++import random
++
++from hypothesis import given, strategies as st
++
++import cachetools
++
++
++class Clock:
++    def __init__(self):
++        self.now = 0
++
++    def __call__(self):
++        return self.now
++
++
++KINDS = ["Cache", "FIFOCache", "LFUCache", "LRUCache", "RRCache", "TTLCache", "TLRUCache"]
++KEYS = st.integers(min_value=0, max_value=5)
++
++
++def make(kind, maxsize, clock, getsizeof=None):
++    if kind == "TTLCache":
++        return cachetools.TTLCache(maxsize, ttl=3, timer=clock, getsizeof=getsizeof)
++    if kind == "TLRUCache":
++        ttu = lambda _k, v, now: now + 1 + abs(v) % 4  # noqa: E731
++        return cachetools.TLRUCache(maxsize, ttu, timer=clock, getsizeof=getsizeof)
++    if kind == "RRCache":
++        return cachetools.RRCache(maxsize, choice=random.Random(0).choice, getsizeof=getsizeof)
++    return getattr(cachetools, kind)(maxsize, getsizeof=getsizeof)
++
++
++def ops(maxsize):
++    return st.lists(
++        st.one_of(
++            st.tuples(st.just("set"), KEYS, st.integers(min_value=-1, max_value=maxsize + 1)),
++            st.tuples(st.just("del"), KEYS),
++            st.tuples(st.just("get"), KEYS),
++            st.tuples(st.just("tick"), st.integers(min_value=0, max_value=4)),
++            st.tuples(st.just("clear")),
++        ),
++        max_size=40,
++    )
++
++
++def apply(cache, clock, op):
++    match op:
++        case ("set", k, v):
++            try:
++                cache[k] = v
++            except ValueError:
++                pass
++        case ("del", k):
++            cache.pop(k, None)
++        case ("get", k):
++            cache.get(k)
++        case ("tick", dt):
++            clock.now += dt
++        case ("clear",):
++            cache.clear()
++
++
++scenarios = st.integers(min_value=1, max_value=12).flatmap(
++    lambda m: st.tuples(st.sampled_from(KINDS), st.just(m), ops(m))
++)
++
++
++# proob:01M63HDHR40B1TWVQVETWPK6VT
++@given(scenarios)
++def test_currsize_is_sum_of_sizes_and_bounded(scenario):
++    kind, maxsize, script = scenario
++    clock = Clock()
++    cache = make(kind, maxsize, clock, getsizeof=lambda v: v)
++    for i, op in enumerate(script):
++        apply(cache, clock, op)
++        currsize = cache.currsize
++        held = dict(cache.items())
++        assert currsize == sum(held.values()), (kind, maxsize, script[: i + 1], currsize, held)
++        assert currsize <= maxsize, (kind, maxsize, script[: i + 1], currsize)
++
++
++@st.composite
++def replacements(draw):
++    kind = draw(st.sampled_from(KINDS))
++    sizes = draw(st.lists(st.integers(min_value=0, max_value=5), min_size=1, max_size=6))
++    maxsize = sum(sizes) + draw(st.integers(min_value=0, max_value=5))
++    maxsize = max(maxsize, 1)
++    victim = draw(st.integers(min_value=0, max_value=len(sizes) - 1))
++    room = maxsize - (sum(sizes) - sizes[victim])
++    new_size = draw(st.integers(min_value=0, max_value=room))
++    return kind, maxsize, sizes, victim, new_size
++
++
++# proob:01M63HDHS8KWSPH7HQ5HYAS47A
++@given(replacements())
++def test_replacing_a_value_that_fits_evicts_nothing(case):
++    kind, maxsize, sizes, victim, new_size = case
++    cache = make(kind, maxsize, Clock(), getsizeof=lambda v: v)
++    for k, size in enumerate(sizes):
++        cache[k] = size
++    before = set(cache)
++    assert before == set(range(len(sizes))), (case, before)
++    cache[victim] = new_size
++    after = set(cache)
++    assert after == before, (case, before, after)
++    assert cache[victim] == new_size, (case, cache[victim])
++
++
++# proob:01M63HDHTBRQM021KZWP9M79BS
++@given(
++    scenarios,
++    KEYS,
++    st.one_of(st.integers(max_value=-1), st.integers(min_value=1, max_value=100)),
++)
++def test_oversized_or_negative_value_is_rejected_without_change(scenario, key, offset):
++    kind, maxsize, script = scenario
++    clock = Clock()
++    cache = make(kind, maxsize, clock, getsizeof=lambda v: v)
++    for op in script:
++        apply(cache, clock, op)
++    bad = offset if offset < 0 else maxsize + offset
++    before_items, before_size = dict(cache.items()), cache.currsize
++    try:
++        cache[key] = bad
++    except ValueError:
++        pass
++    else:
++        raise AssertionError((kind, maxsize, script, key, bad, "accepted"))
++    after_items, after_size = dict(cache.items()), cache.currsize
++    assert after_items == before_items, (kind, maxsize, script, key, bad, before_items, after_items)
++    assert after_size == before_size, (kind, maxsize, script, key, bad, before_size, after_size)
++
++
++# proob:01M63HDHVFMMZJYX6V3YHQSWMH
++@given(scenarios)
++def test_len_iteration_and_membership_agree(scenario):
++    kind, maxsize, script = scenario
++    clock = Clock()
++    cache = make(kind, maxsize, clock)
++    for i, op in enumerate(script):
++        apply(cache, clock, op)
++        n = len(cache)
++        seen = list(cache)
++        present = {k for k in range(6) if k in cache}
++        assert n == len(seen) == len(set(seen)), (kind, maxsize, script[: i + 1], n, seen)
++        assert set(seen) == present, (kind, maxsize, script[: i + 1], seen, present)
+diff --git a/tests/test_cached_properties.py b/tests/test_cached_properties.py
+new file mode 100644
+index 0000000..bdfa861
+--- /dev/null
++++ b/tests/test_cached_properties.py
+@@ -0,0 +1,68 @@
++"""Property-based tests for condition-guarded decorators (bound to proob properties)."""
++
++import threading
++import time
++
++from hypothesis import given, strategies as st
++
++import cachetools
++import cachetools.keys
++
++TIMEOUT = 5
++
++
++# proob:01M63HDHWKE47X6N8A7P702Y7P
++@given(
++    st.lists(
++        st.tuples(st.integers(min_value=0, max_value=2), st.booleans()),
++        min_size=1,
++        max_size=8,
++    ),
++    st.integers(min_value=1, max_value=3),
++)
++def test_condition_releases_keys_and_computes_each_once_at_a_time(calls, maxsize):
++    guard = threading.Lock()
++    running = {}
++    overlaps = []
++
++    # the cache key is k alone, so calls on one k must never overlap, whatever fail is
++    @cachetools.cached(
++        cachetools.LRUCache(maxsize),
++        key=lambda k, fail: cachetools.keys.hashkey(k),
++        condition=threading.Condition(),
++    )
++    def compute(k, fail):
++        with guard:
++            running[k] = running.get(k, 0) + 1
++            if running[k] > 1:
++                overlaps.append(k)
++        try:
++            time.sleep(0.001)
++            if fail:
++                raise RuntimeError(k)
++            return k
++        finally:
++            with guard:
++                running[k] -= 1
++
++    def call(k, fail):
++        try:
++            compute(k, fail)
++        except RuntimeError:
++            pass
++
++    threads = [threading.Thread(target=call, args=c, daemon=True) for c in calls]
++    for t in threads:
++        t.start()
++    for t in threads:
++        t.join(TIMEOUT)
++    stuck = [c for t, c in zip(threads, calls) if t.is_alive()]
++    assert not stuck, (calls, maxsize, "callers still waiting", stuck)
++    assert not overlaps, (calls, maxsize, "keys computed concurrently", overlaps)
++
++    # every key must be released afterwards: a fresh call on each finishes
++    for k in {k for k, _ in calls}:
++        t = threading.Thread(target=call, args=(k, False), daemon=True)
++        t.start()
++        t.join(TIMEOUT)
++        assert not t.is_alive(), (calls, maxsize, "key left pending", k)

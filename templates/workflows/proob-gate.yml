@@ -1,0 +1,96 @@
+# proob gate: the pull-request check. Written by `proob init`.
+#
+# Two jobs, on purpose. `execute` runs your checks under proob's adapters; it
+# executes repository code, so it holds no token at all (`permissions: {}`):
+# a token in that job would let any pull request act as the repository.
+# `judge` derives approvals from GitHub's own review records and evidence from
+# default-branch runs, renders the summary, and exits per the gate policy; it
+# runs no repository code and only reads. No job here has a write permission.
+#
+# `fetch-depth: 0` on every checkout: proob finds the commit that introduced
+# each governed file on the default branch and the commits that touched a
+# scope since; a shallow clone hides both and would render everything as
+# unreviewed.
+#
+# The action is pinned to a full commit SHA with the version as a comment, so
+# a moved tag can never change what judges your pull requests. Bump it on
+# purpose; Dependabot or Renovate can propose the bump.
+#
+# Fork pull requests run these same two jobs unchanged: nothing here needs a
+# write permission, and the read-only token GitHub gives a fork's run is all
+# the judge uses. A private repository is the one case that needs more:
+# actions/checkout cannot clone it with an empty permissions block, so give
+# the execute job `contents: read` there (still no write, still no token in
+# the environment).
+name: proob gate
+
+on:
+  pull_request:
+
+permissions: {}
+
+concurrency:
+  group: proob-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  execute:
+    name: proob execute
+    runs-on: ubuntu-latest
+    # No token: this job runs repository code.
+    permissions: {}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Full history and every branch: the base ref and the default branch
+          # must be reachable for the affected set and the introductions.
+          fetch-depth: 0
+          # Repository code runs in this job: leave no credential in .git/config.
+          persist-credentials: false
+@@SETUP_STEPS@@
+      - name: Run the checks this change affects (no token)
+        uses: @@ACTION_PIN@@ @@ACTION_PIN_COMMENT@@
+        with:
+          mode: check
+          job: execute
+      - name: Hand the raw results to the judge job
+        # Raw results only: the judge job turns them into verdicts.
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: proob-results
+          path: proob/.cache/results/
+          if-no-files-found: error
+          retention-days: 7
+
+  judge:
+    # This job's name is the status check to require on the default branch.
+    name: proob gate
+    needs: execute
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read # governed files, their history, CODEOWNERS
+      pull-requests: read # reviews and commits of the PR that introduced each file
+      actions: read # evidence runs and their artifacts on the default branch
+      issues: read # a waiver's issue must be open
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Take the raw results from the execute job
+        # The judge accepts them only when their manifest names this run.
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: proob-results
+          path: proob/.cache/results/
+      - name: Judge (read-only token, no repository code)
+        # Writes the job summary and a ::notice:: with the headline, an
+        # ::error:: per blocking property, and exits 1 only when a property
+        # this pull request affects is Broken.
+        uses: @@ACTION_PIN@@ @@ACTION_PIN_COMMENT@@
+        with:
+          mode: check
+          job: judge
+        env:
+          # The only token in either workflow, and it can only read.
+          GITHUB_TOKEN: ${{ github.token }}

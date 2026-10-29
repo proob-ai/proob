@@ -1,0 +1,15 @@
+kind = "catch"
+bug = "humanize-naturalsize-rollover"
+trial = "t1"
+language = "python"
+repo = "https://github.com/python-humanize/humanize"
+buggy_commit = "7574e0cc377d80db0d2756fc2c5e0b8799a6f8b4"
+fix_commit = "823ad6096e1e5ba82ea876ce761fc2efebd76157"
+fix_paths = ["src/humanize/filesize.py"]
+install = ["uv venv --python 3.13 .venv", "uv pip install --python .venv/bin/python -e . pytest freezegun"]
+python = "3.13"
+property = "01M62GXGHZYRX98R3DBKF0RXJB"
+seed = "1793139736378497592"
+expect_buggy = "counterexample"
+expect_fixed = "no_counterexample"
+flaky = false

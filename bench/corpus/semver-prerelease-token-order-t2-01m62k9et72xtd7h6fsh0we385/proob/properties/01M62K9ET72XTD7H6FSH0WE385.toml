@@ -1,0 +1,6 @@
+id = "01M62K9ET72XTD7H6FSH0WE385"
+title = "Equal versions hash equally"
+statement = "Two versions that compare as equal always have the same hash."
+scope = ["src/semver/version.py"]
+severity = "medium"
+rationale = "tests/test_parsing.py has test_equal_versions_have_equal_hashes. In src/semver/version.py the hash uses the raw prerelease text while the prerelease comparison ignores leading zeros (comment Keep constructor leading zeros), so a constructor-built prerelease 01 may equal 1 yet hash differently. Sets and dicts keyed by version would then keep duplicates."

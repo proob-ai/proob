@@ -1,0 +1,7 @@
+id = "01M622RQ791MXW80SMN13TWVSY"
+title = "Evidence comes only from the approved workflow on the default branch"
+statement = "Evidence counts only from a successful run of the approved evidence workflow on the default branch."
+scope = ["crates/proob-core/src/evidence_accept.rs", "crates/proob-effects/src/evidence.rs"]
+severity = "high"
+rationale = "ASSERTIONS.md, evidence acceptance (spec_accept): the workflow path, the default branch, a push, schedule, or dispatch event, a successful conclusion, and a workflow blob that is approved now. A pull request that edits the evidence workflow runs an unapproved blob and so can manufacture nothing."
+kind = "proof"

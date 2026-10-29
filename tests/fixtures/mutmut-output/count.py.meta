@@ -1,0 +1,14 @@
+{
+    "exit_code_by_key": {
+        "interval.count.x_count_covering__mutmut_1": null,
+        "interval.count.x_count_covering__mutmut_2": null,
+        "interval.count.x_count_covering__mutmut_3": null,
+        "interval.count.x_count_covering__mutmut_4": null
+    },
+    "hash_by_function_name": {
+        "x_count_covering": "77af0cc8e1a0"
+    },
+    "type_check_error_by_key": {},
+    "durations_by_key": {},
+    "estimated_durations_by_key": {}
+}

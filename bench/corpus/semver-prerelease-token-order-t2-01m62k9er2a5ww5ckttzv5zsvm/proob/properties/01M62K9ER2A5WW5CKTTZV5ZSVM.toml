@@ -1,0 +1,6 @@
+id = "01M62K9ER2A5WW5CKTTZV5ZSVM"
+title = "Next prerelease never goes backwards"
+statement = "Moving a version to its next prerelease never produces a version that sorts at or below the one it started from."
+scope = ["src/semver/version.py", "src/semver/cli.py"]
+severity = "high"
+rationale = "The next_version docstring in src/semver/version.py promises to preserve natural order, yet tests/test_issue484.py expects 1.2.3-rc9 to become 1.2.3-rc10 while tests/test_max-min.py ranks 1.2.3-rc10 below 1.2.3-rc2, and tests/test_bump.py expects 1.2.3-alphaXbeta9 with token alpha.beta to become 1.2.3-alpha.beta.1, which also sorts lower. changelog.d/484.bugfix.rst and changelog.d/pr495.bugfix.rst touch this code. A release tool calling pysemver nextver could publish a next version that package managers treat as older."

@@ -1,0 +1,6 @@
+id = "01M62GJ3S2R9DT5D7SY7S8A0BD"
+title = "Equal versions hash equal"
+statement = "Two versions that compare equal always have the same hash."
+scope = ["src/semver/version.py"]
+severity = "medium"
+rationale = "tests/test_parsing.py:152 test_equal_versions_have_equal_hashes states it, yet tests/test_compare.py:43-66 treats prerelease 0001 and 1 as equal while the hash at src/semver/version.py:645 uses the raw prerelease text, so sets and dict keys can hold duplicate equal versions."

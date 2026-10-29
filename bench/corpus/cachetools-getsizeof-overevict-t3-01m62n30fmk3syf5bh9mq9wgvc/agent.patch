@@ -1,0 +1,232 @@
+diff --git a/tests/test_expiry_properties.py b/tests/test_expiry_properties.py
+new file mode 100644
+index 0000000..cbed1dc
+--- /dev/null
++++ b/tests/test_expiry_properties.py
+@@ -0,0 +1,51 @@
++from hypothesis import given, strategies as st
++
++from cachetools import TLRUCache, TTLCache
++
++
++class Timer:
++    def __init__(self):
++        self.time = 0
++
++    def __call__(self):
++        return self.time
++
++
++keys = st.integers(min_value=0, max_value=5)
++ops = st.lists(
++    st.one_of(
++        st.tuples(st.just("set"), keys, st.integers(min_value=-3, max_value=5)),
++        st.tuples(st.just("tick"), st.none(), st.integers(min_value=0, max_value=4)),
++    ),
++    max_size=40,
++)
++
++
++# proob:01M62N30F3VER13N9J2R7RA7EE
++@given(st.booleans(), st.integers(min_value=0, max_value=5), ops)
++def test_expired_entries_are_never_visible(tlru, ttl, script):
++    timer = Timer()
++    if tlru:
++        # the value is the item's lifetime; zero or less is expired on arrival
++        cache = TLRUCache(100, lambda _k, v, now: now + v, timer=timer)
++    else:
++        cache = TTLCache(100, ttl, timer=timer)
++    expires = {}
++    values = {}
++    for op, key, arg in script:
++        if op == "tick":
++            timer.time += arg
++        else:
++            cache[key] = arg
++            expires[key] = timer.time + (arg if tlru else ttl)
++            values[key] = arg
++        now = timer.time
++        live = {k for k, e in expires.items() if now < e}
++        what = (tlru, ttl, script, now, live)
++        assert set(cache) == live, what
++        assert len(cache) == len(live), what
++        for k in expires:
++            if k in live:
++                assert k in cache and cache.get(k) == values[k], (k, what)
++            else:
++                assert k not in cache and cache.get(k, "missing") == "missing", (k, what)
+diff --git a/tests/test_size_properties.py b/tests/test_size_properties.py
+new file mode 100644
+index 0000000..86e5096
+--- /dev/null
++++ b/tests/test_size_properties.py
+@@ -0,0 +1,89 @@
++from hypothesis import given, strategies as st
++
++from cachetools import Cache, FIFOCache, LFUCache, LRUCache, RRCache
++
++
++def make(cls, maxsize, popped=None):
++    # min() keeps RRCache deterministic so a shrunk witness replays
++    kwargs = {"choice": min} if cls is RRCache else {}
++    if popped is None:
++        return cls(maxsize, getsizeof=lambda v: v, **kwargs)
++
++    class Recording(cls):
++        def popitem(self):
++            item = super().popitem()
++            popped.append(item[0])
++            return item
++
++    return Recording(maxsize, getsizeof=lambda v: v, **kwargs)
++
++
++classes = st.sampled_from([Cache, FIFOCache, LFUCache, LRUCache, RRCache])
++keys = st.integers(min_value=0, max_value=7)
++ops = st.one_of(
++    st.tuples(st.just("set"), keys, st.integers(min_value=-3, max_value=25)),
++    st.tuples(st.just("get"), keys, st.none()),
++    st.tuples(st.just("del"), keys, st.none()),
++    st.tuples(st.just("popitem"), st.none(), st.none()),
++    st.tuples(st.just("clear"), st.none(), st.none()),
++)
++
++
++def apply(cache, op, key, value):
++    try:
++        if op == "set":
++            cache[key] = value
++        elif op == "get":
++            cache.get(key)
++        elif op == "del":
++            del cache[key]
++        elif op == "popitem":
++            cache.popitem()
++        else:
++            cache.clear()
++    except (KeyError, ValueError):
++        pass
++
++
++# proob:01M62N30EGEXBPCMM5KXFXDBFF
++@given(classes, st.integers(min_value=0, max_value=20), st.lists(ops, max_size=40))
++def test_currsize_is_sum_of_sizes_within_maxsize(cls, maxsize, script):
++    cache = make(cls, maxsize)
++    stored = {}
++    for op, key, value in script:
++        apply(cache, op, key, value)
++        if op == "set" and key in cache and 0 <= value <= maxsize:
++            stored[key] = value
++        live = {k: stored[k] for k in cache.keys()}
++        assert cache.currsize == sum(live.values()), (cls, maxsize, script, live)
++        assert cache.currsize <= maxsize, (cls, maxsize, script, cache.currsize)
++
++
++# proob:01M62N30FMK3SYF5BH9MQ9WGVC
++@given(
++    classes,
++    st.integers(min_value=1, max_value=20),
++    st.lists(st.tuples(keys, st.integers(min_value=0, max_value=20)), max_size=20),
++    st.data(),
++)
++def test_resize_evicts_only_what_it_must(cls, maxsize, fill, data):
++    popped = []
++    cache = make(cls, maxsize, popped)
++    stored = {}
++    for key, value in fill:
++        if value <= maxsize:
++            cache[key] = stored[key] = value
++    growable = sorted(k for k in cache.keys() if stored[k] < maxsize)
++    if not growable:
++        return
++    key = data.draw(st.sampled_from(growable), label="key")
++    new = data.draw(st.integers(stored[key] + 1, maxsize), label="new size")
++    del popped[:]
++    cache[key] = new
++    remaining = sum(stored[k] for k in cache.keys() if k != key)
++    if popped:
++        last = popped[-1]
++        assert remaining + stored[last] + new > maxsize, (
++            "evicted %r (size %r) although %r + %r fits maxsize %r; evicted %r"
++            % (last, stored[last], remaining, new, maxsize, popped)
++        )
+diff --git a/tests/test_threading_properties.py b/tests/test_threading_properties.py
+new file mode 100644
+index 0000000..fc6e2fc
+--- /dev/null
++++ b/tests/test_threading_properties.py
+@@ -0,0 +1,74 @@
++import collections
++import threading
++import time
++
++from hypothesis import given, strategies as st
++
++from cachetools import LRUCache, cached, cachedmethod
++
++calls_per_thread = st.lists(st.integers(min_value=0, max_value=3), min_size=1, max_size=4)
++threads = st.lists(calls_per_thread, min_size=2, max_size=6)
++
++
++def run(func, scripts):
++    barrier = threading.Barrier(len(scripts))
++    results = collections.defaultdict(list)
++
++    def worker(script):
++        barrier.wait()
++        for k in script:
++            results[k].append(func(k))
++
++    ts = [threading.Thread(target=worker, args=(s,)) for s in scripts]
++    for t in ts:
++        t.start()
++    for t in ts:
++        t.join()
++    return results
++
++
++def decorate(method, compute, **sync):
++    # sync holds condition= or lock=; method picks cachedmethod over cached
++    if not method:
++        return cached(LRUCache(100), **sync)(compute)
++
++    class Owner:
++        cache = LRUCache(100)
++
++        @cachedmethod(
++            lambda self: self.cache, **{k: (lambda self, v=v: v) for k, v in sync.items()}
++        )
++        def get(self, k):
++            return compute(k)
++
++    return Owner().get
++
++
++# proob:01M62N30G43E7MFP0P312XPB48
++@given(st.booleans(), threads)
++def test_condition_runs_each_key_once(method, scripts):
++    calls = collections.Counter()
++    guard = threading.Lock()
++
++    def compute(k):
++        with guard:
++            calls[k] += 1
++        time.sleep(0.002)
++        return k
++
++    func = decorate(method, compute, condition=threading.Condition())
++    run(func, scripts)
++    assert all(n == 1 for n in calls.values()), (method, scripts, dict(calls))
++
++
++# proob:01M62N30GNPB144WXZRFPR7CPH
++@given(st.booleans(), threads)
++def test_lock_callers_agree_on_one_value(method, scripts):
++    def compute(k):
++        time.sleep(0.002)
++        return object()
++
++    func = decorate(method, compute, lock=threading.Lock())
++    results = run(func, scripts)
++    for k, got in results.items():
++        assert all(r is got[0] for r in got), (method, scripts, k, len(set(map(id, got))))
