@@ -155,7 +155,7 @@ fn row(
                         && Some(&r.binding_hash) == h.binding_hash.as_ref()
                 })
                 .collect();
-            let primary = current.iter().rfind(|r| r.kind != EvidenceKind::Score);
+            let primary = primary(&current);
             let score = current.iter().rfind(|r| r.kind == EvidenceKind::Score);
             (
                 primary.map_or(Outcome::NotRun, |r| outcome_of(&r.outcome, r.replay.as_ref())),
@@ -170,6 +170,13 @@ fn row(
         outcome,
         strength,
     })
+}
+
+/// The check run a row reports: the newest failure on this content and binding, else the newest
+/// run. A counterexample stays true of that code however many other seeds pass after it.
+fn primary<'a>(current: &[&'a RunResultRecord]) -> Option<&'a RunResultRecord> {
+    let checks = || current.iter().copied().filter(|r| r.kind != EvidenceKind::Score);
+    checks().rfind(|r| matches!(outcome_of(&r.outcome, None), Outcome::Fails { .. })).or_else(|| checks().next_back())
 }
 
 fn seed(replay: Option<&Replay>) -> Option<String> {
@@ -419,6 +426,24 @@ pub fn json<'a>(rows: &'a [Row], n: &'a Next, repo: &Path, work: &Path, base: &'
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn record(outcome: &str) -> RunResultRecord {
+        let json = format!(
+            r#"{{"schema_version":1,"id":"01K8V5NQ4A0F3R7Y2M9D6P1XPB","kind":"check","algo":"sha256","content_hash":"00","binding_hash":"00","scope_hash":"00","outcome":{outcome}}}"#
+        );
+        proob_facts::results::parse_result(&json).expect("a valid record")
+    }
+
+    #[test]
+    fn a_later_passing_seed_does_not_hide_a_counterexample() {
+        let fail = record(r#"{"result":"counterexample","witness":"[6]"}"#);
+        let pass = record(r#"{"result":"no_counterexample","budget":256}"#);
+        let err = record(r#"{"result":"errored","reason":"timeout"}"#);
+        assert_eq!(primary(&[&fail, &pass]), Some(&fail));
+        assert_eq!(primary(&[&fail, &err, &pass]), Some(&fail));
+        assert_eq!(primary(&[&pass, &err]), Some(&err), "with no failure, the newest run");
+        assert_eq!(primary(&[]), None);
+    }
 
     fn row(outcome: Outcome, strength: Strength) -> Row {
         Row {

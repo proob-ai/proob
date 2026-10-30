@@ -8,11 +8,18 @@ version as a comment.
 
 ## Unreleased
 
+### Fixed
+
+- The shadow report no longer shows a property as passing when a later run
+  with another seed passed after a counterexample on the same code and
+  test; the counterexample is reported.
+
 ### Changed
 
 - README rewritten around what proob is, the evidence, and a three-command
   quick start; the full usage guide and benchmark tables moved to
-  `docs/guide.md` and `docs/benchmark.md`.
+  `docs/guide.md` and `docs/benchmark.md`. The README's GIF is recorded by
+  `tools/demo/record.sh`.
 
 ### Added
 
