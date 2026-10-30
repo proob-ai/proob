@@ -294,9 +294,10 @@ pub fn outcome() -> impl Strategy<Value = Outcome> {
 }
 
 pub fn any_policy() -> impl Strategy<Value = Policy> {
-    prop::collection::vec(outcome(), 9).prop_map(|o| Policy {
+    prop::collection::vec(outcome(), 10).prop_map(|o| Policy {
         holds: o[0],
         checked: o[1],
+        tested: o[9],
         proposed: o[2],
         waived: o[3],
         not_checked_within_grace: o[4],
@@ -312,6 +313,7 @@ pub fn default_policy() -> Policy {
     Policy {
         holds: Outcome::Pass,
         checked: Outcome::Pass,
+        tested: Outcome::Pass,
         proposed: Outcome::Pass,
         waived: Outcome::Pass,
         not_checked_within_grace: Outcome::Pass,

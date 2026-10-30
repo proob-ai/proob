@@ -382,7 +382,10 @@ pub enum Grace {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Structural)]
 pub struct Policy {
     pub holds: Outcome,
+    /// `Checked` carrying a defect modifier: `strength_pending` or `self_signed`.
     pub checked: Outcome,
+    /// `Checked` whose only modifier is `tested`.
+    pub tested: Outcome,
     pub proposed: Outcome,
     pub waived: Outcome,
     pub not_checked_within_grace: Outcome,

@@ -144,9 +144,14 @@ fn outcome_name(o: config::OutcomeName) -> &'static str {
 
 fn policy_block(p: PolicyTable) -> String {
     format!(
-        "[policy]\nholds = \"{}\"\nchecked = \"{}\"\nproposed = \"{}\"\nwaived = \"{}\"\nnot_checked_within_grace = \"{}\"\nnot_checked_after_grace = \"{}\"\nre_approve = \"{}\"\nbroken_affected = \"{}\"\nbroken_unaffected = \"{}\"\n",
+        "[policy]\nholds = \"{}\"\n\
+         # A Checked property with a defect pending: strength pending or self-signed.\n\
+         checked = \"{}\"\n\
+         # A test-backed property that passes renders Checked (tested); this row gates it.\n\
+         tested = \"{}\"\nproposed = \"{}\"\nwaived = \"{}\"\nnot_checked_within_grace = \"{}\"\nnot_checked_after_grace = \"{}\"\nre_approve = \"{}\"\nbroken_affected = \"{}\"\nbroken_unaffected = \"{}\"\n",
         outcome_name(p.holds),
         outcome_name(p.checked),
+        outcome_name(p.tested),
         outcome_name(p.proposed),
         outcome_name(p.waived),
         outcome_name(p.not_checked_within_grace),

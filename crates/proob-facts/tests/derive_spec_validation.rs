@@ -310,6 +310,20 @@ proptest! {
     }
 
     #[test]
+    fn checked_tested_only_takes_the_tested_row_and_a_defect_takes_checked(
+        sp in any::<bool>(), ss in any::<bool>(), affected in any::<bool>(), grace in grace(), p in any_policy()
+    ) {
+        let cap = |o| if o == Outcome::Block { Outcome::Warn } else { o };
+        let v = Verdict::Checked { tested: true, strength_pending: sp, self_signed: ss };
+        let row = if sp || ss { p.checked } else { p.tested };
+        prop_assert_eq!(policy(&v, affected, grace, &p), cap(row));
+        // The two rows tell apart a passing test and one with strength pending.
+        let p = Policy { tested: Outcome::Pass, checked: Outcome::Warn, ..p };
+        prop_assert_eq!(policy(&Verdict::Checked { tested: true, strength_pending: false, self_signed: false }, affected, grace, &p), Outcome::Pass);
+        prop_assert_eq!(policy(&Verdict::Checked { tested: true, strength_pending: true, self_signed: false }, affected, grace, &p), Outcome::Warn);
+    }
+
+    #[test]
     fn default_policy_matches_the_plans_table(v in any_verdict(), affected in any::<bool>(), grace in grace()) {
         let o = policy(&v, affected, grace, &default_policy());
         let expected = match (v, affected, grace) {

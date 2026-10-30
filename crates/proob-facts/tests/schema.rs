@@ -201,6 +201,18 @@ fn config_blocking_a_row_other_than_broken_affected_is_rejected_naming_the_row()
 }
 
 #[test]
+fn the_tested_row_defaults_to_pass_and_may_not_block() {
+    let base = fixture("config.toml");
+    assert!(!base.contains("tested ="), "the fixture predates the tested row");
+    assert_eq!(parse_config(&base).expect("parses").policy.tested, OutcomeName::Pass, "absent means pass");
+    let warn = base.replace("checked = \"pass\"\n", "checked = \"pass\"\ntested = \"warn\"\n");
+    assert_eq!(parse_config(&warn).expect("parses").policy.tested, OutcomeName::Warn);
+    let block = base.replace("checked = \"pass\"\n", "checked = \"pass\"\ntested = \"block\"\n");
+    let err = parse_config(&block).expect_err("blocking tested");
+    assert!(matches!(err, ParseError::Invalid { field: "policy.tested", .. }), "{err:?}");
+}
+
+#[test]
 fn uncovered_ignore_takes_scope_globs_only() {
     let ok = format!("uncovered_ignore = [\"src/generated/**\", \"vendor/*.py\"]\n{}", fixture("config.toml"));
     assert_eq!(parse_config(&ok).expect("parses").uncovered_ignore, vec!["src/generated/**", "vendor/*.py"]);
@@ -237,6 +249,7 @@ fn defaults_equal_the_plan_table() {
         policy: PolicyTable {
             holds: Pass,
             checked: Pass,
+            tested: Pass,
             proposed: Pass,
             waived: Pass,
             not_checked_within_grace: Pass,
@@ -318,6 +331,7 @@ fn the_core_slice_of_the_defaults() {
         policy: Policy {
             holds: Pass,
             checked: Pass,
+            tested: Pass,
             proposed: Pass,
             waived: Pass,
             not_checked_within_grace: Pass,

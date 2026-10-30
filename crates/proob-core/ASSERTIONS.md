@@ -150,4 +150,8 @@ at floor, self_signed: ss }`. `Verdict::Checked` gains the `tested` field;
 nothing in `Binding`, `derive`, `eligibility`, the facts crate, or the CLI's
 one-check-per-property rule changes.
 `policy.rs` carries R10 as `ensures`: `Block` only for a `Broken` property the
-PR affects, whatever the configured table says elsewhere.
+PR affects, whatever the configured table says elsewhere. Its `ensures` also
+fix one row per verdict: a `Checked` whose only modifier is `tested`
+(`tested_only`) takes the `tested` row, and any other `Checked` (one carrying
+`strength_pending` or `self_signed`) the `checked` row, so `checked` means a
+defect is pending.

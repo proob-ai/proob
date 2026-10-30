@@ -133,10 +133,11 @@ fn non_blocking_outcome_name() -> impl Strategy<Value = OutcomeName> {
 }
 
 fn policy_table() -> impl Strategy<Value = PolicyTable> {
-    (prop::collection::vec(non_blocking_outcome_name(), 8), outcome_name()).prop_map(|(o, broken_affected)| {
+    (prop::collection::vec(non_blocking_outcome_name(), 9), outcome_name()).prop_map(|(o, broken_affected)| {
         PolicyTable {
             holds: o[0],
             checked: o[1],
+            tested: o[8],
             proposed: o[2],
             waived: o[3],
             not_checked_within_grace: o[4],

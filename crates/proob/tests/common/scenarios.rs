@@ -43,6 +43,11 @@ fn waived_toml() -> String {
 /// main: c1 (the approved PR #7 introduces everything), c2 (a direct push
 /// amends E and touches src/lib.rs); the tree adds D, an uncommitted proposal.
 pub fn composite() -> Composite {
+    composite_with(CONFIG_TOML)
+}
+
+/// `composite`, with `config` as the approved `proob/config.toml`.
+pub fn composite_with(config: &str) -> Composite {
     let repo = TempRepo::new();
     let t1 = NOW - 10 * DAY;
     repo.write("src/lib.rs", "pub fn f() {}\n");
@@ -50,7 +55,7 @@ pub fn composite() -> Composite {
     repo.write("tests/prop_a.rs", "// proob:01J9Z3W1V8Q4K7N2M5R8T1X4A1\n#[test] fn a() {}\n");
     repo.write("tests/prop_b.rs", "// proob:01J9Z3W1V8Q4K7N2M5R8T1X4B2\n#[test] fn b() {}\n");
     repo.write("src/proof_j.rs", "// proob:01J9Z3W1V8Q4K7N2M5R8T1X4J9\nproof fn j() {}\n");
-    repo.write("proob/config.toml", CONFIG_TOML);
+    repo.write("proob/config.toml", config);
     repo.write(".github/workflows/proob-gate.yml", GATE_YML);
     repo.write(".github/workflows/proob-evidence.yml", EVIDENCE_YML);
     repo.write(&property_path(PROP_A), &property_toml(PROP_A, "A holds", &["src/lib.rs"], "test"));

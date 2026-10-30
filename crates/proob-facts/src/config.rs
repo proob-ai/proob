@@ -3,7 +3,8 @@
 //! Governs the gate only when the file itself is approved; otherwise
 //! `Config::defaults()` applies and the headline says `Re-approve (config
 //! amended)`. The policy table is total: every verdict row is a required key,
-//! so a missing row fails to parse naming the row. The kill floor has a schema
+//! so a missing row fails to parse naming the row; only `tested`, added after
+//! the others, defaults (to `pass`) when absent. The kill floor has a schema
 //! minimum of one that config cannot lower. Only `broken_affected` may say
 //! `block` (R10: a PR is blocked only by a broken property it affects); any
 //! other row set to `block` fails to parse naming the row, and the verified
@@ -183,12 +184,18 @@ pub enum OutcomeName {
 
 /// The gate policy, one row per verdict, split where the default table
 /// distinguishes cases: `NotChecked` by the grace window, `Broken` by whether
-/// this PR affects the property. All nine rows are required.
+/// this PR affects the property, and `Checked` by whether a defect is pending.
+/// Every row is required but `tested`, which postdates the others and defaults
+/// to `pass` so a table written before it gates test-backed properties as before.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PolicyTable {
     pub holds: OutcomeName,
+    /// `Checked` with a defect pending: strength pending or self-signed.
     pub checked: OutcomeName,
+    /// `Checked (tested)` and nothing else: a test-backed property that passes.
+    #[serde(default = "tested_default")]
+    pub tested: OutcomeName,
     pub proposed: OutcomeName,
     pub waived: OutcomeName,
     pub not_checked_within_grace: OutcomeName,
@@ -198,11 +205,16 @@ pub struct PolicyTable {
     pub broken_unaffected: OutcomeName,
 }
 
+fn tested_default() -> OutcomeName {
+    PolicyTable::DEFAULTS.tested
+}
+
 impl PolicyTable {
     /// The plan's "Gate policy defaults" table.
     pub const DEFAULTS: PolicyTable = PolicyTable {
         holds: OutcomeName::Pass,
         checked: OutcomeName::Pass,
+        tested: OutcomeName::Pass,
         proposed: OutcomeName::Pass,
         waived: OutcomeName::Pass,
         not_checked_within_grace: OutcomeName::Pass,
@@ -290,6 +302,7 @@ fn blocking_row(p: &PolicyTable) -> Option<&'static str> {
     [
         ("policy.holds", p.holds),
         ("policy.checked", p.checked),
+        ("policy.tested", p.tested),
         ("policy.proposed", p.proposed),
         ("policy.waived", p.waived),
         ("policy.not_checked_within_grace", p.not_checked_within_grace),

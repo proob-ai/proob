@@ -260,6 +260,33 @@ fn a_positive_result_from_this_pr_never_holds() {
 }
 
 #[test]
+fn a_passing_test_takes_the_tested_row_and_a_pending_defect_takes_checked() {
+    // The approved config warns on `checked` and leaves `tested` to its default.
+    let config = CONFIG_TOML.replace("checked = \"pass\"\n", "checked = \"warn\"\n");
+    assert!(!config.contains("tested ="), "tested is left to its default");
+    let mut c = composite_with(&config);
+    c.repo.remove(&property_path(PROP_D));
+    c.repo.branch("pr");
+    c.repo.write("README.md", "docs only\n");
+    let c3 = c.repo.commit("docs only", NOW - DAY);
+    c.scenario.open_pr(9, ALICE, &c3).pr_commit(9, ALICE, &c3, &["README.md"], &[&c.c2.clone()]);
+    c.fixture.write_scenario(&c.scenario.build());
+    let out = run(c.proob().args(["check", "--base", "main", "--head", "pr", "--pr", "9", "--json"]));
+    assert_eq!(out.code, 0, "stdout: {}\nstderr: {}", out.stdout, out.stderr);
+    let report = out.json();
+    assert_eq!(report["config"]["in_force"], "approved");
+    let rows = rows_by_id(&report);
+    // A: a test at the floor, Checked (tested) and nothing else.
+    assert_eq!(rows[PROP_A]["verdict"]["word"], "checked", "{:#}", rows[PROP_A]);
+    assert_eq!(rows[PROP_A]["verdict"]["tested"], true);
+    assert_eq!(rows[PROP_A]["verdict"]["strength_pending"], false);
+    assert_eq!(rows[PROP_A]["outcome"], "pass");
+    // B: a test with no score, Checked (tested, strength pending).
+    assert_eq!(rows[PROP_B]["verdict"]["strength_pending"], true, "{:#}", rows[PROP_B]);
+    assert_eq!(rows[PROP_B]["outcome"], "warn");
+}
+
+#[test]
 fn check_refuses_a_tree_that_is_not_at_head() {
     let k = with_pr();
     k.c.repo.checkout("main");
