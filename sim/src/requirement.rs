@@ -7,7 +7,7 @@
 //! property `Proposed` until a reviewer approves it.
 
 use crate::github::ALICE;
-use crate::lifecycle::{A, PROPERTY, declare, merge_declaration, pre_proob};
+use crate::lifecycle::{A, INTRODUCED, PROPERTY, declare, merge_declaration, pre_proob};
 use crate::verdicts::Truth::{Unknown, Violated};
 use crate::verdicts::{self, Expect, Log, Observed, observe, run_steps};
 use crate::world::{DAY, Event, Fallible, NOW, Run, World, run};
@@ -40,7 +40,7 @@ pub fn run_scenario(ctx: &crate::world::Ctx, log: &Log) -> Fallible<Vec<String>>
     let mut world = World::new(ctx)?;
     pre_proob(&world)?;
     declare(&world)?;
-    merge_declaration(&mut world)?;
+    merge_declaration(&mut world, &INTRODUCED)?;
     run_steps("requirement", log, &mut world, &STEPS)
 }
 

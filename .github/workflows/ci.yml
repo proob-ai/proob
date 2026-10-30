@@ -90,7 +90,7 @@ jobs:
       - name: Simulate the outside world (lifecycle, honesty, shadow, soundness)
         # The built binary end to end against a fixture GitHub: real execute and
         # judge jobs with nextest and mutants, worlds that must never render
-        # Holds, shadow mode leaving the repository untouched, and the 240-world
+        # Holds, shadow mode leaving the repository untouched, and the 248-world
         # soundness matrix (sim/, xtask/README.md). Verdicts land in
         # target/sim/verdicts.jsonl; the SV-COMP score follows, and any Holds
         # where the world does not hold fails the job (bench/README.md, Measure 3).

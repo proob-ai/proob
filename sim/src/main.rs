@@ -8,7 +8,7 @@
 //!   verdicts   expectations as data, observations, target/sim/verdicts.jsonl
 //!   lifecycle  one property from declaration to amendment, real jobs
 //!   honesty    adversarial worlds that must never render Holds
-//!   soundness  240 worlds crossing approval, evidence, strength and real code truth
+//!   soundness  248 worlds crossing kind, approval, evidence, strength and real code truth
 //!   score      `--score`: verdicts.jsonl scored with SV-COMP (cargo xtask bench soundness)
 //!   requirement  a new requirement: uncovered code, a property for it, a superseding property
 //!   shadow     shadow mode: open, run, report, adopt, clean, with no footprint
@@ -49,12 +49,12 @@ const SCENARIOS: [Scenario; 9] = [
     },
     Scenario {
         name: "honesty",
-        about: "adversarial worlds that must never render Holds, and a control that must",
+        about: "adversarial worlds that must never render Holds, and a proof-kind control that must",
         run: honesty,
     },
     Scenario {
         name: "soundness",
-        about: "240 worlds: approval x evidence x strength x real code truth, each recording rendered beside truth",
+        about: "248 worlds: approval x evidence x strength x real code truth for a test, plus a proof's 8, each recording rendered beside truth",
         run: soundness,
     },
     Scenario {

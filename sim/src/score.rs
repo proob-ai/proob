@@ -215,6 +215,7 @@ mod tests {
             ("Broken", Truth::Violated, Cell::CorrectBroken, 1),
             ("Not checked", Truth::Holds, Cell::Other, 0),
             ("Checked (strength pending)", Truth::Violated, Cell::Other, 0),
+            ("Checked (tested)", Truth::Unknown, Cell::Other, 0),
             ("Re-approve (check amended)", Truth::Unknown, Cell::Other, 0),
             ("Broken", Truth::Holds, Cell::WrongBroken, -16),
             ("Broken", Truth::Unknown, Cell::WrongBroken, -16),

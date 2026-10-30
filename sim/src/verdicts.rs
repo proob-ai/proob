@@ -24,8 +24,9 @@ pub enum View {
 /// under the verdict carries a real counterexample (a planted bug its bound
 /// test catches), `Holds` when the code is correct and the world holds what
 /// the claim rests on (an eligible approval of what is checked, a passing
-/// default-branch check of this code, a fresh score that kills), `Unknown`
-/// when the code is correct but the world lacks one of those.
+/// default-branch check of this code by a proof or a model, never a test,
+/// which samples its inputs, and a fresh score that kills), `Unknown` when the
+/// code is correct but the world lacks one of those.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Truth {
     Holds,
