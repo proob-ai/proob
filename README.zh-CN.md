@@ -1,4 +1,4 @@
-<!-- translated from README.md sha256:36d235ecabaff63dbe5d07af9995b5ba711856af103ba0aa1d206c707ca9be24 -->
+<!-- translated from README.md sha256:e28f653fa9cdd6695d958a5505c56c2786888da78c6f4beefe5738997ac87941 -->
 # proob
 
 [![ci](https://github.com/proob-ai/proob/actions/workflows/ci.yml/badge.svg)](https://github.com/proob-ai/proob/actions/workflows/ci.yml)
@@ -10,9 +10,9 @@
 
 proob 是一个 Claude Code 插件。它阅读你的代码，用平实的语言写下必须始终成立的规则（例如“退款永远不超过原始扣款”），再用成千上万个自动生成的输入去攻击每条规则。团队在一次普通的拉取请求审查中批准这些规则，此后 proob 在每个拉取请求上重新检查它们。智能体只负责提议，批准只能来自你的团队。
 
-![在 Claude Code 中对 python-semver 运行 /proob:try：五条性质，其中一条因真实缺陷而失败](docs/try.gif)
+![在 Claude Code 中对 python-semver 运行 /proob:try：五条性质，两条失败，其中一条是真实缺陷](docs/try.gif)
 
-在 Claude Code 中对 python-semver 真实运行 `/proob:try`，时间点是维护者修复 issue #497 之前的一个提交，中间约五分钟的等待已剪去。proob 提出五条性质，其中一条失败：请求下一个预发布版本时可能倒退（`1.2.3-rc.1` 使用标记 `alpha` 得到 `1.2.3-alpha.1`，而它排在前者之前）。这正是维护者后来修复的缺陷。仓库里没有任何文件被改动。
+在 Claude Code 中对 python-semver 真实运行 `/proob:try`，时间点是维护者修复 issue #497 之前的一个提交，中间约五分钟的等待已剪去。proob 提出五条性质，其中两条失败。一条正是维护者后来修复的缺陷：请求下一个预发布版本时可能倒退（`1.2.3-zeta` 使用标记 `rc` 得到 `1.2.3-rc.1`，而它排在前者之前）。另一条是两个相等的版本哈希不同，只出现在通过构造函数创建的版本上。仓库里没有任何文件被改动。
 
 ## 它真的有效吗？
 

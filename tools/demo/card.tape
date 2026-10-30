@@ -11,3 +11,4 @@ Sleep 1s
 Show
 Sleep 300ms
 Screenshot target/demo/card.png
+Sleep 500ms

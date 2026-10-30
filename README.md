@@ -9,9 +9,9 @@
 
 proob is a Claude Code plugin. It reads your code, writes down in plain English what must always be true ("a refund never exceeds the charge"), and attacks each rule with thousands of generated inputs. Your team approves the rules in an ordinary pull request review, and proob re-checks them on every pull request after that. The agent proposes; only your team approves.
 
-![/proob:try on python-semver in Claude Code: five properties, one fails on the real bug](docs/try.gif)
+![/proob:try on python-semver in Claude Code: five properties, two fail, one of them the real bug](docs/try.gif)
 
-A real `/proob:try` in Claude Code on python-semver, one commit before its maintainers fixed issue #497, with the five-minute wait cut. proob proposed five properties and one failed: asking for the next prerelease can go backwards (`1.2.3-rc.1` with the token `alpha` gives `1.2.3-alpha.1`, which sorts before it). That is the bug the maintainers fixed. Not one file in the repository changed.
+A real `/proob:try` in Claude Code on python-semver, one commit before its maintainers fixed issue #497, with the five-minute wait cut. proob proposed five properties and two failed. One is the bug the maintainers fixed: asking for the next prerelease can go backwards (`1.2.3-zeta` with the token `rc` gives `1.2.3-rc.1`, which sorts before it). The other, two equal versions with different hashes, shows up only for versions built through the constructor. Not one file in the repository changed.
 
 ## Does it work?
 

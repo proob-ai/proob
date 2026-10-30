@@ -1,4 +1,4 @@
-<!-- translated from README.md sha256:36d235ecabaff63dbe5d07af9995b5ba711856af103ba0aa1d206c707ca9be24 -->
+<!-- translated from README.md sha256:e28f653fa9cdd6695d958a5505c56c2786888da78c6f4beefe5738997ac87941 -->
 # proob
 
 [![ci](https://github.com/proob-ai/proob/actions/workflows/ci.yml/badge.svg)](https://github.com/proob-ai/proob/actions/workflows/ci.yml)
@@ -10,9 +10,9 @@
 
 proob は Claude Code のプラグインです。コードを読み、常に成り立つべきルールを平易な言葉で書き出し（たとえば「返金額は元の請求額を決して超えない」）、自動生成した何千もの入力で各ルールを攻撃します。チームは通常のプルリクエストのレビューでルールを承認し、以後 proob はすべてのプルリクエストでそれを再検査します。エージェントは提案するだけで、承認できるのはチームだけです。
 
-![Claude Code で python-semver に /proob:try を実行：5 つのプロパティのうち 1 つが実際のバグで失敗](docs/try.gif)
+![Claude Code で python-semver に /proob:try を実行：5 つのプロパティのうち 2 つが失敗、うち 1 つが実際のバグ](docs/try.gif)
 
-Claude Code で python-semver に対して実際に `/proob:try` を実行した様子です。メンテナーが issue #497 を修正する一つ前のコミットで、約 5 分の待ち時間はカットしています。proob は 5 つのプロパティを提案し、1 つが失敗しました。次のプレリリース版を求めると逆戻りすることがあります（`1.2.3-rc.1` にトークン `alpha` を与えると `1.2.3-alpha.1` になり、こちらのほうが前に並ぶ）。これはメンテナーが後に修正したバグそのものです。リポジトリのファイルは一つも変わっていません。
+Claude Code で python-semver に対して実際に `/proob:try` を実行した様子です。メンテナーが issue #497 を修正する一つ前のコミットで、約 5 分の待ち時間はカットしています。proob は 5 つのプロパティを提案し、2 つが失敗しました。1 つはメンテナーが後に修正したバグそのものです。次のプレリリース版を求めると逆戻りすることがあります（`1.2.3-zeta` にトークン `rc` を与えると `1.2.3-rc.1` になり、こちらのほうが前に並ぶ）。もう 1 つは等しい 2 つのバージョンのハッシュが異なるというもので、コンストラクタで作ったバージョンでのみ起こります。リポジトリのファイルは一つも変わっていません。
 
 ## 本当に効くのか
 
