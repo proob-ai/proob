@@ -18,13 +18,18 @@ are `eligibility`'s inputs and `a: Approval` its output. Types are in
 |---|---|---|---|
 | 1 | `Holds` only when the property file's current content was approved by an eligible review (`Team`; a self-signed merge never counts). | `statement_team_approved(s)` | `verdict` (U3): `v is Holds ==> statement_team_approved(*s)` |
 | 2 | `Holds` only when the bound check's binding set, `proob/config.toml`, and the evidence workflow are each approved by an eligible review. | `check_and_governance_team_approved(s, g)` | `verdict` (U3): `v is Holds ==> check_and_governance_team_approved(*s, *g)` |
-| 3 | `Holds` only when the scope matches at least one file and the latest default-branch primary evidence for the property's kind is fresh at the current scope and binding hashes and positive: no counterexample for a test, verified for a proof, no violation for a model. | `evidence_fresh_positive(s)`, with `positive(kind, outcome)` | `verdict`: `v is Holds ==> evidence_fresh_positive(*s)`; and `derive`, the only producer of `Primary::Fresh`: `binding.primary is Fresh(o) ==> exists record: latest_primary(records, id, kind, record) && record.scope_hash == scope_hash && record.binding_hash == binding_hash && record.measured == Primary(kind, o)` (`latest_primary`: a record of this property and kind that no such record postdates) |
+| 3 | `Holds` only when the property's kind is a verified kind, `proof` or `model`, the scope matches at least one file, and the latest default-branch primary evidence for that kind is fresh at the current scope and binding hashes and positive: verified for a proof, no violation for a model. A test's no-counterexample is positive evidence for `Checked (tested)`, never for `Holds`: a sampled run cannot speak for every input. | `verified_kind(s) && evidence_fresh_positive(s)`, with `positive(kind, outcome)` | `verdict`: `v is Holds ==> verified_kind(*s) && evidence_fresh_positive(*s)`; and `derive`, the only producer of `Primary::Fresh`: `binding.primary is Fresh(o) ==> exists record: latest_primary(records, id, kind, record) && record.scope_hash == scope_hash && record.binding_hash == binding_hash && record.measured == Primary(kind, o)` (`latest_primary`: a record of this property and kind that no such record postdates) |
 | 4 | `Holds` only when the latest default-branch score at the current binding hash, within the freshness window, kills at least the floor (the floor is at least one; `NoMutants` and an errored run never count), and, for a model-backed property, no commit has touched the modelled scope since the spec's approval. | `strength_at_floor(s, g)`, with `score_at_floor(binding, floor)` and `model_undrifted(s)` | `verdict`: `v is Holds ==> strength_at_floor(*s, *g)`; and `derive`, the only producer of `Score::Fresh`: `binding.score is Fresh(o) ==> exists record: latest_score(records, id, record) && record.binding_hash == binding_hash && record.measured == Score(o) && record.at <= now && now - record.at <= freshness` (a record dated after `now` is never fresh) |
 | 5 | `Waived` only when the waiver content was approved by an eligible review, the waiver's issue is open, and the window has not expired. | `waived_requirements(s)` | `verdict` (U3): `v is Waived ==> waived_requirements(*s)` |
 | 6 | Eligibility is sound: `Team` only when some review on the introducing PR is eligible; `SelfSigned` only when the repository allows it and no review is eligible; a direct push is never approved; an approval names the PR and merge it came from. And no verdict is an input: `derive`, `verdict`, and `eligibility` take facts, and no file, cache entry, or payload type carries an `Approval`, `Status`, or `Verdict`. | `eligibility_sound(intro, allow_self_signed, a)`, with `eligible_review(f, r)` and `has_eligible_review(f)` | `eligibility` (U9): `ensures eligibility_sound(*intro, allow_self_signed, a)`. The second sentence is structural; see below. |
 
 `holds_requirements(s, g)` is the conjunction of 1 to 4, and `verdict`'s first
 `ensures` is `v is Holds ==> holds_requirements(*s, *g)`.
+
+A property-based test is the falsifier: it finds counterexamples (`Broken`) and,
+finding none, earns `Checked (tested)`. Only a verifier earns `Holds`. The two
+are not alternatives for one slot; a property still binds one check, and the
+word says which kind of evidence stands behind it.
 
 ## What the words mean in the types
 
@@ -46,7 +51,13 @@ are `eligibility`'s inputs and `a: Approval` its output. Types are in
   and 4. `Pending`, `Stale`, and `NoEvidence` are never positive.
 - **Positive** (`positive`): `(Test, NoCounterexample)`, `(Proof, Verified)`,
   `(Model, NoViolation)`. Every other pairing, including a kind mismatch, is
-  not positive, so a record of the wrong kind can never produce `Holds`.
+  not positive, so a record of the wrong kind can never produce `Holds` or
+  `Checked`.
+- **Verified kind** (`verified_kind`): the property's kind is `Proof` or
+  `Model`. `Test` is not one, whatever its score, so the strongest word a test
+  can earn is `Checked { tested: true }`. Kani binds as `Proof` (its harness
+  runs against the code, so the model drift rule in row 4 does not apply);
+  TLA+ binds as `Model`.
   **Negative** (`negative`) is the mirror: `(Test, Counterexample)`,
   `(Proof, ProofFailed)`, `(Model, Violation)`; `verdict` renders a negative
   as `Broken(Negative(ThisPr | DefaultBranch))`.
@@ -108,7 +119,7 @@ assertions, but the exec functions rely on them.
 |---|---|---|
 | `property_wf(p)` | `scope` is non-empty and every glob satisfies `grammar::glob_ok`. | `proob-facts::convert::property`, through the verified `scope_ok_exec`. |
 | `gate_config_wf(c)` | `floor >= 1`. | `proob-facts::config::parse_config` and `convert::gate_config`. |
-| `verdict_wf(v)` | `Checked` carries at least one modifier. | `verdict` (U3), as an `ensures`. |
+| `verdict_wf(v)` | `Checked` carries at least one modifier: `tested`, `strength_pending`, or `self_signed`. `tested` is not a defect; the other two are. | `verdict` (U3), as an `ensures`. |
 | `measured_wf(m)` | A primary outcome is one its kind can produce (`coherent`). | `proob-facts::convert::evidence`. |
 
 ## Scope hash
@@ -132,5 +143,11 @@ canonical form and answer `ScopeHash::DuplicatePath`; `derive` requires
 negative or errored run is `Broken`; a lapsed waiver and an empty scope are
 `Broken`; a self-signed statement is never `Holds` nor `Proposed`; `Holds` and
 `Checked` promise team-approved or self-signed governance, never unreviewed).
+Rows 24 and 25 of that table read: 24, primary `Fresh(positive)`, kind `Proof`
+or `Model`, no self-signature, score fresh at the floor, `Holds`; 25, primary
+`Fresh(positive)`, `Checked { tested: kind is Test, strength_pending: score not
+at floor, self_signed: ss }`. `Verdict::Checked` gains the `tested` field;
+nothing in `Binding`, `derive`, `eligibility`, the facts crate, or the CLI's
+one-check-per-property rule changes.
 `policy.rs` carries R10 as `ensures`: `Block` only for a `Broken` property the
 PR affects, whatever the configured table says elsewhere.

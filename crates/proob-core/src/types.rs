@@ -345,13 +345,14 @@ pub enum BrokenWhy {
 
 /// The closed set of words a status can render as.
 ///
-/// `Holds` is reachable only through `specs::holds_requirements`. `Checked`
-/// carries at least one modifier (`specs::verdict_wf`): with none it would be
-/// `Holds`.
+/// `Holds` is reachable only through `specs::holds_requirements`, which a
+/// test-backed property never meets. `Checked` carries at least one modifier
+/// (`specs::verdict_wf`): `tested` (the evidence is a test, not a defect),
+/// `strength_pending`, or `self_signed`; with none it would be `Holds`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Structural)]
 pub enum Verdict {
     Holds,
-    Checked { strength_pending: bool, self_signed: bool },
+    Checked { tested: bool, strength_pending: bool, self_signed: bool },
     NotChecked { reason: NotCheckedWhy, self_signed: bool },
     Proposed,
     ReApprove(ReApproveWhy),

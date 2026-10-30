@@ -9,7 +9,9 @@
 //!
 //! Precedence (first row that applies wins; `ss` is the self-signed modifier:
 //! the statement, the binding set, the config, or the evidence workflow is
-//! `SelfSigned`):
+//! `SelfSigned`; `tested` is the modifier for a test-backed property, whose
+//! sampled run cannot speak for every input, so only a proof or a model
+//! reaches `Holds`):
 //!
 //! | # | Condition | Verdict |
 //! |---|---|---|
@@ -36,8 +38,8 @@
 //! | 21 | primary `Fresh(negative)` | `Broken(Negative(DefaultBranch))` |
 //! | 22 | primary `Fresh(positive)`, config `Unreviewed` | `ReApprove(ConfigAmended)` |
 //! | 23 | primary `Fresh(positive)`, evidence workflow `Unreviewed` | `ReApprove(WorkflowAmended)` |
-//! | 24 | primary `Fresh(positive)`, no self-signature, score fresh at the floor | `Holds` |
-//! | 25 | primary `Fresh(positive)` | `Checked{strength_pending: score not at floor, self_signed: ss}` |
+//! | 24 | primary `Fresh(positive)`, kind `Proof` or `Model`, no self-signature, score fresh at the floor | `Holds` |
+//! | 25 | primary `Fresh(positive)` | `Checked{tested: kind is Test, strength_pending: score not at floor, self_signed: ss}` |
 //!
 //! Rows 9 to 25 apply to a signed statement: decl `Approved{sig}`, or decl
 //! `Waived{SelfSigned, Active, open}`, which is read as `Approved{SelfSigned}`
@@ -213,18 +215,19 @@ pub open spec fn spec_at_floor(score: Score, floor: u32) -> bool {
 }
 
 /// Rows 22 to 25.
-pub open spec fn spec_verdict_positive(ss: bool, score: Score, g: Governance) -> Verdict {
+pub open spec fn spec_verdict_positive(kind: Kind, ss: bool, score: Score, g: Governance) -> Verdict {
     if g.config is Unreviewed {
         Verdict::ReApprove(ReApproveWhy::ConfigAmended)
     } else if g.evidence_workflow is Unreviewed {
         Verdict::ReApprove(ReApproveWhy::WorkflowAmended)
     } else {
+        let tested = kind is Test;
         let self_signed = ss || governance_self_signed(g);
         let at_floor = spec_at_floor(score, g.floor);
-        if !self_signed && at_floor {
+        if !tested && !self_signed && at_floor {
             Verdict::Holds
         } else {
-            Verdict::Checked { strength_pending: !at_floor, self_signed }
+            Verdict::Checked { tested, strength_pending: !at_floor, self_signed }
         }
     }
 }
@@ -249,7 +252,7 @@ pub open spec fn spec_verdict_evidence(
                 Verdict::Broken(BrokenWhy::Negative(Source::DefaultBranch))
             }
         } else if positive(kind, o) {
-            spec_verdict_positive(ss, score, g)
+            spec_verdict_positive(kind, ss, score, g)
         } else {
             Verdict::NotChecked { reason: NotCheckedWhy::AdapterErrored, self_signed: ss }
         },
@@ -439,9 +442,9 @@ fn at_floor(score: Score, floor: u32) -> (r: bool)
 }
 
 // proob:01M622RQ74SFCQ8Y800YE3XNS9
-fn verdict_positive(ss: bool, score: Score, g: &Governance) -> (v: Verdict)
+fn verdict_positive(kind: Kind, ss: bool, score: Score, g: &Governance) -> (v: Verdict)
     ensures
-        v == spec_verdict_positive(ss, score, *g),
+        v == spec_verdict_positive(kind, ss, score, *g),
 {
     if matches!(g.config, Approval::Unreviewed(_)) {
         return Verdict::ReApprove(ReApproveWhy::ConfigAmended);
@@ -449,12 +452,13 @@ fn verdict_positive(ss: bool, score: Score, g: &Governance) -> (v: Verdict)
     if matches!(g.evidence_workflow, Approval::Unreviewed(_)) {
         return Verdict::ReApprove(ReApproveWhy::WorkflowAmended);
     }
+    let tested = matches!(kind, Kind::Test);
     let self_signed = ss || is_self_signed(g.config) || is_self_signed(g.evidence_workflow);
     let strong = at_floor(score, g.floor);
-    if !self_signed && strong {
+    if !tested && !self_signed && strong {
         Verdict::Holds
     } else {
-        Verdict::Checked { strength_pending: !strong, self_signed }
+        Verdict::Checked { tested, strength_pending: !strong, self_signed }
     }
 }
 
@@ -481,7 +485,7 @@ fn verdict_evidence(
                     Verdict::Broken(BrokenWhy::Negative(Source::DefaultBranch))
                 }
             } else if positive_exec(kind, o) {
-                verdict_positive(ss, score, g)
+                verdict_positive(kind, ss, score, g)
             } else {
                 Verdict::NotChecked { reason: NotCheckedWhy::AdapterErrored, self_signed: ss }
             }
