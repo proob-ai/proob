@@ -1,4 +1,4 @@
-<!-- translated from README.md sha256:0fd4122410d3991659a4e5eb99aca8530915c272e33654cdc08fb23fb1a41549 -->
+<!-- translated from README.md sha256:4d58bea81663714f094e61eaeaaccd8a523b410702bd31060f8bf101ead63872 -->
 # proob
 
 [![ci](https://github.com/proob-ai/proob/actions/workflows/ci.yml/badge.svg)](https://github.com/proob-ai/proob/actions/workflows/ci.yml)
@@ -6,40 +6,31 @@
 
 [English](README.md) · **简体中文** · [日本語](README.ja.md)
 
-**为你的代码库提供形式化规约：由 AI 智能体编写，由团队批准，并在每个拉取请求上由机器检查。**
+**用平实语言写下的代码保证：由 AI 智能体提出，由你的团队批准，由机器在每个拉取请求上检查。**
 
-测试只检查有人想到的例子。形式化方法检查*始终*必须成立的事情，但它需要专家，而且规约会随代码变化而过时。proob 是一个 Claude Code 插件，让每个团队只需付出一次代码审查的成本，就能获得后者。
-
-- **是规约，而不是更多的测试。** 每条性质都是一句平实语言的陈述，说明什么必须始终成立（“退款永远不超过原始扣款”），它绑定到一个机器检查，并像其他变更一样在拉取请求中获得批准。
-- **由机器裁决，绝不由智能体裁决。** 性质用成千上万个生成的输入来检查，在 Rust 中可以用 [Verus](https://github.com/verus-lang/verus) 证明，而变异测试会证明每个检查确实能够失败。智能体只能提议，永远无法批准一条性质，也无法把它标记为成立。
-- **proob 自身经过形式化验证。** 把证据转化为结论的代码，用 Verus 对照定义 `Holds` 的[六条断言](crates/proob-core/ASSERTIONS.md)证明；它只信任[两个未经验证的函数](crates/proob-trusted/README.md)。
+每个代码库都有一些没人写下来的规则。退款永远不超过扣款。版本字符串解析回来仍是同一个版本。下一个发布号总是比上一个大。测试只覆盖有人记得的情况。proob 把这些规则写成*性质*，每条一句话，并为每条配一个检查，用成千上万个生成的输入去寻找能打破它的那个用例。从此以后，打破规则的那个拉取请求就是会失败的那个。
 
 ![在 Claude Code 中对 python-semver 运行 /proob:try：五条性质，两条失败，其中一条是真实缺陷](docs/try.gif)
 
-在 Claude Code 中对 python-semver 真实运行 `/proob:try`，时间点是维护者修复 issue #497 之前的一个提交，中间约五分钟的等待已剪去。proob 提出五条性质，其中两条失败。一条正是维护者后来修复的缺陷：请求下一个预发布版本时可能倒退（`1.2.3-zeta` 使用标记 `rc` 得到 `1.2.3-rc.1`，而它排在前者之前）。另一条是两个相等的版本哈希不同，只出现在通过构造函数创建的版本上。仓库里没有任何文件被改动。
+在 Claude Code 中对 python-semver 的一次真实运行，代码回退到维护者修复 [issue #497](https://github.com/python-semver/python-semver/issues/497) 之前的那个提交。一条命令，五分钟。proob 提出五条性质，为每条编写并运行了检查，并找到了维护者后来修复的缺陷：请求*下一个*预发布版本可能返回一个*更旧*的版本。它还找到了第二个，在版本哈希上。仓库里没有任何东西被改动。
 
-## proob 的位置
+## 为什么选择 proob
 
-| | 单元测试 | 形式化方法 | proob |
-|---|---|---|---|
-| 检查什么 | 某人写下的例子 | 必须始终成立的性质 | 必须始终成立的性质 |
-| 谁写规约 | 没有人；它藏在测试里 | 专家 | 智能体提议，团队在拉取请求中批准 |
-| 如何检查 | 那些例子 | 证明器 | 生成的输入，或用 Verus 证明；变异测试表明检查能够失败 |
-| 是否保持最新 | 只要有人维护 | 随代码变化而过时 | 每个拉取请求和每晚重新检查 |
+- **一条性质覆盖所有输入；一个测试只覆盖一个。** “打印一个版本再解析回来得到同一个版本”会在成千上万个生成的版本上检查，而不是某人敲下的那三个。
+- **由你的团队决定什么算数。** 智能体只负责提议。一条性质只有在队友通过普通的拉取请求审查批准后才生效，而 proob 每次都从 GitHub 读取这个批准，所以无论智能体还是单人合并都无法伪造它。
+- **绿色是有含义的。** proob 会变异你的代码，以确认每个检查确实可能失败。无论如何都通过的检查会被报告为弱，而不是证明。
 
-## 它真的有效吗？
+## 它真的能找到缺陷吗？
 
-每个版本都用逃过真实测试套件的真实缺陷来衡量，方法借自测试研究（Defects4J、Klees 等人 CCS 2018、SV-COMP），而非我们自创。
+我们从流行的 Python 和 Rust 库中收集了 15 个缺陷，包括 more-itertools、cattrs、packaging、tomlkit、bytes 和 time。每一个都曾逃过该库自己的测试套件，后来由维护者修复。我们把每个库回退到修复之前的提交，然后在没有任何提示的情况下运行 proob。
 
-| 测试 | 结果 |
-|---|---|
-| 在模型训练截止日期**之后**才修复的真实缺陷，模型不可能记住它们 | **10 个中发现 9 个** |
-| 留出的历史缺陷，盲测 | **20 次试验中 18 次**（90%） |
-| 在 attrs、rich、vaultwarden、python-semver、rust-url、tomlkit 当时最新版本中发现的未知缺陷 | **12 个** |
-| 在 260 个计分结论中，代码违反性质而 proob 却判定 `Holds` 的次数 | **0** |
-| 报告的失败中确为真实缺陷的比例 | 59 个中 50 个（85%） |
+**它找到了 15 个中的 14 个。** 其中 10 个缺陷是在 AI 模型的训练数据截止之后才修复的，所以它不可能记得它们。这 10 个中它找到了 9 个。
 
-每次发现都会成为回归测试，由 CI 在没有模型参与的情况下重放；绑定的检查能在十秒内再次找到该缺陷。完整数据：[docs/benchmark.md](docs/benchmark.md)。
+在 attrs、rich、vaultwarden、python-semver、rust-url 和 tomlkit 的当前版本上运行时，它找到了 **12 个仍然存在于代码中的缺陷**。它报告的失败中，大约每七个有六个是真实缺陷（59 个中的 50 个）。其余的是对库作出了超出其承诺的假设的检查。
+
+在 260 个模拟场景中（其中一些专门用来欺骗它），proob **从未把一条已被破坏的性质报告为成立**。
+
+它找到的每个缺陷都会成为回归测试，由 CI 在没有 AI 参与的情况下重放，所以 proob 不会悄悄变差。我们如何测量，以及每一个数字：[docs/benchmark.md](docs/benchmark.md)。
 
 ## 快速开始
 
@@ -51,42 +42,80 @@
 /proob:try
 ```
 
-`/proob:try` 在 `~/.proob/shadow/` 下的私有副本中工作，你的文件、`.git` 和 `git status` 都保持原样。你需要带有 pytest、Hypothesis 和 mutmut 的 Python，或带有 cargo-nextest 和 cargo-mutants 的 Rust（[详情](docs/guide.md#install)）。
+`/proob:try` 在 `~/.proob/shadow/` 下的私有副本中工作，所以你的文件、`.git` 和 `git status` 都保持原样。你需要带有 pytest、Hypothesis 和 mutmut 的 Python，或带有 cargo-nextest 和 cargo-mutants 的 Rust（[详情](docs/guide.md#install)）。
 
-如果你认可它的发现，报告末尾给出保留它们的三个步骤：
+如果你认可它的发现，报告末尾有保留它们的三个步骤：
 
-1. `proob shadow adopt` 把性质、测试和两个工作流放到一个新分支上。
+1. `proob shadow adopt` 把性质、它们的检查和两个工作流放到一个新分支上。
 2. 打开拉取请求。队友的审查即是批准。
 3. 在默认分支上把 `proob gate` 检查设为必需。
 
 ## 工作原理
 
+proob 在你已有的流程上只增加一个必需检查和一个审查习惯。此后，团队约定的每条规则都会在每次变更时重新检查，打破规则的变更无法合并，而没有规则覆盖的新代码会被指出，但绝不会被阻塞。
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/flow-dark.svg">
+  <img alt="一次性：/proob:try，然后 proob shadow adopt，然后把 proob gate 设为必需检查。此后的每个拉取请求：gate 重新检查该变更触及的性质；全部成立则合并并在夜间刷新；有一条被破坏则阻止合并；没有性质覆盖的新代码会在同一次审查中得到提议。" src="docs/flow-light.svg" width="960">
+</picture>
+
 | 技能 | 作用 |
 |---|---|
 | `/proob:sense` | 智能体阅读你的代码 |
 | `/proob:declare` | 把性质提议为平实语言的文件，放进由团队审查的拉取请求 |
-| `/proob:falsify` | 把每条已批准的性质绑定到一个基于性质的测试，或在 Rust 中绑定到一个 Verus 证明 |
-| `/proob:verify` | proob 变异代码，表明每个检查确实能够失败 |
+| `/proob:falsify` | 把每条已批准的性质绑定到一个基于性质的测试，或在 Rust 中绑定到一个 [Verus](https://github.com/verus-lang/verus) 证明 |
+| `/proob:verify` | proob 变异代码，表明每个检查确实可能失败 |
 | `/proob:guard` | 每个拉取请求、每晚、每次会话：哪些性质仍然成立 |
 
-每条性质都有一个状态：`Holds`、`Checked`、`Not checked`、`Re-approve`、`Broken`、`Proposed` 或 `Waived`。`Holds` 表示由作者以外的审查者批准、有来自默认分支的新鲜证据，并且检查它的测试被证明能够失败。只做审查的队友只需要 GitHub。[指南](docs/guide.md)（英文）介绍每个技能、各个状态、团队设置和命令行。
+每条性质都有一个状态：`Holds`、`Checked`、`Not checked`、`Re-approve`、`Broken`、`Proposed` 或 `Waived`。`Holds` 表示由作者以外的审查者批准、有来自默认分支的新鲜证据，并且检查被证明能够失败。从下一个版本起，`Holds` 只保留给证明或模型，基于性质的测试最高达到 `Checked (tested)`；在 v0.1.0 中，一个强测试仍然可以显示为 `Holds`。只做审查的队友只需要 GitHub。[指南](docs/guide.md)（英文）介绍每个技能、各个状态、团队设置和命令行。
 
-## 为什么可以信任结论
+## 智能体能作弊吗？
 
-- **批准存在于 GitHub，而不是仓库里。** 每次显示状态时都从 GitHub 的审查记录中读取，自己合并的变更永远不算。
-- **证据只来自默认分支，** 由一个不持有令牌的作业产生。
-- **结论是被证明的，而不只是被测试的。** [六条断言](crates/proob-core/ASSERTIONS.md)中的每一条都是一个 Verus `ensures` 子句，在每个拉取请求上以 `--no-cheating` 检查；260 个按 SV-COMP 方式计分的模拟结论中，没有一次错误地判定 `Holds`。
+不能。
 
-## 支持的语言
+- **批准从不存储在仓库中。** 每次显示状态时都从 GitHub 的审查记录中读取，没有第二位审查者就合并的变更永远不算数。
+- **证据只来自你的默认分支，** 由一个不持有令牌的作业产生。
+- **把批准和证据转化为结论的代码是经机器证明正确的，** 用 Verus 证明，而不只是测试。它所对照证明的[六条断言](crates/proob-core/ASSERTIONS.md)短到一杯咖啡的时间就能读完。
 
-| 语言 | 检查 | 强度 |
+## 路线图
+
+**MVP。** 一个把基于性质的测试和形式化验证视为同一种检查的两个类别的核心，以及围绕它的一个循环：
+
+- [x] **为你的代码库共同撰写第一份声明。** 智能体阅读代码并提出规则；团队在拉取请求中批准
+- **从声明生成检查**，让它们抓住你的测试遗漏的缺陷
+  - [x] 作为基于性质的测试，支持 Python 和 Rust
+  - [x] 作为证明，针对用 Verus 编写的 Rust
+  - [ ] 作为普通 Rust 和 Python 上的证明，无需编写证明（Kani、CrossHair）
+  - [ ] 作为你的设计的形式化规约，由智能体根据你的代码库选择合适的语言（协议用 TLA+，数据模型用 Alloy）
+  - [ ] 验证优先，并有安全着陆：当没有验证器能处理某条规则时（不支持的特性、无界循环、超时），智能体改为绑定一个基于性质的测试，并如实说明
+  - [ ] 结论区分测试过与证明过：`Holds` 将意味着已证明，测试显示为 `Checked (tested)`
+- [x] **守护每个拉取请求。** 打破已批准规则的变更无法合并
+- **守护规则与代码之间的漂移。** 规则绝不会悄悄地对它不再描述的代码保持已批准
+  - [x] 规则或其检查发生变化，必须重新批准
+  - [x] 没有规则覆盖的新代码会在拉取请求中被指出
+  - [ ] 偏离其设计规约的代码会把规则标记为待更新并重新批准
+
+**之后**
+
+- [ ] 在 TypeScript 中使用，然后是 Go 和 Java
+- [ ] 向审计者交付一份可以离线独立成立的结论（签名证据）
+- [ ] 同时守护所有仓库，批准仍然从 GitHub 读取
+
+### 支持的语言
+
+**测试负责找缺陷；只有验证器能赢得 `Holds`。** 每条性质绑定一个检查。基于性质的测试在生成的输入中搜索反例：找到则为 `Broken`，没找到则为 `Checked (tested)`，因为抽样运行不能代表所有输入。证明或模型检查器覆盖所有输入，所以只有它能给出 `Holds`；这条规则将在下一个版本中发布，上面的路线图条目跟踪它。结论始终说明背后是哪一类证据。接受得过于轻易的验证器会像弱测试一样被抓住：proob 在证明之下变异代码，仍然通过的证明会被报告为空洞，而不是成立。
+
+☑ 已构建，☐ 计划中。
+
+| 语言 | 形式化验证 | 基于性质的测试 |
 |---|---|---|
-| Python | 通过 pytest 运行 Hypothesis | mutmut |
-| Rust | 通过 cargo-nextest 运行 proptest | cargo-mutants |
-| Verus 下的 Rust | 验证器 | 证明下的变异 |
-| TypeScript | 计划中：通过 vitest 运行 fast-check | StrykerJS |
+| Rust | ☑ Verus，针对 Verus 代码 · ☐ Kani，针对任何 Rust | ☑ proptest |
+| Python | ☐ CrossHair | ☑ Hypothesis |
+| 设计层面，任何语言 | ☐ TLA+ 与 TLC、Alloy | |
+| TypeScript | | ☐ fast-check |
+| Go、Java | | ☐ |
 
-在其他语言中，sense 和 declare 仍可使用，每条性质显示 `Not checked (no adapter)`。已知局限见[指南](docs/guide.md#limits)。
+在其他任何语言中，sense 和 declare 仍可使用，每条性质显示为 `Not checked (no adapter)`。已知局限见[指南](docs/guide.md#limits)。
 
 ## 参与贡献
 
