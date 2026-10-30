@@ -1,4 +1,4 @@
-<!-- translated from README.md sha256:63ebdde342a6d2932ccde7954b85c548d652abb30dc9fc0bf392b6c638dea688 -->
+<!-- translated from README.md sha256:ab5d71cabbf5b36421f1487ea263b19322e3b1218d0def14d724fb32f2214e68 -->
 # proob
 
 [![ci](https://github.com/proob-ai/proob/actions/workflows/ci.yml/badge.svg)](https://github.com/proob-ai/proob/actions/workflows/ci.yml)
@@ -28,7 +28,7 @@
 
 在 attrs、rich、vaultwarden、python-semver、rust-url 和 tomlkit 的当前版本上运行时，它找到了 **12 个仍然存在于代码中的缺陷**。它报告的失败中，大约每七个有六个是真实缺陷（59 个中的 50 个）。其余的是对库作出了超出其承诺的假设的检查。
 
-在 269 个模拟场景中（其中一些专门用来欺骗它），proob **从未把一条已被破坏的性质报告为成立**。
+在 501 个模拟场景中（其中一些专门用来欺骗它），proob **从未把一条已被破坏的性质报告为成立**。
 
 它找到的每个缺陷都会成为回归测试，由 CI 在没有 AI 参与的情况下重放，所以 proob 不会悄悄变差。我们如何测量，以及每一个数字：[docs/benchmark.md](docs/benchmark.md)。
 

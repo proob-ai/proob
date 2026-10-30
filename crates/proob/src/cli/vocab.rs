@@ -241,7 +241,11 @@ mod tests {
             reason(&tested(false, true), Some(Kind::Test)),
             "tested on sampled inputs, not proved; no second reviewer"
         );
+        assert_eq!(word(&tested(true, true)), "Checked (tested, strength pending, self-signed)");
         let proof = Verdict::Checked { tested: false, strength_pending: true, self_signed: false };
         assert_eq!(word(&proof), "Checked (strength pending)");
+        let self_signed = Verdict::Checked { tested: false, strength_pending: false, self_signed: true };
+        assert_eq!(word(&self_signed), "Checked (self-signed)");
+        assert_eq!(modifiers(&self_signed), vec!["self_signed"]);
     }
 }

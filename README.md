@@ -27,7 +27,7 @@ We collected 15 bugs from popular Python and Rust libraries, among them more-ite
 
 Run on the current releases of attrs, rich, vaultwarden, python-semver, rust-url, and tomlkit, it found **12 bugs that were still in the code**. About six of every seven failures it reports are real bugs (50 of 59). The rest were checks that assumed more than the library promises.
 
-In 269 simulated scenarios, some built to trick it, proob **never once reported a broken property as holding**.
+In 501 simulated scenarios, some built to trick it, proob **never once reported a broken property as holding**.
 
 Every bug it finds becomes a regression test that CI replays with no AI involved, so proob cannot quietly get worse. How we measure, and every number: [docs/benchmark.md](docs/benchmark.md).
 

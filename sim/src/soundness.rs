@@ -2,12 +2,11 @@
 //! property, over code whose truth is real, each world recording what proob
 //! rendered beside the truth and asserting nothing about the word.
 //!
-//! The axes vary independently for test-kind `A`: approval of PR #1 (5),
-//! where and when the check ran (6), the score (4), and the code (2):
-//! 5 x 6 x 4 x 2 = 240 worlds. Proof-kind `P` (honesty's) adds worlds only
-//! where the kind changes the verdict, `Team` x `Fresh` x the score (4) x the
-//! code (2) = 8, so 248 in all: only there can a test-kind world reach the
-//! positive rows of the verdict table, where a proof can render `Holds`.
+//! The axes vary independently: the kind, test-kind `A` or proof-kind `P`
+//! (honesty's) (2), approval of PR #1 (5), where and when the check ran (6),
+//! the score (4), and the code (2): 2 x 5 x 6 x 4 x 2 = 480 worlds. Only a
+//! proof can render `Holds`, so `P` crosses every axis too: a wrong `Holds`
+//! can only come from a `P` world.
 //! The code is real: `Correct` is the fixture's `sorted` with a
 //! behaviour-preserving edit (`sort` for `sort_unstable`), `Planted` drops the
 //! largest element, a counterexample to "sorting preserves length". Both are
@@ -15,9 +14,9 @@
 //! A check record's outcome is never chosen: it is what the real evidence job
 //! recorded at that commit, so a positive record on planted code (a CI that
 //! lies) is not a world here, and a negative one is `Fresh` x `Planted`.
-//! P's proof record is derived from that same real run, never chosen
-//! (`verified` where it found no counterexample, `proof_failed` where it found
-//! one): no verifier runs here, since CI's test job has no Verus.
+//! P's proof record is derived from that same real run at the same commit,
+//! never chosen (`verified` where it found no counterexample, `proof_failed`
+//! where it found one): no verifier runs here, since CI's test job has no Verus.
 //!
 //! One repository is built and the real jobs run four times (the check at the
 //! merge, at each head, and cargo-mutants at the correct head); each world
@@ -30,7 +29,7 @@ use serde_json::{Value, json};
 
 use crate::github::{ALICE, BOB, GitHub};
 use crate::honesty::{P, bind_proof, introduced, propose_proof, record};
-use crate::lifecycle::{A, INTRODUCED, declare, merge_unreviewed, pre_proob};
+use crate::lifecycle::{A, declare, merge_unreviewed, pre_proob};
 use crate::verdicts::{Log, Truth, observe};
 use crate::world::{Ctx, DAY, EVIDENCE_WORKFLOW, Event, Fallible, NOW, Repo, World, first_line, run};
 
@@ -118,25 +117,19 @@ const STRENGTHS: [Strength; 4] =
     [Strength::AtFloor, Strength::KilledZero, Strength::NotScored, Strength::UnsampledOnly];
 const CODES: [Code; 2] = [Code::Correct, Code::Planted];
 
-/// The full cross product for `A`, then `P`'s team-approved, fresh worlds.
+const KINDS: [Kind; 2] = [Kind::Test, Kind::Proof];
+
+/// The full cross product, `A`'s worlds then `P`'s.
 pub fn cells() -> Vec<Cell> {
-    let tested = CODES
+    KINDS
         .iter()
-        .flat_map(|&code| APPROVALS.iter().map(move |&approval| (code, approval)))
-        .flat_map(|(code, approval)| EVIDENCE.iter().map(move |&evidence| (code, approval, evidence)))
-        .flat_map(|(code, approval, evidence)| {
-            STRENGTHS.iter().map(move |&strength| Cell { kind: Kind::Test, approval, evidence, strength, code })
-        });
-    let proved = CODES.iter().flat_map(|&code| {
-        STRENGTHS.iter().map(move |&strength| Cell {
-            kind: Kind::Proof,
-            approval: Approval::Team,
-            evidence: Evidence::Fresh,
-            strength,
-            code,
+        .flat_map(|&kind| CODES.iter().map(move |&code| (kind, code)))
+        .flat_map(|(kind, code)| APPROVALS.iter().map(move |&approval| (kind, code, approval)))
+        .flat_map(|(kind, code, approval)| EVIDENCE.iter().map(move |&evidence| (kind, code, approval, evidence)))
+        .flat_map(|(kind, code, approval, evidence)| {
+            STRENGTHS.iter().map(move |&strength| Cell { kind, approval, evidence, strength, code })
         })
-    });
-    tested.chain(proved).collect()
+        .collect()
 }
 
 /// The world's truth, from how it was built: planted code is violated
@@ -245,7 +238,7 @@ struct Point {
     check: Value,
 }
 
-/// P at a head: proob's hashes for it, and its proof outcome derived from the head's real check.
+/// P at a commit: proob's hashes for it, and its proof outcome derived from the real check there.
 struct Proved {
     hashes: Value,
     outcome: Value,
@@ -260,6 +253,7 @@ struct Built {
     at_merge: Point,
     correct: Point,
     planted: Point,
+    proved_merge: Proved,
     proved_correct: Proved,
     proved_planted: Proved,
     /// The real cargo-mutants outcome at the correct head.
@@ -279,7 +273,7 @@ fn approve(gh: &mut GitHub, a: Approval, merge: &str) {
         }
         Approval::Unreviewed => {}
         Approval::AuthorOnly => {
-            gh.review(1, 101, &BOB, merge).pr_commit(1, &BOB, BOB_COMMIT, merge, &INTRODUCED);
+            gh.review(1, 101, &BOB, merge).pr_commit(1, &BOB, BOB_COMMIT, merge, &introduced());
         }
         Approval::Revoked => {
             gh.review(1, 101, &BOB, merge).permission(&BOB, "read");
@@ -325,7 +319,7 @@ fn head(w: &World, merge: &str, code: Code) -> Fallible<String> {
     w.repo.commit(message, &ALICE, NOW - 8 * DAY)
 }
 
-/// P's proof outcome at a head, derived from the real check there and never
+/// P's proof outcome at a commit, derived from the real check there and never
 /// chosen: `verified` where the bound test found no counterexample,
 /// `proof_failed` where it found one. Any other pairing of head and check is
 /// refused, so a proof record is never fabricated against what the code does.
@@ -340,10 +334,10 @@ fn proof_outcome(code: Code, check: &Value) -> Fallible<Value> {
     }
 }
 
-/// P at the head of `code`, main reset to it, once bindings.json binds P.
-fn proved(w: &World, head: &Point, code: Code) -> Fallible<Proved> {
-    let outcome = proof_outcome(code, &head.check)?;
-    reset_main(w, &head.sha)?;
+/// P at `at`, whose code is `code`, main reset to it, once bindings.json binds P.
+fn proved(w: &World, at: &Point, code: Code) -> Fallible<Proved> {
+    let outcome = proof_outcome(code, &at.check)?;
+    reset_main(w, &at.sha)?;
     Ok(Proved { hashes: w.hashes(P)?, outcome })
 }
 
@@ -389,9 +383,11 @@ fn build(ctx: &Ctx) -> Fallible<Built> {
     }
     // The real jobs are done; from here P is bound through bindings.json.
     bind_proof(&w)?;
+    // The merge's `sorted` is the fixture's, before either head's edit.
+    let proved_merge = proved(&w, &at_merge, Code::Correct)?;
     let proved_correct = proved(&w, &correct, Code::Correct)?;
     let proved_planted = proved(&w, &planted, Code::Planted)?;
-    Ok(Built { w, base, merge, blob, at_merge, correct, planted, proved_correct, proved_planted, score })
+    Ok(Built { w, base, merge, blob, at_merge, correct, planted, proved_merge, proved_correct, proved_planted, score })
 }
 
 impl Built {
@@ -402,22 +398,30 @@ impl Built {
         }
     }
 
-    fn proved(&self, code: Code) -> &Proved {
-        match code {
-            Code::Correct => &self.proved_correct,
-            Code::Planted => &self.proved_planted,
+    fn point(&self, at: At, code: Code) -> &Point {
+        match at {
+            At::Head => self.head(code),
+            At::Merge => &self.at_merge,
         }
     }
 
-    /// The run's records for the cell's property; P's worlds are all `Fresh`, so at the head.
+    fn proved(&self, at: At, code: Code) -> &Proved {
+        match (at, code) {
+            (At::Merge, _) => &self.proved_merge,
+            (At::Head, Code::Correct) => &self.proved_correct,
+            (At::Head, Code::Planted) => &self.proved_planted,
+        }
+    }
+
+    /// The run's records for the cell's property, at the commit the run was at.
     fn records(&self, d: &Delivery, cell: &Cell) -> Vec<Value> {
-        let p = match d.point {
-            At::Head => self.head(cell.code),
-            At::Merge => &self.at_merge,
-        };
+        let p = self.point(d.point, cell.code);
         let (hashes, kind, outcome) = match cell.kind {
             Kind::Test => (&p.hashes, "check", &p.check),
-            Kind::Proof => (&self.proved(cell.code).hashes, "proof", &self.proved(cell.code).outcome),
+            Kind::Proof => {
+                let proved = self.proved(d.point, cell.code);
+                (&proved.hashes, "proof", &proved.outcome)
+            }
         };
         let line = |kind: &str, outcome: Value| record(hashes, kind, outcome, d.run_id, &p.sha, &self.blob, d.at);
         let check = d.check.then(|| line(kind, outcome.clone()));
@@ -429,10 +433,7 @@ impl Built {
         let mut gh = self.base.clone();
         approve(&mut gh, cell.approval, &self.merge);
         deliveries(cell.evidence, cell.strength).iter().for_each(|d| {
-            let sha = match d.point {
-                At::Head => &self.head(cell.code).sha,
-                At::Merge => &self.at_merge.sha,
-            };
+            let sha = &self.point(d.point, cell.code).sha;
             gh.evidence_run(d.run_id, sha, d.event, d.branch, d.at, self.records(d, cell));
         });
         gh
@@ -482,9 +483,8 @@ mod tests {
     #[test]
     fn the_matrix_is_the_full_cross_product_without_repeats() {
         let all = cells();
-        let proved: Vec<&Cell> = all.iter().filter(|c| c.kind == Kind::Proof).collect();
-        assert_eq!((all.len(), proved.len()), (5 * 6 * 4 * 2 + 4 * 2, 4 * 2));
-        assert!(proved.iter().all(|c| c.approval == Approval::Team && c.evidence == Evidence::Fresh));
+        let proved = all.iter().filter(|c| c.kind == Kind::Proof).count();
+        assert_eq!((all.len(), proved), (2 * 5 * 6 * 4 * 2, 5 * 6 * 4 * 2));
         assert!(all.iter().enumerate().all(|(i, c)| !all[..i].contains(c)));
     }
 

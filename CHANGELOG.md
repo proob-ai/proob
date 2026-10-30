@@ -21,9 +21,12 @@ version as a comment.
   reaches `Checked (tested)` at best, and every `Checked` on a test-kind
   property carries the `tested` modifier, first:
   `Checked (tested, strength pending, self-signed)`. `status --json` gains a
-  boolean `tested` on a `checked` verdict. The soundness simulation now has
-  248 worlds, proof-kind worlds among them, and CI's `verify` job reaches
-  `Holds` through the real Verus adapter.
+  boolean `tested` on a `checked` verdict. Test-backed properties now count
+  under `checked`, not `holds`, in the status counts, the headline, and the
+  Action's outputs (a new `checked` output), and `[policy] checked` now
+  governs them. The soundness simulation now has 480 worlds, every one of
+  them crossed for a test-kind and a proof-kind property, and CI's `verify`
+  job reaches `Holds` through the real Verus adapter.
 - README rewritten around what proob is, the evidence, and a three-command
   quick start; the full usage guide and benchmark tables moved to
   `docs/guide.md` and `docs/benchmark.md`. The README's GIF is recorded by

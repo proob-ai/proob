@@ -53,14 +53,14 @@ word says which kind of evidence stands behind it.
   `(Model, NoViolation)`. Every other pairing, including a kind mismatch, is
   not positive, so a record of the wrong kind can never produce `Holds` or
   `Checked`.
+  **Negative** (`negative`) is the mirror: `(Test, Counterexample)`,
+  `(Proof, ProofFailed)`, `(Model, Violation)`; `verdict` renders a negative
+  as `Broken(Negative(ThisPr | DefaultBranch))`.
 - **Verified kind** (`verified_kind`): the property's kind is `Proof` or
   `Model`. `Test` is not one, whatever its score, so the strongest word a test
   can earn is `Checked { tested: true }`. Kani binds as `Proof` (its harness
   runs against the code, so the model drift rule in row 4 does not apply);
   TLA+ binds as `Model`.
-  **Negative** (`negative`) is the mirror: `(Test, Counterexample)`,
-  `(Proof, ProofFailed)`, `(Model, Violation)`; `verdict` renders a negative
-  as `Broken(Negative(ThisPr | DefaultBranch))`.
 - **Floor** (`score_at_floor`): `1 <= floor <= killed` on a
   `Score::Fresh(Scored { killed, .. })`. `Governance.floor` is at least one by
   `gate_config_wf`; the facts crate refuses a zero `kill_floor`.

@@ -1,4 +1,4 @@
-<!-- translated from README.md sha256:63ebdde342a6d2932ccde7954b85c548d652abb30dc9fc0bf392b6c638dea688 -->
+<!-- translated from README.md sha256:ab5d71cabbf5b36421f1487ea263b19322e3b1218d0def14d724fb32f2214e68 -->
 # proob
 
 [![ci](https://github.com/proob-ai/proob/actions/workflows/ci.yml/badge.svg)](https://github.com/proob-ai/proob/actions/workflows/ci.yml)
@@ -28,7 +28,7 @@ Claude Code で python-semver に対して実際に実行した様子です。�
 
 attrs、rich、vaultwarden、python-semver、rust-url、tomlkit の現行リリースで実行すると、**コードにまだ残っていた 12 件のバグ**を見つけました。報告する失敗のおよそ 7 件に 6 件は実際のバグです（59 件中 50 件）。残りは、ライブラリが約束していないことを前提にしたチェックでした。
 
-一部はだますために作った 269 の模擬シナリオで、proob は**破られたプロパティを成り立つと報告したことが一度もありません**。
+一部はだますために作った 501 の模擬シナリオで、proob は**破られたプロパティを成り立つと報告したことが一度もありません**。
 
 見つけたバグはそれぞれ回帰テストになり、CI が AI なしで再生するので、proob はこっそり悪くなれません。測り方とすべての数値：[docs/benchmark.md](docs/benchmark.md)。
 

@@ -23,7 +23,7 @@ pub enum Task {
     Sim(Vec<String>),
     /// The arguments after `bench replay`, handed to bench/harness/replay.py's `run`.
     BenchReplay(Vec<String>),
-    /// Score target/sim/verdicts.jsonl with SV-COMP; fails on any wrong `Holds`.
+    /// Score target/sim/verdicts.jsonl with SV-COMP; fails on any wrong `Holds`, or on no correct one.
     BenchSoundness,
     Fmt,
     Clippy,
@@ -94,7 +94,9 @@ impl Task {
             Task::PluginValidate => "claude plugin validate --strict .",
             Task::Sim(_) => "proob end to end against local stand-ins [scenario...] [--list]",
             Task::BenchReplay(_) => "replay the regression corpus bench/corpus/ [entry...] [--list] [-j N]",
-            Task::BenchSoundness => "score target/sim/verdicts.jsonl (SV-COMP); exit 1 on any wrong Holds",
+            Task::BenchSoundness => {
+                "score target/sim/verdicts.jsonl (SV-COMP); exit 1 on any wrong Holds or none correct"
+            }
             Task::Fmt => "cargo fmt --check",
             Task::Clippy => "cargo clippy --workspace --all-targets --locked -- -D warnings",
             Task::CommitLint(_) => {

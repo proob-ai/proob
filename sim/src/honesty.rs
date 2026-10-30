@@ -37,6 +37,7 @@ rationale = "Callers size buffers from the input; a proof covers every input, wh
 kind = "proof"
 "#;
 /// Outside every crate root, so cargo never builds it and no adapter discovers it.
+/// A stand-in file the fixture binds, never compiled or verified: not valid Verus.
 const P_RS: &str = "// proob:01K8V5NQ4A0F3R7Y2M9D6P1XHP\nproof fn sorted_preserves_length(v: Seq<u32>) ensures sorted(v).len() == v.len() {}\n";
 /// The verifier the CI pins (`PROOB_VERUS_VERSION`), and the z3 it ships with.
 const VERUS: &str = "0.2026.10.26.d17fbd0";
@@ -144,15 +145,16 @@ pub fn record(
     json!({
         "schema_version": 1, "id": hashes["id"], "kind": kind, "algo": "sha256",
         "content_hash": hashes["content_hash"], "binding_hash": hashes["binding_hash"], "scope_hash": hashes["scope_hash"],
-        "outcome": outcome, "tool_versions": tools(&hashes["id"]),
+        "outcome": outcome, "tool_versions": tools(kind),
         "run_id": run_id, "head_sha": head, "workflow_blob": workflow_blob, "at": at
     })
 }
 
-/// P's records name the verifier; A's the test runner and the mutation tool.
-fn tools(id: &Value) -> Value {
-    match id.as_str() {
-        Some(P) => json!({ "verus": VERUS, "z3": Z3 }),
+/// A proof record names the verifier; every other record, P's score included
+/// (borrowed from cargo-mutants on A's test), the test runner and the mutation tool.
+fn tools(kind: &str) -> Value {
+    match kind {
+        "proof" => json!({ "verus": VERUS, "z3": Z3 }),
         _ => json!({ "proptest": "1.12.0", "cargo-mutants": "27.1.0" }),
     }
 }

@@ -35,6 +35,9 @@ proptest! {
         let decl = match s { Status::ScopeEmpty { decl } | Status::Scoped { decl, .. } => decl };
         prop_assume!(!matches!(decl, Decl::Approved { sig: Sig::Team, .. }));
         prop_assert_ne!(verdict(&s, &g), Verdict::Holds);
+        if let Status::Scoped { kind, .. } = s {
+            prop_assert_ne!(verdict(&s, &g), top(kind));
+        }
     }
 
     #[test]
@@ -42,14 +45,20 @@ proptest! {
         let binding_team = binding_approval(&s).is_some_and(is_team);
         prop_assume!(!binding_team || !is_team(g.config) || !is_team(g.evidence_workflow));
         prop_assert_ne!(verdict(&s, &g), Verdict::Holds);
+        if let Status::Scoped { kind, .. } = s {
+            prop_assert_ne!(verdict(&s, &g), top(kind));
+        }
     }
 
-    /// The prose of assertions 1 to 4, written independently of `specs.rs`.
+    /// The prose of assertions 1 to 4, written independently of `specs.rs`:
+    /// what `Holds` needs, and what a test's top verdict needs but the kind.
     #[test]
     fn holds_means_what_the_prose_says(s in status(), g in governance()) {
-        if verdict(&s, &g) == Verdict::Holds {
+        let v = verdict(&s, &g);
+        let at_top = matches!(s, Status::Scoped { kind, .. } if v == top(kind));
+        if v == Verdict::Holds || at_top {
             let Status::Scoped { kind, decl, binding, .. } = s else { return Err(TestCaseError::fail("Holds on ScopeEmpty")) };
-            prop_assert!(matches!(kind, Kind::Proof | Kind::Model), "a test samples its inputs, so it never holds: {:?}", kind);
+            prop_assert!(v != Verdict::Holds || matches!(kind, Kind::Proof | Kind::Model), "a test samples its inputs, so it never holds: {:?}", kind);
             prop_assert!(matches!(decl, Decl::Approved { sig: Sig::Team, .. }), "statement team-approved: {:?}", decl);
             let Binding::Bound { approval, primary, score, .. } = binding else { return Err(TestCaseError::fail("Holds unbound")) };
             prop_assert!(is_team(approval) && is_team(g.config) && is_team(g.evidence_workflow));
@@ -200,6 +209,9 @@ proptest! {
             let v = verdict(&s, &g);
             prop_assert_ne!(v, Verdict::Holds);
             prop_assert_ne!(v, Verdict::Proposed);
+            if let Status::Scoped { kind, .. } = s {
+                prop_assert_ne!(v, top(kind));
+            }
         }
     }
 
