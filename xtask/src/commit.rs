@@ -29,19 +29,9 @@ pub fn parse_log_line(line: &str) -> Option<Commit> {
 /// Every problem with one commit, each a phrase; empty when it passes.
 pub fn lint_commit(commit: &Commit) -> Vec<String> {
     match commit.parents > 1 {
-        true if is_release_merge(&commit.subject) => Vec::new(),
-        true => vec!["a merge commit; only merges of develop into master are allowed (rebase instead)".to_owned()],
+        true => vec!["a merge commit; master's history is linear (rebase instead)".to_owned()],
         false => lint_subject(&commit.subject),
     }
-}
-
-/// The merge messages git and GitHub write when develop is merged into master.
-fn is_release_merge(subject: &str) -> bool {
-    let pr_from_develop = subject
-        .strip_prefix("Merge pull request #")
-        .and_then(|rest| rest.split_once(" from "))
-        .is_some_and(|(n, from)| n.chars().all(|c| c.is_ascii_digit()) && from.ends_with("/develop"));
-    pr_from_develop || subject == "Merge branch 'develop'" || subject == "Merge branch 'develop' into master"
 }
 
 /// Every problem with a subject line (a commit's or a pull request title).
@@ -215,19 +205,11 @@ mod tests {
     }
 
     #[test]
-    fn only_merges_of_develop_into_master_are_allowed() {
+    fn merge_commits_are_refused() {
         for subject in [
             "Merge pull request #12 from proob-ai/develop",
-            "Merge branch 'develop'",
-            "Merge branch 'develop' into master",
-        ] {
-            assert!(lint_commit(&commit(2, subject)).is_empty(), "{subject}");
-        }
-        for subject in [
-            "Merge branch 'master' into develop",
-            "Merge branch 'develop' into feat/x",
+            "Merge branch 'master' into feat/x",
             "Merge pull request #12 from someone/feature",
-            "Merge pull request #x from proob-ai/develop",
             "feat: add x",
         ] {
             assert!(lint_commit(&commit(2, subject))[0].starts_with("a merge commit"), "{subject}");

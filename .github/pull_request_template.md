@@ -1,5 +1,5 @@
 <!--
-Pull requests go into `develop` (CONTRIBUTING.md, "Branches").
+Pull requests go into `master` (CONTRIBUTING.md, "Branches").
 The title is a Conventional Commit subject, checked by CI: `type(scope): description`.
 -->
 
@@ -30,7 +30,7 @@ The title is a Conventional Commit subject, checked by CI: `type(scope): descrip
 - [ ] Tests are added or updated for the change; no existing test was weakened to make it pass.
 - [ ] Docs are updated. If `README.md` changed, every `README.<language>.md` is updated too and `cargo xtask readme-sync` passes.
 - [ ] `CHANGELOG.md` has an entry under `## Unreleased` (not needed for `docs`, `test`, `ci`, `chore`).
-- [ ] The title, and every commit, is a Conventional Commit subject (`cargo xtask commit-lint origin/develop..HEAD`).
+- [ ] The title, and every commit, is a Conventional Commit subject (`cargo xtask commit-lint origin/master..HEAD`).
 - [ ] `area: core` only: `cargo xtask verify` passes under `--no-cheating`, and `crates/proob-core/ASSERTIONS.md` is updated if a guarantee changed.
 - [ ] Skills only: an eval case under `evals/` is added or updated for the changed behavior.
 - [ ] Detection changes only (declare, falsify, adapters): tuned on the `dev` split of `bench/bugs.json` only, and new catches are added to `bench/corpus/`.

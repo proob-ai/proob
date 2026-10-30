@@ -22,17 +22,15 @@ Vulnerabilities are reported privately, never in an issue: see
 
 ## Branches
 
-| Branch | What it holds | Who merges |
-|---|---|---|
-| `master` | Releases only. Protected: every commit is a release or a merge of `develop`. | Maintainers, by merging `develop` |
-| `develop` | The next release. Protected: changes land only through reviewed pull requests with CI green. | Maintainers, by squash or rebase merge |
+`master` is the only long-lived branch. It is protected: changes land only
+through reviewed pull requests with CI green, and releases are tags on it.
 
-1. Fork the repository and branch from `develop`: `feat/<topic>`, `fix/<topic>`,
+1. Fork the repository and branch from `master`: `feat/<topic>`, `fix/<topic>`,
    `docs/<topic>`, and so on.
-2. Open the pull request **into `develop`**.
-3. Keep the branch current by rebasing on `develop`, never by merging it in:
-   the only merge commits allowed are maintainers' merges of `develop` into
-   `master` (`cargo xtask commit-lint` refuses any other).
+2. Open the pull request into `master`.
+3. Keep the branch current by rebasing on `master`, never by merging it in:
+   `master`'s history is linear, and `cargo xtask commit-lint` refuses merge
+   commits.
 
 ## Build, test, verify
 
@@ -53,7 +51,7 @@ cargo xtask test -- -p proob-facts
 cargo xtask verify                # proob-core under Verus, --no-cheating
 cargo xtask fmt                   # cargo fmt --check
 cargo xtask clippy                # clippy on every target, warnings denied
-cargo xtask commit-lint origin/develop..HEAD
+cargo xtask commit-lint origin/master..HEAD
 cargo xtask sim                   # proob end to end against a simulated GitHub
 cargo xtask ci                    # all of it, in CI's order, with a summary table
 ```
@@ -105,7 +103,7 @@ type(scope)!: description
 - **description**: imperative mood ("add", not "added" or "adds"), no trailing
   period. The whole subject line is at most 72 characters.
 - No `fixup!`, `squash!`, or `amend!` commits in a pull request: squash them
-  first (`git rebase -i --autosquash develop`).
+  first (`git rebase -i --autosquash master`).
 - The body, after a blank line, says why. Wrap it at 72 columns.
 
 Examples from this repository's history:
@@ -203,24 +201,23 @@ In short:
   labels from the path labeler. A fork's pull request gets them when a
   maintainer triages it, because that workflow never runs with a write token
   on a fork's code (`pull_request`, not `pull_request_target`).
-- Maintainers merge into `develop` by squash (one commit, the pull request
+- Maintainers merge by squash (one commit, the pull request
   title as its subject) or by rebase when every commit stands on its own.
 - Review comments are about the change, never the person. A reviewer says
   what must change before merge and what is a suggestion.
 
 ## Releases
 
-Maintainers release from `develop`:
+Maintainers release from `master`:
 
 1. Move the `## Unreleased` entries of `CHANGELOG.md` under the new version and
    date, bump `version` in `Cargo.toml`'s `[workspace.package]`, and commit as
    `release: vX.Y.Z`.
 2. Run the benchmark and add `bench/results/<version>.md` (bench/README.md,
    "Reporting"); old results files are never edited.
-3. Open a pull request from `develop` into `master` and merge it with a merge
-   commit.
-4. Tag the merge `vX.Y.Z` on `master`; the tag starts `release.yml`, which
-   builds and publishes the binaries. Move the `v0` tag to the release.
+3. Land both through a pull request into `master`.
+4. Tag that commit `vX.Y.Z`; the tag starts `release.yml`, which builds and
+   publishes the binaries. Move the `v0` tag to the release.
 
 ## License
 

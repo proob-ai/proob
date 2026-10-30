@@ -6,8 +6,7 @@
 # rest of U1: formatting, clippy, and commit messages, build and tests, the
 # crate-graph layering rule, the shim, and the plugin manifests.
 #
-# Pull requests into any branch are checked (contributors target develop,
-# releases are develop merged into master), and so are pushes to both.
+# Pull requests into any branch are checked, and so are pushes to master.
 #
 # Every `run:` step that executes something goes through `cargo xtask <cmd>`
 # (xtask/README.md), so CI and a developer's shell run the same argv; the
@@ -19,7 +18,7 @@ name: ci
 
 on:
   push:
-    branches: [master, develop]
+    branches: [master]
   pull_request:
   workflow_dispatch:
 

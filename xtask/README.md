@@ -21,7 +21,7 @@ cargo xtask sim lifecycle honesty      # proob end to end against a fixture GitH
 |---|---|---|
 | `fmt` | `cargo fmt --check` (style in `rustfmt.toml`; `verus!` bodies are left as written) | lint |
 | `clippy` | `cargo clippy --workspace --all-targets --locked -- -D warnings` | lint |
-| `commit-lint [<base>..<head>]` | `git log` over the range (default `origin/master..HEAD`); every subject must follow CONTRIBUTING.md, "Commits": `type(scope)!: description` with an allowed type, at most 72 characters, imperative, no trailing period; no `fixup!`/`squash!`/`amend!` commits; no merge commits except develop merged into master | lint (pull requests: `base.sha..head.sha`) |
+| `commit-lint [<base>..<head>]` | `git log` over the range (default `origin/master..HEAD`); every subject must follow CONTRIBUTING.md, "Commits": `type(scope)!: description` with an allowed type, at most 72 characters, imperative, no trailing period; no `fixup!`/`squash!`/`amend!` commits; no merge commits | lint (pull requests: `base.sha..head.sha`) |
 | `commit-lint --title <title>` | the same rules on one subject line | lint (the pull request title) |
 | `build` | `cargo build --locked --workspace` | test |
 | `test [-- args]` | `cargo nextest run --locked --workspace --no-fail-fast [args]` | test |

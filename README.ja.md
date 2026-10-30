@@ -1,4 +1,4 @@
-<!-- translated from README.md sha256:23d7eaf9d61ad234f052038c63b4380d24366f8019f00d93c28035059ccd7c86 -->
+<!-- translated from README.md sha256:765305705cb20d4edf2d6cdc5b5ac9b9bd9e7ce02c2e78eefc8256b664465ba1 -->
 # proob
 
 [![ci](https://github.com/proob-ai/proob/actions/workflows/ci.yml/badge.svg)](https://github.com/proob-ai/proob/actions/workflows/ci.yml)
@@ -276,7 +276,7 @@ Verus で検証された Rust では、強度を「証明下の変異」で測�
 
 ## コントリビュート
 
-質問やアイデアは [Discussions](https://github.com/proob-ai/proob/discussions) へ、バグ報告は [GitHub issues](https://github.com/proob-ai/proob/issues) へ、脆弱性は非公開のセキュリティアドバイザリで報告してください（[`SECURITY.md`](SECURITY.md)）。プルリクエストは `develop` ブランチ宛てで歓迎します。ブランチ、コミットメッセージ、検証済みのコア、検出に関わる変更のルールは [`CONTRIBUTING.md`](CONTRIBUTING.md) にまとめています。送る前に、CI と同じチェックを実行してください。
+質問やアイデアは [Discussions](https://github.com/proob-ai/proob/discussions) へ、バグ報告は [GitHub issues](https://github.com/proob-ai/proob/issues) へ、脆弱性は非公開のセキュリティアドバイザリで報告してください（[`SECURITY.md`](SECURITY.md)）。プルリクエストは `master` ブランチ宛てで歓迎します。ブランチ、コミットメッセージ、検証済みのコア、検出に関わる変更のルールは [`CONTRIBUTING.md`](CONTRIBUTING.md) にまとめています。送る前に、CI と同じチェックを実行してください。
 
 ```sh
 cargo xtask ci

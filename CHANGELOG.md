@@ -10,15 +10,15 @@ version as a comment.
 
 ### Added
 
-- Contributor standards: `CONTRIBUTING.md` (the `master`/`develop` branch
-  model, Conventional Commits, the core and detection rules, adapters,
+- Contributor standards: `CONTRIBUTING.md` (one `master` branch with
+  releases as tags, Conventional Commits, the core and detection rules, adapters,
   releases), `CODE_OF_CONDUCT.md` (Contributor Covenant 2.1), `SECURITY.md`,
   issue forms, a pull request template, CODEOWNERS, and Dependabot.
 - Labels as code (`.github/labels.yml`), synced on push to `master`, and area
   labels on pull requests from their changed paths.
 - `cargo xtask fmt`, `cargo xtask clippy`, and `cargo xtask commit-lint`, run
   by `cargo xtask ci` and by CI's new `lint` job; pull requests have every
-  commit subject and their title checked. CI also runs on pushes to `develop`.
+  commit subject and their title checked.
 
 ## v0.1.0 (2026-10-30)
 

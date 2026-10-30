@@ -1,4 +1,4 @@
-<!-- translated from README.md sha256:23d7eaf9d61ad234f052038c63b4380d24366f8019f00d93c28035059ccd7c86 -->
+<!-- translated from README.md sha256:765305705cb20d4edf2d6cdc5b5ac9b9bd9e7ce02c2e78eefc8256b664465ba1 -->
 # proob
 
 [![ci](https://github.com/proob-ai/proob/actions/workflows/ci.yml/badge.svg)](https://github.com/proob-ai/proob/actions/workflows/ci.yml)
@@ -276,7 +276,7 @@ proob 的每一项改动都会在缺陷集的开发集上与上一版本对比�
 
 ## 参与贡献
 
-问题和想法请发到 [Discussions](https://github.com/proob-ai/proob/discussions)，缺陷报告请提交到 [GitHub issues](https://github.com/proob-ai/proob/issues)，安全漏洞请通过私密安全公告报告（[`SECURITY.md`](SECURITY.md)）。欢迎向 `develop` 分支提交拉取请求。[`CONTRIBUTING.md`](CONTRIBUTING.md) 介绍了分支、提交信息、经过验证的核心，以及涉及检测的变更所须遵守的规则。提交前请运行与 CI 相同的检查：
+问题和想法请发到 [Discussions](https://github.com/proob-ai/proob/discussions)，缺陷报告请提交到 [GitHub issues](https://github.com/proob-ai/proob/issues)，安全漏洞请通过私密安全公告报告（[`SECURITY.md`](SECURITY.md)）。欢迎向 `master` 分支提交拉取请求。[`CONTRIBUTING.md`](CONTRIBUTING.md) 介绍了分支、提交信息、经过验证的核心，以及涉及检测的变更所须遵守的规则。提交前请运行与 CI 相同的检查：
 
 ```sh
 cargo xtask ci

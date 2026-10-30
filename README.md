@@ -275,7 +275,7 @@ On your default branch, we recommend you:
 
 ## Contributing
 
-Questions and ideas go in [Discussions](https://github.com/proob-ai/proob/discussions), bug reports in [GitHub issues](https://github.com/proob-ai/proob/issues), and vulnerabilities to a private advisory ([`SECURITY.md`](SECURITY.md)). Pull requests are welcome, into the `develop` branch. [`CONTRIBUTING.md`](CONTRIBUTING.md) covers the branches, commit messages, the verified core, and the rules for changes that touch detection. Before opening one, run the same checks CI runs:
+Questions and ideas go in [Discussions](https://github.com/proob-ai/proob/discussions), bug reports in [GitHub issues](https://github.com/proob-ai/proob/issues), and vulnerabilities to a private advisory ([`SECURITY.md`](SECURITY.md)). Pull requests are welcome, into `master`. [`CONTRIBUTING.md`](CONTRIBUTING.md) covers the branches, commit messages, the verified core, and the rules for changes that touch detection. Before opening one, run the same checks CI runs:
 
 ```sh
 cargo xtask ci
