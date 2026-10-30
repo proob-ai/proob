@@ -8,6 +8,12 @@ version as a comment.
 
 ## Unreleased
 
+### Changed
+
+- README rewritten around what proob is, the evidence, and a three-command
+  quick start; the full usage guide and benchmark tables moved to
+  `docs/guide.md` and `docs/benchmark.md`.
+
 ### Added
 
 - Contributor standards: `CONTRIBUTING.md` (one `master` branch with
