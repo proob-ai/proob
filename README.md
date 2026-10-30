@@ -27,7 +27,7 @@ We collected 15 bugs from popular Python and Rust libraries, among them more-ite
 
 Run on the current releases of attrs, rich, vaultwarden, python-semver, rust-url, and tomlkit, it found **12 bugs that were still in the code**. About six of every seven failures it reports are real bugs (50 of 59). The rest were checks that assumed more than the library promises.
 
-In 260 simulated scenarios, some built to trick it, proob **never once reported a broken property as holding**.
+In 269 simulated scenarios, some built to trick it, proob **never once reported a broken property as holding**.
 
 Every bug it finds becomes a regression test that CI replays with no AI involved, so proob cannot quietly get worse. How we measure, and every number: [docs/benchmark.md](docs/benchmark.md).
 
@@ -66,7 +66,7 @@ proob adds one required check and one review habit to the loop you already have.
 | `/proob:verify` | proob mutates the code to show each check can actually fail |
 | `/proob:guard` | every pull request, every night, every session: which properties still hold |
 
-Every property gets one status: `Holds`, `Checked`, `Not checked`, `Re-approve`, `Broken`, `Proposed`, or `Waived`. `Holds` means approved by a reviewer other than the author, with fresh evidence from your default branch and a check shown able to fail. From the next release `Holds` is reserved for a proof or a model, and a property-based test reaches `Checked (tested)`; in v0.1.0 a strong test can still read `Holds`. A teammate who only reviews needs nothing but GitHub. The [guide](docs/guide.md) covers each skill, the statuses, team setup, and the CLI.
+Every property gets one status: `Holds`, `Checked`, `Not checked`, `Re-approve`, `Broken`, `Proposed`, or `Waived`. `Holds` means approved by a reviewer other than the author, with fresh evidence from your default branch and a check shown able to fail. `Holds` is reserved for a proof or a model, and a property-based test reaches `Checked (tested)`. A teammate who only reviews needs nothing but GitHub. The [guide](docs/guide.md) covers each skill, the statuses, team setup, and the CLI.
 
 ## Can the agent cheat?
 
@@ -87,7 +87,7 @@ No.
   - [ ] as proofs on ordinary Rust and Python, with no proofs to write (Kani, CrossHair)
   - [ ] as a formal spec of your design, chosen by the agent to fit your codebase (TLA+ for a protocol, Alloy for a data model)
   - [ ] verification first, with a safe landing: where no verifier can take a rule (an unsupported feature, an unbounded loop, a timeout), the agent binds a property-based test instead, and says so
-  - [ ] with the verdict telling tested from proved: `Holds` will mean proved, a test reads `Checked (tested)`
+  - [x] with the verdict telling tested from proved: `Holds` means proved, a test reads `Checked (tested)`
 - [x] **Watch every pull request.** Nothing that breaks an approved rule gets merged
 - **Watch for drift between the rules and the code.** A rule never silently stays approved for code it no longer describes
   - [x] a rule or its check that changes must be approved again
@@ -102,7 +102,7 @@ No.
 
 ### Languages
 
-**A test finds bugs; only a verifier earns `Holds`.** Every property binds one check. A property-based test searches generated inputs for a counterexample: `Broken` when it finds one, `Checked (tested)` when it does not, because a sampled run cannot speak for every input. A proof or a model checker covers every input, so it alone can render `Holds`; that rule ships in the next release, and the roadmap item above tracks it. The verdict always says which kind of evidence stands behind it. A verifier that accepts too easily is caught the way a weak test is: proob mutates the code under the proof, and a proof that still passes is reported as vacuous, not as holding.
+**A test finds bugs; only a verifier earns `Holds`.** Every property binds one check. A property-based test searches generated inputs for a counterexample: `Broken` when it finds one, `Checked (tested)` when it does not, because a sampled run cannot speak for every input. A proof or a model checker covers every input, so it alone can render `Holds`. The verdict always says which kind of evidence stands behind it. A verifier that accepts too easily is caught the way a weak test is: proob mutates the code under the proof, and a proof that still passes is reported as vacuous, not as holding.
 
 ☑ built, ☐ planned.
 

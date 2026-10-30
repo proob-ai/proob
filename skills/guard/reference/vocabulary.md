@@ -5,15 +5,15 @@ PR check, the session line, and guard all use the same one.
 
 | Word | Meaning | Reader's action |
 |---|---|---|
-| **Holds** | approved statement, approved check, approved config; positive evidence on the default branch; the check proven able to fail (kill count at or above the floor, within the freshness window) | none |
-| **Checked** | as Holds, but strength not yet measured (`strength pending`), or the approval is self-signed (`self-signed`) | none; wait for the scheduled run, or get a second reviewer with write access |
+| **Holds** | approved statement, approved check, approved config; a proof verified or a model checked on the default branch; the check proven able to fail (kill count at or above the floor, within the freshness window) | none |
+| **Checked** | as Holds, but the check is a property-based test (`tested`), strength not yet measured (`strength pending`), or the approval is self-signed (`self-signed`) | none for `tested`, which is not a defect: a test samples inputs and cannot prove; otherwise wait for the scheduled run, or get a second reviewer with write access |
 | **Not checked** | approved, but no check bound, no adapter for the language, evidence pending or stale, the runner errored, or GitHub unreachable | bind a check (`/proob:falsify` or `/proob:verify`), or wait for the next run |
 | **Re-approve** | the statement, check, config, or workflow changed since its last approval; the approver lost write access; or a model spec drifted | review the amendment PR, or re-affirm (guard proposes the PR) |
 | **Broken** | a counterexample, a failed proof, or a runner error on this PR; a scope that matches nothing; or an expired waiver | fix the code, fix the runner, or amend the statement |
 | **Proposed** | never approved: not yet on the default branch, or merged without an eligible review | review and merge, or reject |
 | **Waived until d** | approved, failing, human-waived with an open tracking issue until date d | track the issue |
 
-Modifiers that may follow a word: `(strength pending)`, `(self-signed)`,
+Modifiers that may follow a word: `(tested)`, `(strength pending)`, `(self-signed)`,
 `(no adapter)`, `(no check)`, `(evidence pending)`, `(evidence stale)`,
 `(rate limited)`, `(statement amended)`, `(reviewer access revoked)`.
 
@@ -32,9 +32,10 @@ request that introduced its current content into the default branch merged
 with an eligible review: a human with write access at derivation time, not
 the author, not someone who edited a governed file in that PR. With
 `allow_self_signed = true`, a merge with no eligible review is a
-self-signature: Checked (self-signed) at best, never Holds.
+self-signature: Checked (self-signed) at best, or Checked (tested, self-signed)
+for a test, never Holds.
 
 What drift means: the number of commits that touched a property's scope since
-its approving merge. Drift alone never blocks and never demotes Holds for a
+its approving merge. Drift alone never blocks and never demotes the word of a
 test-backed or proof-backed property; above `drift_threshold` guard proposes
 a re-affirmation so a human re-reads the statement against the changed code.

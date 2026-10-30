@@ -79,7 +79,8 @@ Print, in this order:
    from <age>` / `no cached facts`.
 3. Counts, non-zero ones, using the vocabulary words: `Holds n · Checked n ·
    Not checked n · Re-approve n · Broken n · Proposed n · Waived n ·
-   Unverified n (total n)`.
+   Unverified n (total n)`. `Checked` includes `Checked (tested)` rows; a
+   test-backed property reaches `Checked (tested)` at best, never `Holds`.
 4. Governance footer, one line each:
    - approvals verified via GitHub reviews: `footer.approvals_verified`
    - config / evidence workflow / gate workflow: `approved (team, PR #n)`,

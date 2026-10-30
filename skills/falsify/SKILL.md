@@ -61,7 +61,7 @@ vacuous example per language. The rules that hold in every language:
   the comfortable middle of it.
 - The test reads the code in its scope. A test that cannot fail when the scoped code is wrong is
   vacuous; verify will score it `killed 0` and the property will never leave
-  `Checked (strength pending)`.
+  `Checked (tested, strength pending)`.
 - No seed, no case count, no `ProptestConfig`, no `@settings(max_examples=…)`, no `derandomize`,
   no `#[ignore]`, no skip marker. proob passes the seed and budget to the runner itself; anything
   you hard-code is overridden or, worse, hides a counterexample from the seed that replays it.
@@ -133,10 +133,12 @@ expecting nothing to move.
 ## Words
 
 Verdicts are only: Holds, Checked, Not checked, Re-approve, Broken, Proposed, Waived until d, with
-modifiers in parentheses (`Checked (strength pending)`, `Not checked (no check bound)`). A property
-you bound today is `Not checked` until the PR merges with an eligible review and the default-branch
-run produces evidence, then `Checked (strength pending)` until a score run shows the test can fail.
-`Holds` is the binary's word for the default branch, never yours for a local run.
+modifiers in parentheses (`Checked (tested, strength pending)`, `Not checked (no check bound)`). A
+property you bound today is `Not checked` until the PR merges with an eligible review and the
+default-branch run produces evidence, then `Checked (tested, strength pending)` until a score run
+shows the test can fail, then `Checked (tested)`. That is as far as a test goes: it samples inputs
+and cannot prove, so `tested` is not a defect. `Holds` is the proof route's word, earned by a proof
+or a model on the default branch (`/proob:verify`), never yours for a local run.
 
 ## Never
 

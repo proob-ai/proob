@@ -1,6 +1,6 @@
 ---
 name: verify
-description: Measure whether a bound check can fail (mutation score via proob run score), explain the surviving mutants and what a stronger test needs, and for Verus-verified Rust or kind = "proof" properties propose the proof route (annotate the verified item, or draft a spec fn and ensures for review) and explain mutation-under-proof. Use when a property reads "Checked (strength pending)", when the user asks how strong a test is, or when a core is under Verus.
+description: Measure whether a bound check can fail (mutation score via proob run score), explain the surviving mutants and what a stronger test needs, and for Verus-verified Rust or kind = "proof" properties propose the proof route (annotate the verified item, or draft a spec fn and ensures for review) and explain mutation-under-proof. Use when a property reads "Checked (tested, strength pending)" or "Checked (strength pending)", when the user asks how strong a test is, or when a core is under Verus.
 argument-hint: "[id ...|all]"
 allowed-tools: Read Grep Glob
 ---
@@ -69,16 +69,19 @@ Quote `outcome` from the JSON. Per `outcome.result`:
   killed K of M sampled mutants (S in scope)", with S = M + `unviable` + `unsampled`, and that
   the kill floor was applied to the sample. Never call a sampled score exhaustive.
 - `no_mutants`: nothing in the scope could be mutated (no `.rs` file, or only items cargo-mutants
-  skips). The property stays `Checked (strength pending)`; the remedy is a scope that names the
+  skips). The property stays `Checked (tested, strength pending)`, or `Checked (strength pending)`
+  for a proof; the remedy is a scope that names the
   code the statement is about, which is an amendment to the property file for the human to make.
 - `errored`: quote `outcome.reason`. "baseline failed" means the bound test does not pass before
   any mutation; run `/proob:falsify <id>` first. A missing `cargo-mutants` is an install hint.
 
 For every score, say what it changes and what it does not: after the PR that bound the check
 merges with an eligible review and the scheduled evidence run records a score at or above the
-floor, the property moves from `Checked (strength pending)` to `Holds` only if the team approved
-the statement, the check, the config, and the workflow; with a self-signed approval it reads
-`Checked (self-signed)`. A local score moves nothing.
+floor, a test-backed property moves from `Checked (tested, strength pending)` to
+`Checked (tested)`, and no further: a test samples inputs and cannot prove, so strength never makes
+it `Holds`. A proof-backed property moves from `Checked (strength pending)` to `Holds` only if the
+team approved the statement, the check, the config, and the workflow (`proof-route.md`). With a
+self-signed approval either reads `self-signed` as well. A local score moves nothing.
 
 ## 4. Name the survivors and what a stronger test needs
 

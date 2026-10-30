@@ -16,6 +16,14 @@ version as a comment.
 
 ### Changed
 
+- **Breaking:** `Holds` is reserved for a property of kind `proof` or
+  `model`: approved, proved, shown able to fail. A property-based test
+  reaches `Checked (tested)` at best, and every `Checked` on a test-kind
+  property carries the `tested` modifier, first:
+  `Checked (tested, strength pending, self-signed)`. `status --json` gains a
+  boolean `tested` on a `checked` verdict. The soundness simulation now has
+  248 worlds, proof-kind worlds among them, and CI's `verify` job reaches
+  `Holds` through the real Verus adapter.
 - README rewritten around what proob is, the evidence, and a three-command
   quick start; the full usage guide and benchmark tables moved to
   `docs/guide.md` and `docs/benchmark.md`. The README's GIF is recorded by
