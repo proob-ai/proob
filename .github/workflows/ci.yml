@@ -1,8 +1,9 @@
 # Continuous integration for proob.
 #
 # `verify` is the job to make REQUIRED in branch protection: it checks the
-# verified core under --no-cheating with the pinned Verus release and proves
-# the job can fail (tools/ci/verify-negative.sh). The other jobs guard the
+# verified core under --no-cheating with the pinned Verus release, proves
+# the job can fail (tools/ci/verify-negative.sh), and reaches Holds through
+# the real Verus adapter. The other jobs guard the
 # rest of U1: formatting, clippy, and commit messages, build and tests, the
 # crate-graph layering rule, the shim, and the plugin manifests.
 #
@@ -125,6 +126,16 @@ jobs:
         run: cargo xtask trusted-base
       - name: The verify job can fail
         run: cargo xtask verify-negative
+      - uses: taiki-e/install-action@1168f6810a3cb30a3514bf5756a3b7f0422c6df8 # v2.87.28
+        with:
+          tool: cargo-nextest@0.9.150
+      - name: Holds through the real Verus adapter (the only job with Verus on PATH)
+        # Real proof and mutation-under-proof records on the Verus fixture
+        # render Holds; elsewhere the test skips itself (crates/proob/tests/run.rs),
+        # and PROOB_REQUIRE_VERUS makes a skip here a failure.
+        env:
+          PROOB_REQUIRE_VERUS: "1"
+        run: cargo xtask test -- -p proob --test run real_verus_records_under_a_team_approval_hold_and_a_failed_proof_is_broken
 
   crate-graph:
     name: crate graph layering
