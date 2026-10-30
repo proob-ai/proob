@@ -5,13 +5,26 @@
 
 **English** · [简体中文](README.zh-CN.md) · [日本語](README.ja.md)
 
-**Your tests check the cases someone thought of. proob finds the bugs nobody thought to test for.**
+**Formal specifications for your codebase: an AI agent writes them, your team approves them, and machines check them on every pull request.**
 
-proob is a Claude Code plugin. It reads your code, writes down in plain English what must always be true ("a refund never exceeds the charge"), and attacks each rule with thousands of generated inputs. Your team approves the rules in an ordinary pull request review, and proob re-checks them on every pull request after that. The agent proposes; only your team approves.
+Tests check the examples someone thought of. Formal methods check what must *always* be true, but they need a specialist, and the specs drift out of date. proob is a Claude Code plugin that brings the second to every team at the cost of a code review.
+
+- **Specs, not more tests.** Each property is a plain-English statement of what must always hold ("a refund never exceeds the charge"), bound to a machine check and approved in a pull request like any other change.
+- **Machines decide, never the agent.** Properties are checked against thousands of generated inputs, or proved with [Verus](https://github.com/verus-lang/verus) for Rust, and mutation testing proves each check can actually fail. The agent proposes. It can never approve a property or mark one as holding.
+- **proob is formally verified itself.** The code that turns evidence into a verdict is proved with Verus against the [six assertions](crates/proob-core/ASSERTIONS.md) that define `Holds`. It trusts only [two unverified functions](crates/proob-trusted/README.md).
 
 ![/proob:try on python-semver in Claude Code: five properties, two fail, one of them the real bug](docs/try.gif)
 
 A real `/proob:try` in Claude Code on python-semver, one commit before its maintainers fixed issue #497, with the five-minute wait cut. proob proposed five properties and two failed. One is the bug the maintainers fixed: asking for the next prerelease can go backwards (`1.2.3-zeta` with the token `rc` gives `1.2.3-rc.1`, which sorts before it). The other, two equal versions with different hashes, shows up only for versions built through the constructor. Not one file in the repository changed.
+
+## Where proob fits
+
+| | Unit tests | Formal methods | proob |
+|---|---|---|---|
+| What is checked | examples someone wrote | properties that must always hold | properties that must always hold |
+| Who writes the spec | nobody; it lives in the test | a specialist | an agent proposes, your team approves in a pull request |
+| How it is checked | the examples | a prover | generated inputs, or a proof with Verus; mutation testing shows the check can fail |
+| Stays current | while someone maintains it | drifts as the code changes | re-checked on every pull request and every night |
 
 ## Does it work?
 
@@ -22,7 +35,7 @@ We measure every release against real bugs that escaped real test suites, with m
 | Real bugs fixed **after** the model's training cutoff, so it cannot have memorized them | **9 of 10 caught** |
 | Held-out historical bugs, blind trials | **18 of 20 trials** (90%) |
 | Unknown bugs found in the then-latest releases of attrs, rich, vaultwarden, python-semver, rust-url, and tomlkit | **12** |
-| Times proob said a rule `Holds` when the code broke it, out of 260 scored verdicts | **0** |
+| Times proob said a property `Holds` when the code broke it, out of 260 scored verdicts | **0** |
 | Failures it reported that were real bugs | 50 of 59 (85%) |
 
 Each catch becomes a regression test that CI replays with no model in the loop, and a bound check finds its bug again in under ten seconds. Full numbers: [docs/benchmark.md](docs/benchmark.md).
@@ -41,7 +54,7 @@ In Claude Code, inside your repository:
 
 If you like what it found, the report ends with three steps to keep it:
 
-1. `proob shadow adopt` puts the rules, their tests, and two workflows on a new branch.
+1. `proob shadow adopt` puts the properties, their tests, and two workflows on a new branch.
 2. Open a pull request. A teammate's review is the approval.
 3. Make the `proob gate` check required on your default branch.
 
@@ -50,18 +63,18 @@ If you like what it found, the report ends with three steps to keep it:
 | Skill | What happens |
 |---|---|
 | `/proob:sense` | the agent reads your code |
-| `/proob:declare` | it proposes rules as plain-English files, in a pull request your team reviews |
-| `/proob:falsify` | it writes a property-based test for each approved rule, run with a fixed seed |
-| `/proob:verify` | proob mutates the code to prove each test can actually fail |
-| `/proob:guard` | every pull request, every night, every session: which rules still hold |
+| `/proob:declare` | it proposes properties as plain-English files, in a pull request your team reviews |
+| `/proob:falsify` | it binds each approved property to a property-based test, or to a Verus proof in Rust |
+| `/proob:verify` | proob mutates the code to show each check can actually fail |
+| `/proob:guard` | every pull request, every night, every session: which properties still hold |
 
-Every rule gets one status: `Holds`, `Checked`, `Not checked`, `Re-approve`, `Broken`, `Proposed`, or `Waived`. `Holds` means approved by a reviewer other than the author, backed by fresh evidence from your default branch, and checked by a test that is proven able to fail. A teammate who only reviews needs nothing but GitHub. The [guide](docs/guide.md) covers each skill, the statuses, team setup, and the CLI.
+Every property gets one status: `Holds`, `Checked`, `Not checked`, `Re-approve`, `Broken`, `Proposed`, or `Waived`. `Holds` means approved by a reviewer other than the author, backed by fresh evidence from your default branch, and checked by a test that is proven able to fail. A teammate who only reviews needs nothing but GitHub. The [guide](docs/guide.md) covers each skill, the statuses, team setup, and the CLI.
 
 ## Why you can trust a verdict
 
-- **The agent can't approve anything.** Approval is read from GitHub's review records each time a status is shown; nothing in the repository stores it, and a self-merged change never counts.
-- **Evidence only comes from your default branch,** from a job that holds no token.
-- **The code that decides is formally verified.** The verdict function is proved with [Verus](https://github.com/verus-lang/verus) against [six assertions](crates/proob-core/ASSERTIONS.md) that define `Holds`; the trusted base is [two functions](crates/proob-trusted/README.md).
+- **Approval lives in GitHub, not in the repository.** It is read from GitHub's review records every time a status is shown, and a self-merged change never counts.
+- **Evidence only comes from your default branch,** produced by a job that holds no token.
+- **The verdict is proved, not just tested.** Each of the [six assertions](crates/proob-core/ASSERTIONS.md) is a Verus `ensures` clause, checked under `--no-cheating` on every pull request, and 260 simulated verdicts scored the SV-COMP way never once said `Holds` wrongly.
 
 ## Languages
 
@@ -72,7 +85,7 @@ Every rule gets one status: `Holds`, `Checked`, `Not checked`, `Re-approve`, `Br
 | Rust under Verus | the verifier | mutation under proof |
 | TypeScript | planned: fast-check through vitest | StrykerJS |
 
-In other languages, sense and declare still work and every rule reads `Not checked (no adapter)`. Known limits are in the [guide](docs/guide.md#limits).
+In other languages, sense and declare still work and every property reads `Not checked (no adapter)`. Known limits are in the [guide](docs/guide.md#limits).
 
 ## Contributing
 
