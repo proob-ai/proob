@@ -184,7 +184,7 @@ fn check_judge_blocks_an_affected_counterexample_with_summary_annotations_and_ou
     assert_eq!(out.code, 1, "stdout: {}\nstderr: {}", out.stdout, out.stderr);
     let row = format!("| A holds `{PROP_A}` | Broken **blocks** | _counterexample on this PR_ | counterexample |");
     assert!(out.stdout.contains(&row), "{}", out.stdout);
-    assert!(out.stdout.contains("::notice title=proob::proob gate: block (3 affected of 7)"), "{}", out.stdout);
+    assert!(out.stdout.contains("::notice title=proob::proob gate: block (4 affected of 8)"), "{}", out.stdout);
     assert!(
         out.stdout.contains(&format!(
             "::error file={},title=proob gate::A holds: Broken (counterexample on this PR); this PR: counterexample",
@@ -194,13 +194,13 @@ fn check_judge_blocks_an_affected_counterexample_with_summary_annotations_and_ou
         out.stdout
     );
     let summary = actions.summary();
-    assert!(summary.starts_with("## proob gate: block (3 affected of 7)"), "{summary}");
+    assert!(summary.starts_with("## proob gate: block (4 affected of 8)"), "{summary}");
     assert!(summary.contains(&row), "{summary}");
     let outputs = actions.outputs();
     assert_eq!(outputs["verdict"], "block");
     assert_eq!(outputs["blocked"], "true");
     assert_eq!(outputs["mode"], "check");
-    assert_eq!(outputs["affected"], "3");
+    assert_eq!(outputs["affected"], "4");
     assert_eq!(outputs["broken"], "2");
     assert!(outputs["headline"].starts_with("proob gate: block"), "{outputs:?}");
 

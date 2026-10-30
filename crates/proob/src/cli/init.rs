@@ -176,6 +176,8 @@ pub fn config_text(detected: &[Detected]) -> String {
          # renders Checked (self-signed) or Not checked (self-signed): never Holds, and\n\
          # never Proposed. Set it to false once a second maintainer with write access\n\
          # reviews, and the same content reads Proposed until they approve it.\n\
+         # A property backed by a test renders Checked (tested) at best: a test samples\n\
+         # its inputs, so only a proof or a model reaches Holds.\n\
          allow_self_signed = {}\n\
          \n\
          # Days after approval during which an unchecked property stays silent.\n\

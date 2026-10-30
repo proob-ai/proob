@@ -17,7 +17,7 @@ pub struct Composite {
     pub scenario: ScenarioBuilder,
 }
 
-const GOVERNED_AT_C1: [&str; 11] = [
+const GOVERNED_AT_C1: [&str; 13] = [
     "proob/config.toml",
     ".github/workflows/proob-gate.yml",
     ".github/workflows/proob-evidence.yml",
@@ -27,8 +27,10 @@ const GOVERNED_AT_C1: [&str; 11] = [
     "proob/properties/01J9Z3W1V8Q4K7N2M5R8T1X4E5.toml",
     "proob/properties/01J9Z3W1V8Q4K7N2M5R8T1X4F6.toml",
     "proob/properties/01J9Z3W1V8Q4K7N2M5R8T1X4G7.toml",
+    "proob/properties/01J9Z3W1V8Q4K7N2M5R8T1X4J9.toml",
     "tests/prop_a.rs",
     "tests/prop_b.rs",
+    "src/proof_j.rs",
 ];
 
 fn waived_toml() -> String {
@@ -47,6 +49,7 @@ pub fn composite() -> Composite {
     repo.write("src/util.rs", "pub fn g() {}\n");
     repo.write("tests/prop_a.rs", "// proob:01J9Z3W1V8Q4K7N2M5R8T1X4A1\n#[test] fn a() {}\n");
     repo.write("tests/prop_b.rs", "// proob:01J9Z3W1V8Q4K7N2M5R8T1X4B2\n#[test] fn b() {}\n");
+    repo.write("src/proof_j.rs", "// proob:01J9Z3W1V8Q4K7N2M5R8T1X4J9\nproof fn j() {}\n");
     repo.write("proob/config.toml", CONFIG_TOML);
     repo.write(".github/workflows/proob-gate.yml", GATE_YML);
     repo.write(".github/workflows/proob-evidence.yml", EVIDENCE_YML);
@@ -56,6 +59,7 @@ pub fn composite() -> Composite {
     repo.write(&property_path(PROP_E), &property_toml(PROP_E, "E was amended", &["src/lib.rs"], "test"));
     repo.write(&property_path(PROP_F), &property_toml(PROP_F, "F matches nothing", &["nothing/**/*.zig"], "test"));
     repo.write(&property_path(PROP_G), &waived_toml());
+    repo.write(&property_path(PROP_J), &property_toml(PROP_J, "J is proved", &["src/lib.rs"], "proof"));
     let c1 = repo.commit("introduce proob (PR #7)", t1);
     repo.write(
         &property_path(PROP_E),
@@ -75,7 +79,11 @@ pub fn composite() -> Composite {
         let blob = repo.blob(&c1, path);
         scenario.blob(&c1, path, Some(&blob));
     }
-    let bindings = json!({ PROP_A: { "files": ["tests/prop_a.rs"] }, PROP_B: { "files": ["tests/prop_b.rs"] } });
+    let bindings = json!({
+        PROP_A: { "files": ["tests/prop_a.rs"] },
+        PROP_B: { "files": ["tests/prop_b.rs"] },
+        PROP_J: { "files": ["src/proof_j.rs"] },
+    });
     let fixture = Fixture::new(&scenario.build(), bindings.as_object());
     let mut composite = Composite { repo, fixture, c1, c2, scenario };
     composite.add_evidence();
@@ -83,10 +91,12 @@ pub fn composite() -> Composite {
 }
 
 impl Composite {
-    /// The scheduled run on main at c2: A checked and scored, B checked only.
+    /// The scheduled run on main at c2: A checked and scored, B checked only,
+    /// J (a proof) verified and scored.
     fn add_evidence(&mut self) {
         let a = hashes_of(&self.repo, &self.fixture, PROP_A);
         let b = hashes_of(&self.repo, &self.fixture, PROP_B);
+        let j = hashes_of(&self.repo, &self.fixture, PROP_J);
         let blob = self.repo.blob("main", ".github/workflows/proob-evidence.yml");
         let run = RunMeta { run_id: 101, head_sha: &self.c2, workflow_blob: &blob, at: NOW - DAY };
         let records = vec![
@@ -99,6 +109,14 @@ impl Composite {
                 &run,
             ),
             record(PROP_B, "check", &b, json!({ "result": "no_counterexample", "budget": 256 }), &run),
+            record(PROP_J, "proof", &j, json!({ "result": "verified", "rlimit": 10 }), &run),
+            record(
+                PROP_J,
+                "score",
+                &j,
+                json!({ "result": "scored", "killed": 3, "survived": 1, "timeout": 0, "unviable": 0 }),
+                &run,
+            ),
         ];
         self.scenario.evidence_run(101, &self.c2.clone(), "schedule", "2026-10-27T00:00:00Z", records);
         self.fixture.write_scenario(&self.scenario.build());

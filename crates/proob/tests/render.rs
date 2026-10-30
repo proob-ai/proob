@@ -22,17 +22,29 @@ fn status_markdown_golden() {
     assert_eq!(out.code, 0, "{}", out.stderr);
     let md = &out.stdout;
     assert!(
-        md.starts_with("## proob: 1 holds, 1 checked, 1 not checked, 1 re-approve, 1 broken, 1 proposed, 1 waived\n"),
+        md.starts_with("## proob: 1 holds, 2 checked, 1 not checked, 1 re-approve, 1 broken, 1 proposed, 1 waived\n"),
         "{md}"
     );
     assert!(md.contains("| Property | Status | Reason | This PR |\n"));
     assert!(
         md.contains(
-            "| A holds `01J9Z3W1V8Q4K7N2M5R8T1X4A1` | Holds | _approved, checked, proven able to fail_ | not run |"
+            "| A holds `01J9Z3W1V8Q4K7N2M5R8T1X4A1` | Checked (tested) | _tested on sampled inputs, not proved_ | not run |"
         ),
         "{md}"
     );
-    assert!(md.contains("| Checked (strength pending) | _strength not yet measured_ |"), "{md}");
+    assert!(
+        md.contains(
+            "| J is proved `01J9Z3W1V8Q4K7N2M5R8T1X4J9` | Holds | _approved, proved, shown able to fail_ | not run |"
+        ),
+        "{md}"
+    );
+    assert_eq!(md.matches("| Holds |").count(), 1, "only the proof holds: {md}");
+    assert!(
+        md.contains(
+            "| Checked (tested, strength pending) | _tested on sampled inputs, not proved; strength not yet measured_ |"
+        ),
+        "{md}"
+    );
     assert!(md.contains("| Not checked | _no check bound_ |"), "{md}");
     assert!(md.contains("| Re-approve | _statement amended_ |"), "{md}");
     assert!(md.contains("| Broken | _scope matches nothing_ |"), "{md}");
@@ -49,7 +61,7 @@ fn check_markdown_golden_with_if_merged_now_rows() {
     let out = run(&mut k.check(Some(&results)));
     assert_eq!(out.code, 1, "{}", out.stderr);
     let md = &out.stdout;
-    assert!(md.starts_with("## proob gate: block (3 affected of 7); "), "{md}");
+    assert!(md.starts_with("## proob gate: block (4 affected of 8); "), "{md}");
     assert!(md.contains("| Broken **blocks** | _counterexample on this PR_ | counterexample |"), "{md}");
     assert!(md.contains("**If merged now** (governed files in this change)"), "{md}");
     assert!(md.contains("| `proob/config.toml` | unreviewed: the approval predates the file's last change | re-approve the latest commit |"), "{md}");

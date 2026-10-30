@@ -15,9 +15,10 @@ use proob_facts::results::RunResultRecord;
 pub fn word(v: &Verdict) -> String {
     match v {
         Verdict::Holds => "Holds".to_string(),
-        Verdict::Checked { strength_pending, self_signed } => {
-            with_modifiers("Checked", &[(*strength_pending, "strength pending"), (*self_signed, "self-signed")])
-        }
+        Verdict::Checked { tested, strength_pending, self_signed } => with_modifiers(
+            "Checked",
+            &[(*tested, "tested"), (*strength_pending, "strength pending"), (*self_signed, "self-signed")],
+        ),
         Verdict::NotChecked { self_signed, .. } => with_modifiers("Not checked", &[(*self_signed, "self-signed")]),
         Verdict::Proposed => "Proposed".to_string(),
         Verdict::ReApprove(_) => "Re-approve".to_string(),
@@ -34,8 +35,8 @@ fn with_modifiers(word: &str, modifiers: &[(bool, &str)]) -> String {
 /// The modifiers alone, for JSON.
 pub fn modifiers(v: &Verdict) -> Vec<&'static str> {
     match v {
-        Verdict::Checked { strength_pending, self_signed } => {
-            [(*strength_pending, "strength_pending"), (*self_signed, "self_signed")]
+        Verdict::Checked { tested, strength_pending, self_signed } => {
+            [(*tested, "tested"), (*strength_pending, "strength_pending"), (*self_signed, "self_signed")]
                 .into_iter()
                 .filter(|(set, _)| *set)
                 .map(|(_, m)| m)
@@ -49,15 +50,17 @@ pub fn modifiers(v: &Verdict) -> Vec<&'static str> {
 /// The reason column.
 pub fn reason(v: &Verdict, kind: Option<Kind>) -> String {
     match v {
-        Verdict::Holds => "approved, checked, proven able to fail".to_string(),
-        Verdict::Checked { strength_pending, self_signed } => {
-            [(*strength_pending, "strength not yet measured"), (*self_signed, "no second reviewer")]
-                .into_iter()
-                .filter(|(set, _)| *set)
-                .map(|(_, r)| r)
-                .collect::<Vec<_>>()
-                .join("; ")
-        }
+        Verdict::Holds => "approved, proved, shown able to fail".to_string(),
+        Verdict::Checked { tested, strength_pending, self_signed } => [
+            (*tested, "tested on sampled inputs, not proved"),
+            (*strength_pending, "strength not yet measured"),
+            (*self_signed, "no second reviewer"),
+        ]
+        .into_iter()
+        .filter(|(set, _)| *set)
+        .map(|(_, r)| r)
+        .collect::<Vec<_>>()
+        .join("; "),
         Verdict::NotChecked { reason, .. } => not_checked_reason(*reason).to_string(),
         Verdict::Proposed => "never reviewed".to_string(),
         Verdict::ReApprove(why) => re_approve_reason(*why),
@@ -217,4 +220,28 @@ pub fn days_ago(age: Secs) -> String {
 
 pub fn plural(n: u64) -> &'static str {
     if n == 1 { "" } else { "s" }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn tested(strength_pending: bool, self_signed: bool) -> Verdict {
+        Verdict::Checked { tested: true, strength_pending, self_signed }
+    }
+
+    #[test]
+    fn tested_leads_the_checked_modifiers_and_is_not_a_defect() {
+        assert_eq!(word(&tested(false, false)), "Checked (tested)");
+        assert_eq!(word(&tested(true, false)), "Checked (tested, strength pending)");
+        assert_eq!(word(&tested(false, true)), "Checked (tested, self-signed)");
+        assert_eq!(modifiers(&tested(true, true)), vec!["tested", "strength_pending", "self_signed"]);
+        assert_eq!(reason(&tested(false, false), Some(Kind::Test)), "tested on sampled inputs, not proved");
+        assert_eq!(
+            reason(&tested(false, true), Some(Kind::Test)),
+            "tested on sampled inputs, not proved; no second reviewer"
+        );
+        let proof = Verdict::Checked { tested: false, strength_pending: true, self_signed: false };
+        assert_eq!(word(&proof), "Checked (strength pending)");
+    }
 }
