@@ -9,23 +9,9 @@
 
 proob is a Claude Code plugin. It reads your code, writes down in plain English what must always be true ("a refund never exceeds the charge"), and attacks each rule with thousands of generated inputs. Your team approves the rules in an ordinary pull request review, and proob re-checks them on every pull request after that. The agent proposes; only your team approves.
 
-```text
-$ claude   # in python-semver, one commit before the maintainers fixed issue #497
-> /proob:try
+![/proob:try on python-semver in Claude Code: five properties, one fails on the real bug](docs/try.gif)
 
-shadow: 5 properties tried · 1 fails · 4 pass · nothing in your repository was changed
-
-  - Asking for the next version always gives a strictly greater version
-    fails: v=parse('0.0.0-1'), part='prerelease', token='0'
-    0.0.0-1.next_version('prerelease', '0') gave 0.0.0-0.1
-    replay: proob --shadow run check 01M644W0MSK9CBE2136XR777N5 --seed 1793003282928823768
-  - Printing a parsed version string gives back exactly that string · passes, test can fail
-  - Two versions that compare equal always have the same hash · passes, test can fail
-  - Version ordering is antisymmetric and transitive · passes, test can fail
-  - Bumping a prerelease or build always yields valid SemVer · passes, test can fail
-```
-
-A real run, shortened. That failure is the bug python-semver's maintainers fixed later: asking for the next prerelease could go backwards. One command, about five minutes and $1.10, and not one file in the repository changed.
+A real `/proob:try` in Claude Code on python-semver, one commit before its maintainers fixed issue #497, with the five-minute wait cut. proob proposed five properties and one failed: asking for the next prerelease can go backwards (`1.2.3-rc.1` with the token `alpha` gives `1.2.3-alpha.1`, which sorts before it). That is the bug the maintainers fixed. Not one file in the repository changed.
 
 ## Does it work?
 

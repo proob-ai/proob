@@ -1,4 +1,4 @@
-<!-- translated from README.md sha256:efb2a7b8cd3f8bca877ed969d8ae05077fb6d23d7649a468e0f39b0e49b269e7 -->
+<!-- translated from README.md sha256:36d235ecabaff63dbe5d07af9995b5ba711856af103ba0aa1d206c707ca9be24 -->
 # proob
 
 [![ci](https://github.com/proob-ai/proob/actions/workflows/ci.yml/badge.svg)](https://github.com/proob-ai/proob/actions/workflows/ci.yml)
@@ -10,23 +10,9 @@
 
 proob 是一个 Claude Code 插件。它阅读你的代码，用平实的语言写下必须始终成立的规则（例如“退款永远不超过原始扣款”），再用成千上万个自动生成的输入去攻击每条规则。团队在一次普通的拉取请求审查中批准这些规则，此后 proob 在每个拉取请求上重新检查它们。智能体只负责提议，批准只能来自你的团队。
 
-```text
-$ claude   # 在 python-semver 中，维护者修复 issue #497 之前的一个提交
-> /proob:try
+![在 Claude Code 中对 python-semver 运行 /proob:try：五条性质，其中一条因真实缺陷而失败](docs/try.gif)
 
-shadow: 5 properties tried · 1 fails · 4 pass · nothing in your repository was changed
-
-  - Asking for the next version always gives a strictly greater version
-    fails: v=parse('0.0.0-1'), part='prerelease', token='0'
-    0.0.0-1.next_version('prerelease', '0') gave 0.0.0-0.1
-    replay: proob --shadow run check 01M644W0MSK9CBE2136XR777N5 --seed 1793003282928823768
-  - Printing a parsed version string gives back exactly that string · passes, test can fail
-  - Two versions that compare equal always have the same hash · passes, test can fail
-  - Version ordering is antisymmetric and transitive · passes, test can fail
-  - Bumping a prerelease or build always yields valid SemVer · passes, test can fail
-```
-
-这是一次真实运行的节选。那个失败正是 python-semver 维护者后来修复的缺陷：请求下一个预发布版本时，版本号可能倒退。一条命令，约五分钟、1.10 美元，仓库里没有任何文件被改动。
+在 Claude Code 中对 python-semver 真实运行 `/proob:try`，时间点是维护者修复 issue #497 之前的一个提交，中间约五分钟的等待已剪去。proob 提出五条性质，其中一条失败：请求下一个预发布版本时可能倒退（`1.2.3-rc.1` 使用标记 `alpha` 得到 `1.2.3-alpha.1`，而它排在前者之前）。这正是维护者后来修复的缺陷。仓库里没有任何文件被改动。
 
 ## 它真的有效吗？
 

@@ -1,4 +1,4 @@
-<!-- translated from README.md sha256:efb2a7b8cd3f8bca877ed969d8ae05077fb6d23d7649a468e0f39b0e49b269e7 -->
+<!-- translated from README.md sha256:36d235ecabaff63dbe5d07af9995b5ba711856af103ba0aa1d206c707ca9be24 -->
 # proob
 
 [![ci](https://github.com/proob-ai/proob/actions/workflows/ci.yml/badge.svg)](https://github.com/proob-ai/proob/actions/workflows/ci.yml)
@@ -10,23 +10,9 @@
 
 proob は Claude Code のプラグインです。コードを読み、常に成り立つべきルールを平易な言葉で書き出し（たとえば「返金額は元の請求額を決して超えない」）、自動生成した何千もの入力で各ルールを攻撃します。チームは通常のプルリクエストのレビューでルールを承認し、以後 proob はすべてのプルリクエストでそれを再検査します。エージェントは提案するだけで、承認できるのはチームだけです。
 
-```text
-$ claude   # python-semver で、メンテナーが issue #497 を修正する一つ前のコミット
-> /proob:try
+![Claude Code で python-semver に /proob:try を実行：5 つのプロパティのうち 1 つが実際のバグで失敗](docs/try.gif)
 
-shadow: 5 properties tried · 1 fails · 4 pass · nothing in your repository was changed
-
-  - Asking for the next version always gives a strictly greater version
-    fails: v=parse('0.0.0-1'), part='prerelease', token='0'
-    0.0.0-1.next_version('prerelease', '0') gave 0.0.0-0.1
-    replay: proob --shadow run check 01M644W0MSK9CBE2136XR777N5 --seed 1793003282928823768
-  - Printing a parsed version string gives back exactly that string · passes, test can fail
-  - Two versions that compare equal always have the same hash · passes, test can fail
-  - Version ordering is antisymmetric and transitive · passes, test can fail
-  - Bumping a prerelease or build always yields valid SemVer · passes, test can fail
-```
-
-実際の実行の抜粋です。この失敗は、python-semver のメンテナーが後に修正したバグそのものです。次のプレリリース版を求めると、バージョンが逆戻りすることがありました。コマンド一つ、約 5 分と 1.10 ドルで、リポジトリのファイルは一つも変わっていません。
+Claude Code で python-semver に対して実際に `/proob:try` を実行した様子です。メンテナーが issue #497 を修正する一つ前のコミットで、約 5 分の待ち時間はカットしています。proob は 5 つのプロパティを提案し、1 つが失敗しました。次のプレリリース版を求めると逆戻りすることがあります（`1.2.3-rc.1` にトークン `alpha` を与えると `1.2.3-alpha.1` になり、こちらのほうが前に並ぶ）。これはメンテナーが後に修正したバグそのものです。リポジトリのファイルは一つも変わっていません。
 
 ## 本当に効くのか
 
