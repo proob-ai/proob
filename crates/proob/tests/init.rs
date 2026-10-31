@@ -344,11 +344,14 @@ fn copy_tree(from: &Path, to: &Path) {
     }
 }
 
+/// Whether the pinned toolchain resolves here; a note when it does not.
+/// `PROOB_REQUIRE_KANI` (CI's kani job) turns that skip into a failure.
 fn kani_present() -> bool {
     use proob_adapters::kani::tools::{Resolution, resolve};
     match resolve(&[]) {
         Resolution::Ready(_) => true,
         Resolution::Missing { reason, .. } => {
+            assert!(std::env::var_os("PROOB_REQUIRE_KANI").is_none(), "PROOB_REQUIRE_KANI is set but {reason}");
             eprintln!("skipped: {reason}");
             false
         }

@@ -24,7 +24,7 @@ cargo xtask sim lifecycle honesty      # proob end to end against a fixture GitH
 | `commit-lint [<base>..<head>]` | `git log` over the range (default `origin/master..HEAD`); every subject must follow CONTRIBUTING.md, "Commits": `type(scope)!: description` with an allowed type, at most 72 characters, imperative, no trailing period; no `fixup!`/`squash!`/`amend!` commits; no merge commits | lint (pull requests: `base.sha..head.sha`) |
 | `commit-lint --title <title>` | the same rules on one subject line | lint (the pull request title) |
 | `build` | `cargo build --locked --workspace` | test |
-| `test [-- args]` | `cargo nextest run --locked --workspace --no-fail-fast [args]` | test |
+| `test [-- args]` | `cargo nextest run --locked --workspace --no-fail-fast [args]` | test; kani (the Kani-gated tests, below) |
 | `verify` | `cargo verus verify --locked -p proob-core --fwd-verus-args-to roots -- --no-cheating --rlimit 10` | verify (the required check) |
 | `trusted-base` | the line count of `crates/proob-trusted/src/*.rs`, as `wc -l` prints it | verify |
 | `verify-negative` | `tools/ci/verify-negative.sh`: proves the verify job can fail (several minutes) | verify |
@@ -46,6 +46,17 @@ directory the script unpacks the pinned release into,
 to the child's PATH. xtask never downloads anything: when neither is present
 it fails with a one-line hint to run `tools/get-verus.sh`. The pinned version
 is read from that script at build time, so the pin lives in one place.
+
+The `kani` job (not required) installs the Kani release pinned in
+`tools/kani.toml`, cached on that pin, with the steps `proob init --kani`
+writes for users, then runs `cargo xtask test` three times with
+`PROOB_REQUIRE_KANI=1`: the real-Kani twin of the real-Verus test in
+`crates/proob/tests/run.rs` (real `verified` and score records render `Holds`,
+a real counterexample `Broken`), `-p proob-adapters --test kani` (the
+adapter's real checks and scores), and `init --kani`'s build probe in
+`crates/proob/tests/init.rs`. Without Kani those tests skip themselves (`test`
+runs them, and so `ci`; there is no Kani stage); the variable turns a skip into
+a failure.
 
 `declaration` exercises the no-token path: in CI nothing can reach GitHub, so
 `status` renders Unverified and never Holds. proob also accepts a token from
@@ -97,6 +108,7 @@ built (`target/sim/rust-repo` keeps its cargo build), so `ci` runs it.
 | `test` | cargo-nextest 0.9.150 | `cargo install cargo-nextest --locked --version 0.9.150` |
 | `test` (the Rust adapter's score tests) | cargo-mutants 27.1.0 | `cargo install cargo-mutants --locked --version 27.1.0` |
 | `test` (the Python adapter's tests) | pytest, hypothesis, mutmut at the pins in `tools/python-tools.txt`, on PATH | `python -m venv .venv && .venv/bin/pip install -r tools/python-tools.txt`, then put `.venv/bin` on PATH |
+| `test` (the Kani-gated tests; skipped without it) | Kani and its nightly, at the pin in `tools/kani.toml` | `cargo install --locked kani-verifier --version 0.68.0 && cargo kani setup` |
 | `verify`, `verify-negative` | the pinned Verus release | `tools/get-verus.sh` (fetches, checks the sha256, unpacks; prints the directory) |
 | `plugin-validate` | Claude Code | `curl -fsSL https://claude.ai/install.sh \| bash` (installs to `$HOME/.local/bin/claude`) |
 | `declaration` | `origin/master` reachable, no `GITHUB_TOKEN`/`GH_TOKEN` in the environment (a gh login is neutralised, see above) | `git fetch origin master`; `env -u GH_TOKEN cargo xtask declaration` if your shell exports one |

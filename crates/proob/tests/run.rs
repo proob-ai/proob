@@ -210,14 +210,16 @@ impl VerusRepo {
     }
 }
 
-/// `None` when this machine has no Verus toolchain: the run's record says so.
-/// `PROOB_REQUIRE_VERUS` (CI's verify job) turns that skip into a failure, so
-/// the one job meant to exercise the real proof route cannot pass vacuously.
-fn verified_or_skipped(out: &Run) -> Option<Value> {
+/// `None` when this machine has no `tool` (Verus or Kani) toolchain: the
+/// run's record says so. `PROOB_REQUIRE_VERUS` (CI's verify job) or
+/// `PROOB_REQUIRE_KANI` (its kani job) turns that skip into a failure, so the
+/// one job meant to exercise a real proof route cannot pass vacuously.
+fn verified_or_skipped(out: &Run, tool: &str) -> Option<Value> {
     let record = out.json();
     let reason = record["outcome"]["reason"].as_str().unwrap_or("");
-    if record["outcome"]["result"] == "errored" && reason.contains("Verus toolchain was not found") {
-        assert!(std::env::var_os("PROOB_REQUIRE_VERUS").is_none(), "PROOB_REQUIRE_VERUS is set but {reason}");
+    if record["outcome"]["result"] == "errored" && reason.contains(&format!("{tool} toolchain was not found")) {
+        let require = format!("PROOB_REQUIRE_{}", tool.to_uppercase());
+        assert!(std::env::var_os(&require).is_none(), "{require} is set but {reason}");
         eprintln!("skipped: {reason}");
         return None;
     }
@@ -303,7 +305,7 @@ fn a_crate_without_verify_true_renders_not_checked_no_adapter() {
 fn run_check_on_a_proof_records_verified_then_a_bug_fails_it() {
     let r = VerusRepo::new();
     let out = run(r.proob().args(["run", "check", VA, "--json", "--record"]));
-    let Some(record) = verified_or_skipped(&out) else { return };
+    let Some(record) = verified_or_skipped(&out, "Verus") else { return };
     assert_eq!(out.code, 0, "{}", out.stderr);
     assert_eq!(record["kind"], "proof");
     assert_eq!(record["outcome"], serde_json::json!({ "result": "verified", "rlimit": 10 }), "{record}");
@@ -335,7 +337,7 @@ fn run_check_on_a_proof_records_verified_then_a_bug_fails_it() {
 fn run_score_on_the_weak_spec_records_zero_kills() {
     let r = VerusRepo::new();
     let out = run(r.proob().args(["run", "score", VB, "--json"]));
-    let Some(record) = verified_or_skipped(&out) else { return };
+    let Some(record) = verified_or_skipped(&out, "Verus") else { return };
     assert_eq!(out.code, 0, "{}", out.stderr);
     assert_eq!(record["kind"], "score");
     assert_eq!(
@@ -377,7 +379,7 @@ fn real_verus_records_under_a_team_approval_hold_and_a_failed_proof_is_broken() 
     let r = VerusRepo { repo, fixture: Fixture::new(&governed().build(), None) };
 
     let out = run(r.proob().args(["run", "check", VA, "--json"]));
-    let Some(proof) = verified_or_skipped(&out) else { return };
+    let Some(proof) = verified_or_skipped(&out, "Verus") else { return };
     assert_eq!(proof["outcome"]["result"], "verified", "{proof}");
     let out = run(r.proob().args(["run", "score", VA, "--json"]));
     assert_eq!(out.code, 0, "{}", out.stderr);
@@ -414,18 +416,26 @@ fn real_verus_records_under_a_team_approval_hold_and_a_failed_proof_is_broken() 
 // ---------------------------------------------------------------------------
 
 const KB: &str = "01K8V5NQ4A0F3R7Y2M9D6P1XKB";
+/// `clamp_is_identity_planted_failure`: Kani finds a counterexample.
+const KF: &str = "01K8V5NQ4A0F3R7Y2M9D6P1XKF";
 
 fn kani_fixture_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/kani-crate").canonicalize().expect("fixture")
 }
 
-/// The Kani fixture with a `kani` adapter beside its `rust` one, committed;
-/// discovery needs no Kani toolchain.
-fn kani_repo() -> TempRepo {
+/// The Kani fixture with a `kani` adapter beside its `rust` one, uncommitted.
+fn kani_tree() -> TempRepo {
     let repo = TempRepo::new();
     copy_tree(&kani_fixture_dir(), repo.root());
     let kani = "[[adapters]]\nroot = \".\"\nlanguage = \"kani\"\nrunner = \"kani\"\nmutation_tool = \"cargo-mutants\"\n\n[policy]";
     repo.write("proob/config.toml", &repo.read("proob/config.toml").replace("[policy]", kani));
+    repo
+}
+
+/// The Kani fixture with its `kani` adapter, committed; discovery needs no
+/// Kani toolchain.
+fn kani_repo() -> TempRepo {
+    let repo = kani_tree();
     repo.commit("the kani fixture", NOW - 10 * DAY);
     repo
 }
@@ -466,4 +476,74 @@ fn run_on_an_unbound_proof_in_a_kani_repository_says_how_to_bind_a_harness() {
         "{}",
         out.stderr
     );
+}
+
+/// The Kani twin of the real-Verus test: Kani's own `verified` check and
+/// mutation score for a harness, and its `proof_failed` check for the planted
+/// failure, all from real runs on a copy of the Kani fixture, repackaged as one
+/// evidence run on main under a team approval. The harness Holds; the planted
+/// failure is Broken. Two Kani checks and one score.
+#[test]
+fn real_kani_records_under_a_team_approval_hold_and_a_counterexample_is_broken() {
+    let repo = kani_tree();
+    repo.write(".github/workflows/proob-gate.yml", GATE_YML);
+    repo.write(".github/workflows/proob-evidence.yml", EVIDENCE_YML);
+    let c1 = repo.commit("the kani fixture (PR #7)", NOW - 10 * DAY);
+    let blobs: Vec<(String, String)> =
+        repo.git(&["ls-files"]).lines().map(|path| (path.to_string(), repo.blob(&c1, path))).collect();
+    let workflow_blob = repo.blob(&c1, ".github/workflows/proob-evidence.yml");
+    // Alice's PR #7 introduces everything; Bob, another writer, approves it.
+    let files: Vec<&str> = blobs.iter().map(|(path, _)| path.as_str()).collect();
+    let mut scenario = ScenarioBuilder::new();
+    scenario.merged_pr(7, ALICE, &c1, &files).review(7, 501, BOB, "APPROVED", &c1).governance(true, true, true, true);
+    for (path, blob) in &blobs {
+        scenario.blob(&c1, path, Some(blob));
+    }
+    let fixture = Fixture::new(&scenario.build(), None);
+    let proob = || {
+        let mut cmd = repo.proob();
+        // cargo-kani comes from the real PATH, its bundle from HOME or KANI_HOME.
+        cmd.env("PATH", std::env::var_os("PATH").expect("PATH"));
+        cmd.env("PROOB_FIXTURE_DIR", fixture.path());
+        // Share the fixture's build directory, so the copy builds under Kani once per machine.
+        cmd.env("CARGO_TARGET_DIR", kani_fixture_dir().join("target"));
+        cmd
+    };
+
+    let out = run(proob().args(["run", "check", KB, "--json"]));
+    let Some(proof) = verified_or_skipped(&out, "Kani") else { return };
+    assert_eq!(proof["outcome"]["result"], "verified", "{proof}");
+    let out = run(proob().args(["run", "score", KB, "--json"]));
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    let score = out.json();
+    assert_eq!(score["outcome"]["result"], "scored", "{score}");
+    assert!(score["outcome"]["killed"].as_u64().unwrap_or(0) >= 1, "the default kill floor is one: {score}");
+    let out = run(proob().args(["run", "check", KF, "--json"]));
+    assert_eq!(out.code, 1, "a failed proof exits 1: {}", out.stderr);
+    let failed = out.json();
+    assert_eq!(failed["outcome"]["result"], "proof_failed", "{failed}");
+
+    // What the evidence job adds to a run result: the run, its head, the
+    // workflow blob, and when.
+    let evidence = |result: &Value| {
+        let mut record = result.clone();
+        record["run_id"] = 101.into();
+        record["head_sha"] = c1.as_str().into();
+        record["workflow_blob"] = workflow_blob.as_str().into();
+        record["at"] = (NOW - DAY).into();
+        record
+    };
+    scenario.evidence_run(
+        101,
+        &c1,
+        "schedule",
+        "2026-10-27T00:00:00Z",
+        vec![evidence(&proof), evidence(&score), evidence(&failed)],
+    );
+    fixture.write_scenario(&scenario.build());
+    let out = run(proob().args(["status", "--json"]));
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    let rows = rows(&out.json());
+    assert_eq!(rows[KB]["word"], "Holds", "{}", rows[KB]);
+    assert_eq!(rows[KF]["word"], "Broken", "{}", rows[KF]);
 }

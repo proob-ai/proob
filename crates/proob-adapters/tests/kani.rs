@@ -338,10 +338,12 @@ fn a_missing_toolchain_yields_errored_with_the_stable_hint() {
 // ---------------------------------------------------------------------------
 
 /// Whether the pinned toolchain resolves here; a note when it does not.
+/// `PROOB_REQUIRE_KANI` (CI's kani job) turns that skip into a failure.
 fn kani_present() -> bool {
     match resolve(adapter().tool_env()) {
         Resolution::Ready(_) => true,
         Resolution::Missing { reason, .. } => {
+            assert!(std::env::var_os("PROOB_REQUIRE_KANI").is_none(), "PROOB_REQUIRE_KANI is set but {reason}");
             eprintln!("skipped: {reason}");
             false
         }
