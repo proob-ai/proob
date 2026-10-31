@@ -4,7 +4,7 @@ Branch: `proob/falsify-<YYYY-MM-DD>`. Title: `proob: bind <n> propert(y|ies) to 
 Fill every `<…>` from the property files, `proob hash <id> --json`, and the `run check` JSON; do
 not retype numbers that the JSON already carries.
 
-```markdown
+~~~markdown
 ## Bindings for review
 
 Merging this PR approves each check below and its binding set. Nothing here is evidence: every
@@ -15,10 +15,45 @@ merge.
 |---|---|---|---|
 | `<id>` <title> | <statement, verbatim> | `<check reference>` in `<test file>` | passed locally (seed <replay.seed>, <outcome.budget> cases) |
 | `<id>` <title> | <statement, verbatim> | `<check reference>` in `<test file>` | counterexample: `<outcome.witness>`; replay `proob run check <id> --seed <replay.seed>` |
+| `<id>` <title> | <statement, verbatim> | Kani `<check reference>` in `<harness file>` | verified locally within the harness's bounds (<outcome.checks> checks) |
+| `<id>` <title> | <statement, verbatim> | Kani `<check reference>` in `<harness file>` | proof failed: `<the failed check and location from outcome.diagnostics>` |
 
 ### What each check asserts
 
 - `<id>`: <one sentence: the generator's domain and the assertion, in plain words>.
+
+### Proved for
+
+Kani checks a harness for every input it admits, and for no other. Each bound below comes from
+the statement unless it is marked **narrows**; a narrowing you approve is part of what `Holds`
+will mean for that property.
+
+- `<id>` `<check reference>`
+  - inputs: `<name>: <type>` from `kani::any()`, …
+  - `kani::assume(<expr>)`: from "<the statement's words>"
+  - `<CONST> = <n>` (size bound): <why n>. **narrows**: <what it leaves out, e.g. lists longer than n>
+  - `#[kani::unwind(<n>)]`: <the loop, and why n covers the size bound>
+  - covers: `<case>` from "<the statement's words>", …
+
+### Fell back to a test
+
+`<id>` was declared `kind = "proof"`. Kani could not take it, so this PR changes its `kind` to
+`"test"` and binds the property-based test in the table above. Changing `kind` re-opens the
+statement's approval: approving this PR approves the change. After merge it reads
+`Checked (tested)` at best: a test samples inputs and cannot prove.
+
+- Why, from `proob run check <id> --json`: `<outcome.reason, verbatim>`
+- Retry with `#[kani::unwind(<n>)]` (unwinding only): `<the retry's outcome.reason, verbatim>`
+- Or, not run: the harness needs <feature>, which Kani does not support
+  (https://model-checking.github.io/kani/rust-feature-support.html).
+
+<details><summary>The harness that was tried</summary>
+
+```rust
+<the harness as it ran, token included>
+```
+
+</details>
 
 ### Binding sets
 
@@ -38,10 +73,19 @@ Approval attaches to these files' content. Editing any of them after merge rende
   statement is amended in its own PR to `proob/properties/`.
 - After merge: `Not checked` until the default-branch run completes, then `Checked (tested,
   strength pending)` until a scheduled score run shows each check can fail, then `Checked (tested)`.
+  A Kani harness reads `Checked (strength pending)` instead, then `Holds` once its score is at the
+  floor and the team has approved it: `Holds` within the bounds under "Proved for".
+- A Kani row is checked for every input its harness admits; review "Proved for" as you would the
+  statement. A "proof failed" row is a bug, like a counterexample.
 
 Opened by /proob:falsify. The agent wrote the tests and ran them locally; it did not approve
 anything and cannot.
-```
+~~~
 
 Omit the counterexample row and the counterexample reviewer bullet when every result passed.
+"Proved for" is required for every Kani-bound property and lists every `kani::assume`, size
+bound, and unwind bound in its harness; omit it when no property is bound to Kani. Include "Fell
+back to a test" once per fallback, with the reason line verbatim, and omit it when none fell
+back; drop the lines that do not apply (the retry, or the not-run line). Never write "proved",
+"proven", or "holds" about a local result.
 Quote statements verbatim, however long; never paraphrase one to fit the table.

@@ -5,6 +5,10 @@ the verifier and the strength measure is mutation-under-proof. You propose the b
 approves it; proob runs it. You run nothing you then describe as a proof unless `run check`
 printed `verified`.
 
+Two verifiers take a proof: Verus, for a crate written in Verus (the sections below), and Kani,
+for ordinary Rust when `proob/config.toml` has an adapter with `language = "kani"` (the last
+section). Kani is Rust only; Python has no proof route in this release.
+
 ## What binds a proof
 
 A comment-only line `// proob:<ULID>` directly above an item inside a `verus!` block, in a crate
@@ -55,10 +59,12 @@ is the unit of approval; after merge, an edit anywhere in it renders every proof
    maintainer decides whether to adopt it. Never write `assume`, `admit`, `external_body`, or
    `assume_specification` to make a draft go through; under `--no-cheating` proob's run rejects
    them anyway.
-3. If the crate is not under Verus and the property says `kind = "proof"`, say that the route
-   needs `verify = true` on the crate and a `verus` adapter in `proob/config.toml`, both human
-   decisions, and that until then the property renders `Not checked (no check bound)`. Offer the
-   draft from step 2 as text in your reply or in a PR comment, not as a token in the tree.
+3. If the crate is not under Verus and the property says `kind = "proof"`: with a `kani` adapter,
+   the property is Kani's, and `/proob:falsify <id>` writes its harness. Otherwise say that the
+   route needs `verify = true` on the crate and a `verus` adapter in `proob/config.toml`, or a
+   `kani` adapter (`proob init --kani`), all human decisions, and that until then the property
+   renders `Not checked (no check bound)`. Offer the draft from step 2 as text in your reply or
+   in a PR comment, not as a token in the tree.
 4. Open the PR on a branch `proob/verify-<YYYY-MM-DD>` with the token and, when drafted, the spec;
    the body uses `../falsify/pr-template.md` with "Check" naming the item
    (`<package> <module path>::<fn>`) and the local result from step 5, or "not run" when you could
@@ -109,3 +115,41 @@ then `Holds` if the team approved the statement, the binding set, the config, an
 or `Checked (self-signed)` when the only approval is the author's own. A local `verified` and a
 local score change none of this. This is the route to `Holds`: a test-backed property, however
 strong, stops at `Checked (tested)`.
+
+## Kani: a harness on ordinary Rust
+
+`/proob:falsify` writes and binds the harness (its `conventions.md` has the convention); verify
+reads the run and the score. A harness is checked for every input it admits and no other, so a
+Kani result always travels with its bounds: the `kani::assume`s, size bounds, and unwind bounds
+the binding PR's "Proved for" block lists.
+
+`check` runs `cargo kani` on the one harness with Kani's own nightly. `outcome.result` is
+`verified` (with `checks`), `proof_failed` (with `diagnostics`: the failed check, its location),
+or `errored` (with `reason`); `tool_versions` records `kani`, `cbmc`, and `nightly`. The words
+for a local `verified` are "verified locally within the harness's bounds (<checks> checks):
+unverified until the default-branch run". A `proof_failed` is a bug, read as a counterexample:
+quote the diagnostics, offer the two exits. An `errored` reason says what to do next; falsify's
+step 5 has the table.
+
+`score`, operator set `cargo-mutants-under-kani-v1`, applies sampled cargo-mutants mutants of the
+property's scope (never of harness code) and re-runs the one harness on each, `max_mutants`
+(default 30; 10 in `/proob:try`) per score. Read the JSON as:
+
+- `killed`: an assertion written in the harness failed on the mutant. The harness tells the
+  mutant from the real code.
+- `survived`: the harness verified the mutant, or the only check that failed was one of Rust's or
+  Kani's own (arithmetic overflow, an index out of bounds, a panic in another function). Those
+  count as survived: the statement is not "the code does not panic", and a harness whose own
+  assertions let the mutant through has not shown it can tell the mutant apart. A harness that
+  only trips such checks on mutants (the fixture's `clamp_indexes_a_table`) reads `killed 0`;
+  so does one that asserts only what it assumed (`clamp_runs_with_ordered_bounds`). The remedy is
+  an assertion of the statement, not a weaker bound.
+- `timeout`: the mutant hit the unwind bound, left checks undetermined, ran out of memory, or ran
+  past the per-mutant limit (five times the baseline run); neither a kill nor a survivor.
+- `unviable`: Kani could not check the mutant at all (it did not compile, reached an unsupported
+  construct, made a cover unreachable, or the harness was not found); outside the denominator.
+- `unsampled`: as for Verus.
+
+A Kani-bound property reads as above: `Not checked`, then `Checked (strength pending)`, then
+`Holds`, and a Kani `Holds` means within the harness's bounds: inputs outside them were not
+checked.

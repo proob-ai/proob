@@ -224,7 +224,16 @@ rationale = "<why it matters, citing the evidence: files, tests, notes, the requ
 - `rationale`: cites the evidence by path, test name, note, or issue number;
   never the picture file itself; never a credential or a long token. A
   superseding property's rationale begins `Supersedes <old ULID>: `.
-- `kind = "proof"` or `kind = "model"` only when the user asked for the proof
+- `kind`: when `proob/config.toml` has an adapter with `language = "kani"`,
+  every property whose scope is Rust code gets `kind = "proof"` if
+  `proob/.cache/kani-probe.toml` reads `kani_probe = "passed"`
+  (`/proob:falsify` then writes a Kani harness, and falls back to a test only
+  for a reason it shows the reviewer), and `kind = "test"` otherwise: the file
+  is missing, or reads `kani_probe = "failed: …"`. Say why in one line in the
+  report and in the PR body, quoting that `kani_probe` line or saying the file
+  is missing (`proob init --kani` writes it). Kani is Rust only: a Python
+  property never gets `kind = "proof"` from this rule. Without a kani adapter,
+  `kind = "proof"` or `kind = "model"` only when the user asked for the proof
   or model route; otherwise omit the key and the bound check's adapter decides.
 - No `"` or `\` inside a value; rephrase instead.
 
@@ -289,11 +298,13 @@ the gate's next run will list the proposals as `Proposed`.
 In this order: the mode line (step 0); the `proob validate` line; the
 `headline` from `proob status --json` with its verification state ("local,
 unverified" when it is not `verified`); each proposal as `<ULID> —
-<statement> — <severity> — <scope>`, and for a superseding one `(supersedes
-<old ULID>: delete the old file when approving)`; in branch mode, each
+<statement> — <severity> — <scope>`, with its `kind` when it has one (and,
+with a kani adapter, the `kani_probe` line behind it), and for a superseding
+one `(supersedes <old ULID>: delete the old file when approving)`; in branch mode, each
 `Broken` property you judged a code bug, and the uncovered paths still
 without a property, with why; the PR URL, or the body and the commands, or
 on the current branch the commit and the PR-body section; the statements left
 out as duplicates and why; the init files, when init ran. End with: these
 are proposals; each renders `Proposed` until a reviewer merges the pull
-request, and none is checked until `/proob:falsify` binds a test to it.
+request, and none is checked until `/proob:falsify` binds a test or a Kani
+harness to it.

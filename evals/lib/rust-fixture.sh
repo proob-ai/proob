@@ -4,7 +4,7 @@
 # Sourced by each case's scaffold.sh, which `claude plugin eval` runs only
 # with --scaffold, as the operator, with cwd = the case's fresh workspace and
 # HOME = the eval's own home directory (not the operator's). It leaves behind:
-#   - a copy of tests/fixtures/rust-repo with the repository's toolchain pin
+#   - a copy of tests/fixtures/rust-repo (or $fixture_name) with the repository's toolchain pin
 #     (outside the repository rustup would fall back to the default toolchain,
 #     which cannot read an edition-2024 manifest);
 #   - the operator's ~/.rustup and ~/.cargo linked into the eval home, so the
@@ -25,7 +25,7 @@
 set -eu
 
 plugin_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
-fixture="$plugin_root/tests/fixtures/rust-repo"
+fixture="$plugin_root/tests/fixtures/${fixture_name:-rust-repo}"   # kani-fixture.sh sets kani-crate
 real_home=$(eval echo "~$(id -un)")
 
 cp -R "$fixture/." .

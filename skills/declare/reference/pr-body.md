@@ -3,8 +3,9 @@
 Fill the angle-bracket fields and keep everything else, especially the three
 numbered reviewer instructions, word for word. Drop the "First run" section
 when `proob init` did not run in this invocation, the "No adapter" section
-when `proob/config.toml` lists an adapter for the repository's language, and
-the "Supersedes" section when no proposal replaces an existing property.
+when `proob/config.toml` lists an adapter for the repository's language, the
+"Proof or test" section when it has no `kani` adapter, and the "Supersedes"
+section when no proposal replaces an existing property.
 Never write "holds", "verified", "guaranteed", "proven", or "approved" about
 a proposal anywhere in the body.
 
@@ -51,7 +52,11 @@ The gate takes effect after this pull request merges.
 
 ### No adapter
 
-proob has no adapter for this repository's language, so each property above will render `Not checked (no adapter)` until an adapter exists. Adapters today: Rust with proptest, Rust under Verus, Python with Hypothesis. The statements still stand as the team's agreement, and the gate still lists them.
+proob has no adapter for this repository's language, so each property above will render `Not checked (no adapter)` until an adapter exists. Adapters today: Rust with proptest, Rust under Verus, Rust with Kani, Python with Hypothesis. The statements still stand as the team's agreement, and the gate still lists them.
+
+### Proof or test
+
+`<the kani_probe line from proob/.cache/kani-probe.toml, verbatim | proob/.cache/kani-probe.toml is missing>`: so the Rust proposals declare `kind = "<proof | test>"`. A `proof` proposal gets a Kani harness from `/proob:falsify`, whose pull request lists the inputs the harness covers; if Kani cannot take one, that pull request changes it to `test` and says why.
 
 ### Not proposed
 

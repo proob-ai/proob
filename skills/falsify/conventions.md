@@ -75,6 +75,105 @@ present. Not `Cargo.toml`, not `Cargo.lock`. Hashed as `proob-binding-v1`.
 A crate whose `Cargo.toml` says `[package.metadata.verus] verify = true` belongs to the Verus
 adapter: its `src/` holds proofs and is not scanned for tests; its `tests/` crates still are.
 
+## Kani: a harness, for a `kind = "proof"` Rust property
+
+A line comment holding only the token, directly above a `#[kani::proof]` fn (or
+`#[cfg_attr(kani, kani::proof)]`), in a `#[cfg(kani)]` module of the library or binary crate.
+A harness under `tests/` binds nothing, and a `#[kani::proof_for_contract]` harness is reported
+unbound ("contracts are not supported yet"). The property must say `kind = "proof"`, and
+`proob/config.toml` must carry an adapter with `language = "kani"`.
+
+Correct (after `tests/fixtures/kani-crate/src/lib.rs`, statement "For ordered bounds, a clamped
+value lies between them"):
+
+```rust
+#[cfg(kani)]
+mod verification {
+    use super::clamp;
+
+    // proob:01K8V5NQ4A0F3R7Y2M9D6P1XKB
+    #[kani::proof]
+    fn clamp_stays_within_bounds() {
+        let (x, lo, hi): (i32, i32, i32) = (kani::any(), kani::any(), kani::any());
+        kani::assume(lo <= hi);                     // "for ordered bounds"
+        kani::cover!(lo == hi, "equal bounds");     // ordered includes equal
+        kani::cover!(x < lo, "below the bounds");
+        kani::cover!(x > hi, "above the bounds");
+        let y = clamp(x, lo, hi);
+        assert!(lo <= y && y <= hi, "clamp({x}, {lo}, {hi}) = {y}");
+    }
+}
+```
+
+Every `i32` triple with `lo <= hi` is checked, which is what the statement says and no less.
+
+With a size bound (statement "The number of even values in a list is at most the number of
+values in it"):
+
+```rust
+    /// Lists of up to 8 values: each extra value is one more loop iteration for Kani to unroll.
+    const MAX_LEN: usize = 8;
+
+    // proob:01K8V5NQ4A0F3R7Y2M9D6P1XHC
+    #[kani::proof]
+    #[kani::unwind(9)]                              // MAX_LEN + 1: one per value, one to exit
+    fn evens_never_exceed_the_length() {
+        let values: [u32; MAX_LEN] = kani::any();
+        let len: usize = kani::any();
+        kani::assume(len <= MAX_LEN);               // the size bound, not the statement's
+        let v = &values[..len];
+        kani::cover!(len == 0, "an empty list");
+        assert!(count_evens(v) <= v.len());
+    }
+```
+
+The statement says "a list", any length; this proves it for lists of at most 8. That is a
+narrowing the reviewer must see: the PR's "Proved for" block lists `MAX_LEN = 8` and says what it
+leaves out.
+
+Narrowed: verifies, and proves far less than the statement promises. Nothing in "for ordered
+bounds" says the bounds are small or the input is between them:
+
+```rust
+    // proob:01K8V5NQ4A0F3R7Y2M9D6P1XKB
+    #[kani::proof]
+    fn clamp_stays_within_bounds() {
+        let (x, lo, hi): (i32, i32, i32) = (kani::any(), kani::any(), kani::any());
+        kani::assume(-100 <= lo && lo <= hi && hi <= 100);  // no: the statement admits every i32
+        kani::assume(lo <= x && x <= hi);                   // no: excludes the clamping cases
+        assert!(lo <= clamp(x, lo, hi) && clamp(x, lo, hi) <= hi);
+    }
+```
+
+Vacuous (from `tests/fixtures/kani-crate/src/lib.rs`): verifies, and asserts only what it
+assumed, so every mutant of `clamp` survives and verify scores it `killed 0`:
+
+```rust
+    // proob:01K8V5NQ4A0F3R7Y2M9D6P1XKK
+    #[kani::proof]
+    fn clamp_runs_with_ordered_bounds() {
+        let (x, lo, hi): (i32, i32, i32) = (kani::any(), kani::any(), kani::any());
+        kani::assume(lo <= hi);
+        let _ = clamp(x, lo, hi);
+        assert!(lo <= hi);                          // true of the assume, says nothing about clamp
+    }
+```
+
+A cover the harness cannot reach (`kani::cover!(y < lo, …)` after the assume above, in the
+fixture's `clamp_covers_an_unreachable_case`) makes the run `errored` with "vacuous: the harness
+cannot reach a case it covers: …"; fix the assume or the bound, never the cover.
+
+Forbidden in a bound harness: `kani::assume` of anything the statement does not state, unless
+the PR flags it; `#[kani::stub]` and `#[kani::proof_for_contract]` (stubs and contracts are not
+used in this release); `#[kani::should_panic]`; `#[kani::unwind]` on a harness with no loop;
+`kani::assume(false)` or any assume that leaves no input.
+
+Check reference: `<package> <module::path::harness>`, e.g. `kani-crate
+verification::clamp_stays_within_bounds`; `run check` prints it in its text output.
+
+Binding set: the harness's file and the files its `#[cfg(kani)]` `mod` declarations reach, the
+package `Cargo.toml`, the workspace root `Cargo.toml` when there is a workspace, and `Cargo.lock`.
+
 ## Python: Hypothesis through pytest (adapter arriving in U6)
 
 A comment line holding only the token, directly above the test function, above its decorators:
@@ -100,7 +199,7 @@ say that the check has not run.
 
 ## Verus: a proof, not a test
 
-Not falsify's route. A property whose statement is an `ensures` clause of an item in a crate with
+Not falsify's route (Kani, above, is). A property whose statement is an `ensures` clause of an item in a crate with
 `verify = true` is bound by `// proob:<ULID>` directly above that item inside `verus!`, and must
 declare `kind = "proof"`. `/proob:verify` proposes those bindings; see its `proof-route.md`.
 
