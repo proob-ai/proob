@@ -7,3 +7,6 @@
 .DS_Store
 /evals/results/
 /evals/.bin/
+
+# Planning documents stay local; decisions land in commits, PRs and docs.
+/docs/plans/
