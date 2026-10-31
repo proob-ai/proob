@@ -1,0 +1,7 @@
+id = "01M6870W1SJRYP1F3BQQ22CRJP"
+title = "Reversal keeps lookup and position in step"
+statement = "Reversing a map lists its entries in the opposite order and every key stays found at its new position."
+scope = ["src/inner.rs", "src/map.rs"]
+severity = "medium"
+rationale = "src/map.rs:1394-1396 documents reverse; src/inner.rs:471-481 recomputes every stored position arithmetically instead of rebuilding the table. tests/quick.rs reverse."
+kind = "proof"

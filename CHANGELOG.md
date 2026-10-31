@@ -50,6 +50,18 @@ version as a comment.
 
 ### Added
 
+- Proofs on ordinary Rust with Kani 0.68.0: a `kani` adapter binds a
+  `#[kani::proof]` harness as a `proof`, so a property on plain Rust code
+  can reach `Holds` with no proof language. A run that verifies is reported
+  within the harness's bounds; a counterexample is `Broken`; anything Kani
+  cannot complete is errored with its reason, never positive. Strength is
+  measured by mutation under Kani, where only a failed assertion of the
+  harness's own is a kill. `proob init --kani` opts a repository in (the
+  adapter, a pinned and cached Kani install in both workflows, and a build
+  probe); `/proob:declare` proposes proofs when the probe passed, and
+  `/proob:falsify` writes the harness, lists its bounds in the pull request,
+  and falls back to a property-based test, quoting Kani's reason, only when
+  Kani cannot take the property. CI runs the real Kani route in its own job.
 - Contributor standards: `CONTRIBUTING.md` (one `master` branch with
   releases as tags, Conventional Commits, the core and detection rules, adapters,
   releases), `CODE_OF_CONDUCT.md` (Contributor Covenant 2.1), `SECURITY.md`,

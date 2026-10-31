@@ -1,0 +1,7 @@
+id = "01M68C22JJY533ADTJ85CSVV9H"
+title = "Moving an entry keeps the rest in order"
+statement = "Moving an entry from one position to another keeps all other entries in their relative order, and every key is found at the position it ends up in."
+scope = ["src/inner.rs", "src/map.rs"]
+severity = "high"
+rationale = "The docs say move_index shifts all other pairs in between (src/map.rs move_index docs); src/inner.rs move_index locates the bucket before shifting indices so it is not lost. Existing test tests/quick.rs map_move_index."
+kind = "proof"

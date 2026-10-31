@@ -84,7 +84,8 @@ No.
 - **Generate the checks from the declaration**, so they catch the bugs your tests miss
   - [x] as property-based tests, for Python and Rust
   - [x] as proofs, for Rust written in Verus
-  - [ ] as proofs on ordinary Rust and Python, with no proofs to write (Kani, CrossHair)
+  - [x] as proofs on ordinary Rust, with no proofs to write (Kani)
+  - [ ] as proofs on ordinary Python, with no proofs to write (CrossHair)
   - [ ] as a formal spec of your design, chosen by the agent to fit your codebase (TLA+ for a protocol, Alloy for a data model)
   - [ ] verification first, with a safe landing: where no verifier can take a rule (an unsupported feature, an unbounded loop, a timeout), the agent binds a property-based test instead, and says so
   - [x] with the verdict telling tested from proved: `Holds` means proved, a test reads `Checked (tested)`
@@ -102,13 +103,13 @@ No.
 
 ### Languages
 
-**A test finds bugs; only a verifier earns `Holds`.** Every property binds one check. A property-based test searches generated inputs for a counterexample: `Broken` when it finds one, `Checked (tested)` when it does not, because a sampled run cannot speak for every input. A proof or a model checker covers every input, so it alone can render `Holds`. The verdict always says which kind of evidence stands behind it. A verifier that accepts too easily is caught the way a weak test is: proob mutates the code under the proof, and a proof that still passes is reported as vacuous, not as holding.
+**A test finds bugs; only a verifier earns `Holds`.** Every property binds one check. A property-based test searches generated inputs for a counterexample: `Broken` when it finds one, `Checked (tested)` when it does not, because a sampled run cannot speak for every input. A proof or a model checker covers every input, so it alone can render `Holds`. A Kani proof covers every input within the bounds its harness sets, and the verdict says so. The verdict always says which kind of evidence stands behind it. A verifier that accepts too easily is caught the way a weak test is: proob mutates the code under the proof, and a proof that still passes is reported as vacuous, not as holding.
 
 ☑ built, ☐ planned.
 
 | Language | Formal verification | Property-based test |
 |---|---|---|
-| Rust | ☑ Verus, for Verus code · ☐ Kani, for any Rust | ☑ proptest |
+| Rust | ☑ Verus, for Verus code · ☑ Kani, for any Rust | ☑ proptest |
 | Python | ☐ CrossHair | ☑ Hypothesis |
 | Design level, any language | ☐ TLA+ with TLC, Alloy | |
 | TypeScript | | ☐ fast-check |

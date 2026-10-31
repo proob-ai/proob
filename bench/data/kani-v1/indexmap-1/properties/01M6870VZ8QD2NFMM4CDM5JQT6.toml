@@ -1,0 +1,7 @@
+id = "01M6870VZ8QD2NFMM4CDM5JQT6"
+title = "Swap removal keeps lookup and position in step"
+statement = "After a key is removed by swapping with the last entry, every remaining key is found at the position where it is listed, and the removed key is gone."
+scope = ["src/inner.rs", "src/map.rs"]
+severity = "high"
+rationale = "src/map.rs:994-996 documents that swap removal moves the last entry; src/inner.rs:587-604 patches that entry's index in the hash table by hand. A stale index returns the wrong value for a key. tests/quick.rs insert_remove."
+kind = "proof"

@@ -1,4 +1,4 @@
-<!-- translated from README.md sha256:ab5d71cabbf5b36421f1487ea263b19322e3b1218d0def14d724fb32f2214e68 -->
+<!-- translated from README.md sha256:c8d03c3cc3cab1a0262cb7223eb247a69e7ec1c864cb376f98e1f436617712a7 -->
 # proob
 
 [![ci](https://github.com/proob-ai/proob/actions/workflows/ci.yml/badge.svg)](https://github.com/proob-ai/proob/actions/workflows/ci.yml)
@@ -85,7 +85,8 @@ proob 在你已有的流程上只增加一个必需检查和一个审查习惯�
 - **从声明生成检查**，让它们抓住你的测试遗漏的缺陷
   - [x] 作为基于性质的测试，支持 Python 和 Rust
   - [x] 作为证明，针对用 Verus 编写的 Rust
-  - [ ] 作为普通 Rust 和 Python 上的证明，无需编写证明（Kani、CrossHair）
+  - [x] 作为普通 Rust 上的证明，无需编写证明（Kani）
+  - [ ] 作为普通 Python 上的证明，无需编写证明（CrossHair）
   - [ ] 作为你的设计的形式化规约，由智能体根据你的代码库选择合适的语言（协议用 TLA+，数据模型用 Alloy）
   - [ ] 验证优先，并有安全着陆：当没有验证器能处理某条规则时（不支持的特性、无界循环、超时），智能体改为绑定一个基于性质的测试，并如实说明
   - [x] 结论区分测试过与证明过：`Holds` 意味着已证明，测试显示为 `Checked (tested)`
@@ -103,13 +104,13 @@ proob 在你已有的流程上只增加一个必需检查和一个审查习惯�
 
 ### 支持的语言
 
-**测试负责找缺陷；只有验证器能赢得 `Holds`。** 每条性质绑定一个检查。基于性质的测试在生成的输入中搜索反例：找到则为 `Broken`，没找到则为 `Checked (tested)`，因为抽样运行不能代表所有输入。证明或模型检查器覆盖所有输入，所以只有它能给出 `Holds`。结论始终说明背后是哪一类证据。接受得过于轻易的验证器会像弱测试一样被抓住：proob 在证明之下变异代码，仍然通过的证明会被报告为空洞，而不是成立。
+**测试负责找缺陷；只有验证器能赢得 `Holds`。** 每条性质绑定一个检查。基于性质的测试在生成的输入中搜索反例：找到则为 `Broken`，没找到则为 `Checked (tested)`，因为抽样运行不能代表所有输入。证明或模型检查器覆盖所有输入，所以只有它能给出 `Holds`。Kani 证明覆盖其 harness 所设界限内的所有输入，结论会如实说明。结论始终说明背后是哪一类证据。接受得过于轻易的验证器会像弱测试一样被抓住：proob 在证明之下变异代码，仍然通过的证明会被报告为空洞，而不是成立。
 
 ☑ 已构建，☐ 计划中。
 
 | 语言 | 形式化验证 | 基于性质的测试 |
 |---|---|---|
-| Rust | ☑ Verus，针对 Verus 代码 · ☐ Kani，针对任何 Rust | ☑ proptest |
+| Rust | ☑ Verus，针对 Verus 代码 · ☑ Kani，针对任何 Rust | ☑ proptest |
 | Python | ☐ CrossHair | ☑ Hypothesis |
 | 设计层面，任何语言 | ☐ TLA+ 与 TLC、Alloy | |
 | TypeScript | | ☐ fast-check |

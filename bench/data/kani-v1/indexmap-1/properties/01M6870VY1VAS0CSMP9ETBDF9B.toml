@@ -1,0 +1,7 @@
+id = "01M6870VY1VAS0CSMP9ETBDF9B"
+title = "Range resolution stays in bounds"
+statement = "A range resolved against a length always lies inside that length, and the non-panicking resolution accepts exactly the ranges the panicking one accepts, with the same result."
+scope = ["src/util.rs"]
+severity = "high"
+rationale = "Drain, splice and range lookups resolve caller bounds through the two resolvers in src/util.rs (lines 26-75); a resolved range outside the length, or the two disagreeing, would touch entries outside the map or reject valid input. tests/quick.rs drain_bounds exercises arbitrary bounds."
+kind = "proof"

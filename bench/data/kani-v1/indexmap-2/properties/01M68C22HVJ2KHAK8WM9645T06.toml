@@ -1,0 +1,7 @@
+id = "01M68C22HVJ2KHAK8WM9645T06"
+title = "Swap removal moves only the last entry"
+statement = "Removing a key by swapping moves only the last entry into the vacated position, every other entry keeps its position, and each remaining key is still found where it sits."
+scope = ["src/inner.rs", "src/map.rs"]
+severity = "high"
+rationale = "The docs say swap removal perturbs only the position of the last element (src/map.rs swap_remove docs); src/inner.rs swap_remove_finish patches that one index by hand, and src/map.rs has a separate single-entry fast path."
+kind = "proof"

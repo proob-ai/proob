@@ -85,6 +85,31 @@ Run `/proob:declare` on the branch where you build the feature. It works out wha
 
 You do not have to remember to run it. When a pull request adds code that no property covers, the proob gate check lists it under "New code without a property" and suggests `/proob:declare`; it never blocks. The session line says the same while you work. To leave paths out of that list, add globs to `uncovered_ignore` in `proob/config.toml`.
 
+### Proofs on ordinary Rust (Kani)
+
+For a Rust crate, proob can prove a property instead of testing it, with no proof language to learn. Opt in once:
+
+```sh
+proob init --kani
+```
+
+It adds the Kani adapter to `proob/config.toml` and a pinned, cached Kani install to both workflows, then checks that Kani can build the crate at all. In a repository already set up for proob it changes nothing and prints the block and steps to add. When that check passes, `/proob:declare` proposes Rust properties as proofs, and `/proob:falsify` writes a Kani harness for each: a function that gives the code symbolic inputs and asserts the statement for every input it admits.
+
+A Kani proof holds only within the harness's bounds: the input ranges it assumes, the collection sizes it fixes, and the loop bounds it unwinds. The falsify pull request lists every bound in a "Proved for" block, with the words of the statement it comes from, and flags any bound that narrows the statement. Approving the pull request approves those bounds. The property reaches `Holds` only after that approval, a default-branch run that verifies, and a mutation score at the floor: proob changes the code under proof and reruns the harness, and only a failed assertion of the harness's own counts as a catch.
+
+When Kani cannot take a property (code it does not support, a loop it cannot bound, a timeout, running out of memory), falsify binds a property-based test instead, changes the property's `kind` from `proof` to `test`, and quotes Kani's reason in the pull request; that property reads `Checked (tested)` at best. A counterexample is never a reason to fall back: it is a bug, and the property reads `Broken`.
+
+What a Kani proof does not cover:
+
+- inputs outside the harness's bounds;
+- concurrency: Kani compiles threads sequentially;
+- aliasing rules (Stacked Borrows) and other undefined behaviour Kani does not check;
+- the build itself: Kani compiles with its own nightly toolchain, not yours.
+
+Kani runs on Linux and macOS, not Windows. It downloads CBMC, whose BSD-style licence has an advertising clause.
+
+Kani is heavy. On indexmap, one CBMC process used 6 to 13 GB of memory per harness, and a harness over maps of 4 entries ran past the adapter's 30-minute limit ([Kani results](../bench/results/kani-v1.md)). proob does not yet check free memory before a run or cap CBMC's memory, so run one Kani job at a time on a machine with memory to spare, and keep harness bounds small.
+
 ### CLI
 
 The skills drive the `proob` binary, which you can also run directly:
@@ -148,7 +173,7 @@ The function that decides is `verdict`, in the crate `proob-core`. The crate tha
 5. `Waived` only with an approved waiver, an open issue, and an unexpired window.
 6. Eligibility is sound, a direct push is never approved, and no verdict is ever an input.
 
-For Rust under Verus, strength is measured by mutation-under-proof: proob changes the code under the proof and runs the verifier again. A change the proof still accepts is a specification that cannot tell right from wrong.
+For a proof, strength is measured by mutation under proof: proob changes the code under the proof and runs the verifier (Verus) or the harness (Kani) again. A change the proof still accepts is a specification that cannot tell right from wrong.
 
 `cargo xtask sim` runs the whole lifecycle against local stand-ins for GitHub, the release server, and Claude Code's hooks, and checks that a set of adversarial cases never renders `Holds`.
 
@@ -158,4 +183,5 @@ For Rust under Verus, strength is measured by mutation-under-proof: proob change
 - The evals that test the skills need an API key, and their scores vary between runs, so they are not a required check.
 - GitHub disables scheduled workflows on a public repository after 60 days without activity. When the nightly run stops, scores go stale: `Holds` drops to `Checked (strength pending)`, and `Checked (tested)` to `Checked (tested, strength pending)`.
 - mutmut needs `os.fork`, so Python checks are scored on Linux and macOS only.
+- A Kani proof holds only within its harness's bounds, and Kani cannot run on Windows (see [Proofs on ordinary Rust](#proofs-on-ordinary-rust-kani)).
 - TLA+ is not supported yet.
