@@ -52,6 +52,9 @@ outputs:
   holds:
     description: "Judge jobs: properties rendering Holds."
     value: ${{ steps.run.outputs.holds }}
+  checked:
+    description: "Judge jobs: properties rendering Checked."
+    value: ${{ steps.run.outputs.checked }}
   broken:
     description: "Judge jobs: properties rendering Broken."
     value: ${{ steps.run.outputs.broken }}

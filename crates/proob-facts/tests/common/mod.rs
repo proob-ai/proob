@@ -207,9 +207,9 @@ pub fn negative_for(kind: Kind) -> PrimaryOutcome {
     }
 }
 
-/// A status that renders `Holds` under `approved_governance()`: team-approved
-/// statement and binding set, fresh positive primary evidence, fresh score of
-/// one kill, no drift.
+/// A status that renders `top(kind)` under `approved_governance()`:
+/// team-approved statement and binding set, fresh positive primary evidence,
+/// fresh score of one kill, no drift.
 pub fn holds_ready(kind: Kind) -> Status {
     Status::Scoped {
         kind,
@@ -223,6 +223,15 @@ pub fn holds_ready(kind: Kind) -> Status {
             provisional: Provisional::None,
             score: Score::Fresh(ScoreOutcome::Scored { killed: 1, survived: 0, timeout: 0, unviable: 0 }),
         },
+    }
+}
+
+/// The best verdict a kind can earn: `Holds` for a proof or a model; a test
+/// samples its inputs, so it tops out at `Checked (tested)`.
+pub fn top(kind: Kind) -> Verdict {
+    match kind {
+        Kind::Test => Verdict::Checked { tested: true, strength_pending: false, self_signed: false },
+        Kind::Proof | Kind::Model => Verdict::Holds,
     }
 }
 
@@ -285,9 +294,10 @@ pub fn outcome() -> impl Strategy<Value = Outcome> {
 }
 
 pub fn any_policy() -> impl Strategy<Value = Policy> {
-    prop::collection::vec(outcome(), 9).prop_map(|o| Policy {
+    prop::collection::vec(outcome(), 10).prop_map(|o| Policy {
         holds: o[0],
         checked: o[1],
+        tested: o[9],
         proposed: o[2],
         waived: o[3],
         not_checked_within_grace: o[4],
@@ -303,6 +313,7 @@ pub fn default_policy() -> Policy {
     Policy {
         holds: Outcome::Pass,
         checked: Outcome::Pass,
+        tested: Outcome::Pass,
         proposed: Outcome::Pass,
         waived: Outcome::Pass,
         not_checked_within_grace: Outcome::Pass,
@@ -364,8 +375,9 @@ pub fn broken_why() -> impl Strategy<Value = BrokenWhy> {
 pub fn any_verdict() -> impl Strategy<Value = Verdict> {
     prop_oneof![
         Just(Verdict::Holds),
-        (any::<bool>(), any::<bool>())
-            .prop_map(|(strength_pending, self_signed)| Verdict::Checked { strength_pending, self_signed }),
+        (any::<bool>(), any::<bool>(), any::<bool>()).prop_map(|(tested, strength_pending, self_signed)| {
+            Verdict::Checked { tested, strength_pending, self_signed }
+        }),
         (not_checked_why(), any::<bool>())
             .prop_map(|(reason, self_signed)| Verdict::NotChecked { reason, self_signed }),
         Just(Verdict::Proposed),

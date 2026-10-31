@@ -39,6 +39,8 @@ fn init_on_a_rust_repository_with_a_toolchain_file() {
     let config = repo.read("proob/config.toml");
     assert!(config.contains("allow_self_signed = true"));
     assert!(config.contains("Checked (self-signed)"), "the comment explains the word");
+    assert!(config.contains("Checked (tested)"), "the comment says a test never reaches Holds");
+    assert!(config.contains("\ntested = \"pass\"\n"), "the tested row gates a passing test-backed property");
     assert!(config.contains("language = \"rust\""));
     assert!(config.contains("runner = \"nextest\""));
     assert!(!config.contains("features"), "nothing about features without a sign of needing them");

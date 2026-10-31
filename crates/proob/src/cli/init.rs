@@ -144,9 +144,14 @@ fn outcome_name(o: config::OutcomeName) -> &'static str {
 
 fn policy_block(p: PolicyTable) -> String {
     format!(
-        "[policy]\nholds = \"{}\"\nchecked = \"{}\"\nproposed = \"{}\"\nwaived = \"{}\"\nnot_checked_within_grace = \"{}\"\nnot_checked_after_grace = \"{}\"\nre_approve = \"{}\"\nbroken_affected = \"{}\"\nbroken_unaffected = \"{}\"\n",
+        "[policy]\nholds = \"{}\"\n\
+         # A Checked property with a defect pending: strength pending or self-signed.\n\
+         checked = \"{}\"\n\
+         # A test-backed property that passes renders Checked (tested); this row gates it.\n\
+         tested = \"{}\"\nproposed = \"{}\"\nwaived = \"{}\"\nnot_checked_within_grace = \"{}\"\nnot_checked_after_grace = \"{}\"\nre_approve = \"{}\"\nbroken_affected = \"{}\"\nbroken_unaffected = \"{}\"\n",
         outcome_name(p.holds),
         outcome_name(p.checked),
+        outcome_name(p.tested),
         outcome_name(p.proposed),
         outcome_name(p.waived),
         outcome_name(p.not_checked_within_grace),
@@ -176,6 +181,8 @@ pub fn config_text(detected: &[Detected]) -> String {
          # renders Checked (self-signed) or Not checked (self-signed): never Holds, and\n\
          # never Proposed. Set it to false once a second maintainer with write access\n\
          # reviews, and the same content reads Proposed until they approve it.\n\
+         # A property backed by a test renders Checked (tested) at best: a test samples\n\
+         # its inputs, so only a proof or a model reaches Holds.\n\
          allow_self_signed = {}\n\
          \n\
          # Days after approval during which an unchecked property stays silent.\n\

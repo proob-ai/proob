@@ -23,6 +23,7 @@ pub const PROP_E: &str = "01J9Z3W1V8Q4K7N2M5R8T1X4E5";
 pub const PROP_F: &str = "01J9Z3W1V8Q4K7N2M5R8T1X4F6";
 pub const PROP_G: &str = "01J9Z3W1V8Q4K7N2M5R8T1X4G7";
 pub const PROP_H: &str = "01J9Z3W1V8Q4K7N2M5R8T1X4H8";
+pub const PROP_J: &str = "01J9Z3W1V8Q4K7N2M5R8T1X4J9";
 
 pub fn property_path(id: &str) -> String {
     format!("proob/properties/{id}.toml")

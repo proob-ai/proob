@@ -50,23 +50,26 @@ The simulation (`sim/`, xtask/README.md) scores the same way on worlds it builds
 | `truth` | When |
 |---|---|
 | `violated` | The code under the verdict carries a real counterexample to the property: a planted bug (`sorted` drops its largest element, or keeps one copy of each value) that the bound test catches. |
-| `holds` | The code is correct, and the world holds what the claim rests on: an eligible second reviewer approved what is checked, a default-branch check of this very code passed, and a score at this binding inside `freshness_days` killed at least the floor. |
-| `unknown` | The code is correct but the world lacks one of those (no approval, a self-signed or revoked one, evidence from a PR, another branch, an earlier commit or outside the window, a score that killed nothing, GitHub unreadable). |
+| `holds` | The code is correct, and the world holds what the claim rests on: an eligible second reviewer approved what is checked, a default-branch check of this very code passed and was a proof or a model (a test samples its inputs, so a test-kind world is at most `unknown`), and a score at this binding inside `freshness_days` killed at least the floor. |
+| `unknown` | The code is correct but the world lacks one of those (a test where a proof is needed, no approval, a self-signed or revoked one, evidence from a PR, another branch, an earlier commit or outside the window, a score that killed nothing, GitHub unreadable). |
 
-`Holds` in an `unknown` world is scored as a wrong `Holds` (−32), since the claim says more than the world can back; `Broken` in a `holds` or `unknown` world is a false alarm (−16). In the `soundness` scenario a check record's outcome is never written by hand: it is what the real evidence job recorded at that commit, and plain `cargo test` confirms each head is the code it says (passes on the correct head, fails on the planted one), so no world is a CI that lies. The truth of the scripted steps (`lifecycle`, `honesty`, `requirement`) is stated beside each step, from the same table.
+`Holds` in an `unknown` world is scored as a wrong `Holds` (−32), since the claim says more than the world can back; `Broken` in a `holds` or `unknown` world is a false alarm (−16). In the `soundness` scenario a test's check record is never written by hand: it is what the real evidence job recorded at that commit, and plain `cargo test` confirms each head is the code it says (passes on the correct head, fails on the planted one), so no world is a CI that lies. A proof record is written by the simulation, since CI's `test` job has no Verus: it is derived from that real run on the same code, never chosen (`verified` where the bound test found no counterexample, `proof_failed` where it found one, and the build stops on any other pairing). Every simulated `Holds` therefore rests on a derived proof record, not on a verifier run. The proof-kind property's strength (row 4) is the test-kind property's real cargo-mutants score on the same code, borrowed because the `test` job has no Verus; CI's `verify` job's real-Verus test is where a real mutation-under-proof score reaches `Holds`. The truth of the scripted steps (`lifecycle`, `honesty`, `requirement`) is stated beside each step, from the same table.
 
-**The worlds.** `cargo xtask sim lifecycle honesty requirement shadow soundness` records 260 verdicts: 20 scripted steps and 240 worlds of `soundness`, the full cross product (not a pairwise subset) of
+**The worlds.** `cargo xtask sim lifecycle honesty requirement shadow soundness` records 501 verdicts: 21 scripted steps and 480 worlds of `soundness`, the full cross product (not a pairwise subset) of
 
+- the kind (2): a test-kind property, and a proof-kind property with the same statement;
 - approval of the declaring PR (5): a second reviewer; the author alone (self-signed is allowed in the fixture); none; a reviewer who also authored a commit of the PR touching governed files; a reviewer who then lost write access;
 - the check's run (6): a push run on main at the head a day ago; a push run at the earlier merge commit, before the head edited the scope; the fresh world read 15 days later (outside `freshness_days`); a pull-request run; a run on another branch; none;
 - the score (4): the real cargo-mutants record (kills ≥ the floor of 1); every mutant surviving; no score; every mutant unsampled;
 - the code (2): correct (a behaviour-preserving edit) or planted.
 
-The score rides the check's run (with no check run, a scheduled run on main brings it alone). One repository is built and the real jobs run four times; every world then varies only the fixture GitHub and the clock. About a minute.
+Only one world of the 480 is `holds`, the proof-kind one with a second reviewer, a fresh push run, the real score and correct code; its test-kind twin renders `Checked (tested)` and scores as other. Since only a proof can render `Holds`, the proof-kind half is where a wrong `Holds` could come from, so it crosses every approval, run and score the test-kind half does.
+
+The score rides the check's run (with no check run, a scheduled run on main brings it alone). One repository is built and the real jobs run four times; every world then varies only the fixture GitHub and the clock. About two minutes.
 
 ```sh
 cargo xtask sim lifecycle honesty requirement shadow soundness
-cargo xtask bench soundness   # the table; target/sim/soundness.json; exit 1 on any wrong Holds
+cargo xtask bench soundness   # the table; target/sim/soundness.json; exit 1 on any wrong Holds, or on no correct one
 ```
 
 CI runs both in the `test` job, so a wrong `Holds` fails the PR. Results per release: [`results/soundness-v1.md`](results/soundness-v1.md).

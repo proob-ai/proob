@@ -2,7 +2,8 @@
 //! SV-COMP scheme of bench/README.md ("Measure 3"). `Holds` is proob's "true"
 //! claim and `Broken` its "false" claim; each is scored against the world's
 //! `truth`, never against what the scenario expected. Any wrong `Holds`
-//! fails the run, whatever the total.
+//! fails the run, whatever the total, and so does no correct `Holds`: with no
+//! world reaching `Holds`, "no wrong Holds" would be vacuous.
 
 use std::fs;
 use std::path::Path;
@@ -157,6 +158,16 @@ impl Table {
         self.wrong_holds.is_empty()
     }
 
+    /// At least one world reached `Holds` and was right to.
+    pub fn reaches_holds(&self) -> bool {
+        self.counts[0] > 0
+    }
+
+    /// Sound, and not vacuously so: the run passes.
+    pub fn passes(&self) -> bool {
+        self.sound() && self.reaches_holds()
+    }
+
     pub fn render(&self) -> String {
         let rows: String = CELLS
             .iter()
@@ -164,9 +175,10 @@ impl Table {
             .map(|(c, n)| format!("  {:<16} {:>+4} {:>5} {:>+7}\n", c.title(), c.points(), n, c.points() * n as i64))
             .collect();
         let worlds: usize = self.counts.iter().sum();
-        let verdict = match self.sound() {
-            true => "sound: no wrong Holds".to_owned(),
-            false => format!(
+        let verdict = match (self.sound(), self.reaches_holds()) {
+            (true, true) => "sound: no wrong Holds".to_owned(),
+            (true, false) => "VACUOUS: no world reached Holds, so the soundness claim would be vacuous".to_owned(),
+            (false, _) => format!(
                 "UNSOUND: {} wrong Holds\n{}",
                 self.wrong_holds.len(),
                 self.wrong_holds.iter().map(|w| format!("  {w}\n")).collect::<String>()
@@ -186,7 +198,7 @@ impl Table {
 }
 
 /// Reads `<dir>/verdicts.jsonl`, writes `<dir>/soundness.json`, prints the
-/// table; `Ok(false)` when any Holds is wrong.
+/// table; `Ok(false)` when any Holds is wrong or none is correct.
 pub fn score_file(dir: &Path) -> Fallible<bool> {
     let input = dir.join("verdicts.jsonl");
     let text =
@@ -197,7 +209,7 @@ pub fn score_file(dir: &Path) -> Fallible<bool> {
     fs::write(&output, pretty + "\n").map_err(|e| format!("{}: {e}", output.display()))?;
     print!("{}", table.render());
     println!("written: {}", output.display());
-    Ok(table.sound())
+    Ok(table.passes())
 }
 
 #[cfg(test)]
@@ -215,6 +227,7 @@ mod tests {
             ("Broken", Truth::Violated, Cell::CorrectBroken, 1),
             ("Not checked", Truth::Holds, Cell::Other, 0),
             ("Checked (strength pending)", Truth::Violated, Cell::Other, 0),
+            ("Checked (tested)", Truth::Unknown, Cell::Other, 0),
             ("Re-approve (check amended)", Truth::Unknown, Cell::Other, 0),
             ("Broken", Truth::Holds, Cell::WrongBroken, -16),
             ("Broken", Truth::Unknown, Cell::WrongBroken, -16),
@@ -250,6 +263,14 @@ mod tests {
     }
 
     #[test]
+    fn no_correct_holds_is_vacuous_and_fails() {
+        let t = tally(&[v("Checked (tested)", Truth::Unknown), v("Broken", Truth::Violated)]);
+        assert!(t.sound() && !t.reaches_holds() && !t.passes());
+        assert!(t.render().contains("no world reached Holds, so the soundness claim would be vacuous"));
+        assert!(tally(&[v("Holds", Truth::Holds)]).passes());
+    }
+
+    #[test]
     fn lines_need_a_truth_and_a_file_needs_a_line() {
         let ok = r#"{"scenario":"a","step":"b","expected":null,"rendered":"Holds","truth":"holds"}"#;
         assert_eq!(
@@ -281,5 +302,7 @@ mod tests {
         );
         fs::write(dir.path().join("verdicts.jsonl"), line("Holds", "violated")).expect("writes");
         assert_eq!(score_file(dir.path()), Ok(false));
+        fs::write(dir.path().join("verdicts.jsonl"), line("Broken", "violated")).expect("writes");
+        assert_eq!(score_file(dir.path()), Ok(false), "no world reached Holds");
     }
 }

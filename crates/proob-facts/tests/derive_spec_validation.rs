@@ -35,6 +35,9 @@ proptest! {
         let decl = match s { Status::ScopeEmpty { decl } | Status::Scoped { decl, .. } => decl };
         prop_assume!(!matches!(decl, Decl::Approved { sig: Sig::Team, .. }));
         prop_assert_ne!(verdict(&s, &g), Verdict::Holds);
+        if let Status::Scoped { kind, .. } = s {
+            prop_assert_ne!(verdict(&s, &g), top(kind));
+        }
     }
 
     #[test]
@@ -42,13 +45,20 @@ proptest! {
         let binding_team = binding_approval(&s).is_some_and(is_team);
         prop_assume!(!binding_team || !is_team(g.config) || !is_team(g.evidence_workflow));
         prop_assert_ne!(verdict(&s, &g), Verdict::Holds);
+        if let Status::Scoped { kind, .. } = s {
+            prop_assert_ne!(verdict(&s, &g), top(kind));
+        }
     }
 
-    /// The prose of assertions 1 to 4, written independently of `specs.rs`.
+    /// The prose of assertions 1 to 4, written independently of `specs.rs`:
+    /// what `Holds` needs, and what a test's top verdict needs but the kind.
     #[test]
     fn holds_means_what_the_prose_says(s in status(), g in governance()) {
-        if verdict(&s, &g) == Verdict::Holds {
+        let v = verdict(&s, &g);
+        let at_top = matches!(s, Status::Scoped { kind, .. } if v == top(kind));
+        if v == Verdict::Holds || at_top {
             let Status::Scoped { kind, decl, binding, .. } = s else { return Err(TestCaseError::fail("Holds on ScopeEmpty")) };
+            prop_assert!(v != Verdict::Holds || matches!(kind, Kind::Proof | Kind::Model), "a test samples its inputs, so it never holds: {:?}", kind);
             prop_assert!(matches!(decl, Decl::Approved { sig: Sig::Team, .. }), "statement team-approved: {:?}", decl);
             let Binding::Bound { approval, primary, score, .. } = binding else { return Err(TestCaseError::fail("Holds unbound")) };
             prop_assert!(is_team(approval) && is_team(g.config) && is_team(g.evidence_workflow));
@@ -67,9 +77,20 @@ proptest! {
 
     #[test]
     fn checked_always_carries_a_modifier(s in status(), g in governance()) {
-        if let Verdict::Checked { strength_pending, self_signed } = verdict(&s, &g) {
-            prop_assert!(strength_pending || self_signed);
+        if let Verdict::Checked { tested, strength_pending, self_signed } = verdict(&s, &g) {
+            prop_assert!(tested || strength_pending || self_signed);
+            let Status::Scoped { kind, .. } = s else { return Err(TestCaseError::fail("Checked on ScopeEmpty")) };
+            prop_assert_eq!(tested, kind == Kind::Test, "tested is exactly the test kind");
         }
+    }
+
+    /// Assertion 3's kind conjunct: the same facts hold for a proof or a model
+    /// and read `Checked (tested)` for a test.
+    #[test]
+    fn holds_ready_holds_iff_the_kind_is_not_test(kind in kind()) {
+        let v = verdict(&holds_ready(kind), &approved_governance());
+        prop_assert_eq!(v == Verdict::Holds, kind != Kind::Test);
+        prop_assert_eq!(v, top(kind));
     }
 
     #[test]
@@ -98,9 +119,9 @@ proptest! {
         Just(Score::NoEvidence),
     ]) {
         let g = approved_governance();
-        prop_assert_eq!(verdict(&holds_ready(kind), &g), Verdict::Holds);
+        prop_assert_eq!(verdict(&holds_ready(kind), &g), top(kind));
         let weakened = with_binding(holds_ready(kind), |b| set_score(b, weak));
-        prop_assert_eq!(verdict(&weakened, &g), Verdict::Checked { strength_pending: true, self_signed: false });
+        prop_assert_eq!(verdict(&weakened, &g), Verdict::Checked { tested: kind == Kind::Test, strength_pending: true, self_signed: false });
     }
 
     #[test]
@@ -175,19 +196,22 @@ proptest! {
     fn self_signed_is_checked_or_not_checked_never_proposed_or_holds(kind in kind(), s in status(), g in governance()) {
         let g_ok = approved_governance();
         let statement = with_decl(holds_ready(kind), Decl::Approved { sig: Sig::SelfSigned, since: [7; 32], drift: Drift { commits: 0, days: 0 } });
-        prop_assert_eq!(verdict(&statement, &g_ok), Verdict::Checked { strength_pending: false, self_signed: true });
+        prop_assert_eq!(verdict(&statement, &g_ok), Verdict::Checked { tested: kind == Kind::Test, strength_pending: false, self_signed: true });
         let check = with_binding(holds_ready(kind), |b| set_binding_approval(b, self_signed()));
-        prop_assert_eq!(verdict(&check, &g_ok), Verdict::Checked { strength_pending: false, self_signed: true });
+        prop_assert_eq!(verdict(&check, &g_ok), Verdict::Checked { tested: kind == Kind::Test, strength_pending: false, self_signed: true });
         let unbound = with_binding(statement, |_| Binding::Unbound(UnboundWhy::NoCheck));
         prop_assert_eq!(verdict(&unbound, &g_ok), Verdict::NotChecked { reason: NotCheckedWhy::NoCheck, self_signed: true });
         let config = Governance { config: self_signed(), ..g_ok };
-        prop_assert_eq!(verdict(&holds_ready(kind), &config), Verdict::Checked { strength_pending: false, self_signed: true });
+        prop_assert_eq!(verdict(&holds_ready(kind), &config), Verdict::Checked { tested: kind == Kind::Test, strength_pending: false, self_signed: true });
         // Across random statuses.
         let decl = match s { Status::ScopeEmpty { decl } | Status::Scoped { decl, .. } => decl };
         if matches!(decl, Decl::Approved { sig: Sig::SelfSigned, .. } | Decl::Waived { sig: Sig::SelfSigned, .. }) {
             let v = verdict(&s, &g);
             prop_assert_ne!(v, Verdict::Holds);
             prop_assert_ne!(v, Verdict::Proposed);
+            if let Status::Scoped { kind, .. } = s {
+                prop_assert_ne!(v, top(kind));
+            }
         }
     }
 
@@ -199,7 +223,7 @@ proptest! {
         // Drift never changes a test- or proof-backed verdict.
         for kind in [Kind::Test, Kind::Proof] {
             let drifted = with_decl(holds_ready(kind), Decl::Approved { sig: Sig::Team, since: [7; 32], drift: Drift { commits, days } });
-            prop_assert_eq!(verdict(&drifted, &g), Verdict::Holds);
+            prop_assert_eq!(verdict(&drifted, &g), top(kind));
         }
     }
 
@@ -283,6 +307,20 @@ proptest! {
         if !affected {
             prop_assert_ne!(o, Outcome::Block);
         }
+    }
+
+    #[test]
+    fn checked_tested_only_takes_the_tested_row_and_a_defect_takes_checked(
+        sp in any::<bool>(), ss in any::<bool>(), affected in any::<bool>(), grace in grace(), p in any_policy()
+    ) {
+        let cap = |o| if o == Outcome::Block { Outcome::Warn } else { o };
+        let v = Verdict::Checked { tested: true, strength_pending: sp, self_signed: ss };
+        let row = if sp || ss { p.checked } else { p.tested };
+        prop_assert_eq!(policy(&v, affected, grace, &p), cap(row));
+        // The two rows tell apart a passing test and one with strength pending.
+        let p = Policy { tested: Outcome::Pass, checked: Outcome::Warn, ..p };
+        prop_assert_eq!(policy(&Verdict::Checked { tested: true, strength_pending: false, self_signed: false }, affected, grace, &p), Outcome::Pass);
+        prop_assert_eq!(policy(&Verdict::Checked { tested: true, strength_pending: true, self_signed: false }, affected, grace, &p), Outcome::Warn);
     }
 
     #[test]
@@ -419,7 +457,7 @@ proptest! {
     }
 
     /// A commit to the scope: with primary evidence at the new hash and a score
-    /// within the window the property holds; before the push run reports, it is
+    /// within the window the property reaches `top(kind)`; before the push run reports, it is
     /// not checked (evidence pending).
     #[test]
     fn a_scope_commit_holds_once_evidence_catches_up(kind in prop_oneof![Just(Kind::Test), Just(Kind::Proof)], scope in scope().prop_filter("non-empty", |s| !s.is_empty())) {
@@ -435,7 +473,7 @@ proptest! {
         let mut input = base_input(kind, clone_scope(&touched));
         input.drift = Drift { commits: 1, days: 0 };
         input.records = vec![record(positive, before, BINDING_HASH, NOW - 2 * DAY), record(scored, before, BINDING_HASH, NOW - DAY), record(positive, after, BINDING_HASH, NOW)];
-        prop_assert_eq!(verdict(&derive(input, &cfg, NOW), &g), Verdict::Holds);
+        prop_assert_eq!(verdict(&derive(input, &cfg, NOW), &g), top(kind));
         // Push run not yet reported.
         let mut input = base_input(kind, clone_scope(&touched));
         input.drift = Drift { commits: 1, days: 0 };

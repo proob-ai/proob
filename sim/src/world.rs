@@ -227,6 +227,15 @@ impl World {
         Ok(cmd)
     }
 
+    /// Binding sets that stand in for discovery in every later run: the
+    /// fixture's `bindings.json` beside `github.json`. An execute job binds
+    /// its checks by discovery alone, so write this after the last workflow run.
+    pub fn bindings(&self, sets: &Value) -> Fallible<()> {
+        let fixture = self.path("github");
+        io(&fixture, fs::create_dir_all(&fixture))?;
+        io(&fixture, fs::write(fixture.join("bindings.json"), sets.to_string()))
+    }
+
     /// The binary at `dir` talking to a real REST endpoint at `api_url` with a
     /// token: the live client, not the fixture.
     pub fn proob_live(&self, dir: &Path, api_url: &str) -> Command {

@@ -2,8 +2,11 @@
 //! property, over code whose truth is real, each world recording what proob
 //! rendered beside the truth and asserting nothing about the word.
 //!
-//! The axes vary independently: approval of PR #1 (5), where and when the
-//! check ran (6), the score (4), and the code (2): 5 x 6 x 4 x 2 = 240 worlds.
+//! The axes vary independently: the kind, test-kind `A` or proof-kind `P`
+//! (honesty's) (2), approval of PR #1 (5), where and when the check ran (6),
+//! the score (4), and the code (2): 2 x 5 x 6 x 4 x 2 = 480 worlds. Only a
+//! proof can render `Holds`, so `P` crosses every axis too: a wrong `Holds`
+//! can only come from a `P` world.
 //! The code is real: `Correct` is the fixture's `sorted` with a
 //! behaviour-preserving edit (`sort` for `sort_unstable`), `Planted` drops the
 //! largest element, a counterexample to "sorting preserves length". Both are
@@ -11,6 +14,9 @@
 //! A check record's outcome is never chosen: it is what the real evidence job
 //! recorded at that commit, so a positive record on planted code (a CI that
 //! lies) is not a world here, and a negative one is `Fresh` x `Planted`.
+//! P's proof record is derived from that same real run at the same commit,
+//! never chosen (`verified` where it found no counterexample, `proof_failed`
+//! where it found one): no verifier runs here, since CI's test job has no Verus.
 //!
 //! One repository is built and the real jobs run four times (the check at the
 //! merge, at each head, and cargo-mutants at the correct head); each world
@@ -22,8 +28,8 @@ use std::io::ErrorKind;
 use serde_json::{Value, json};
 
 use crate::github::{ALICE, BOB, GitHub};
-use crate::honesty::record;
-use crate::lifecycle::{A, INTRODUCED, declare, merge_unreviewed, pre_proob};
+use crate::honesty::{P, bind_proof, introduced, propose_proof, record};
+use crate::lifecycle::{A, declare, merge_unreviewed, pre_proob};
 use crate::verdicts::{Log, Truth, observe};
 use crate::world::{Ctx, DAY, EVIDENCE_WORKFLOW, Event, Fallible, NOW, Repo, World, first_line, run};
 
@@ -72,8 +78,25 @@ pub enum Code {
     Planted,
 }
 
+/// Which property the world is about: `A`, bound to a test, or `P`, its statement bound to a proof.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Kind {
+    Test,
+    Proof,
+}
+
+impl Kind {
+    fn id(self) -> &'static str {
+        match self {
+            Kind::Test => A,
+            Kind::Proof => P,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Cell {
+    pub kind: Kind,
     pub approval: Approval,
     pub evidence: Evidence,
     pub strength: Strength,
@@ -94,26 +117,30 @@ const STRENGTHS: [Strength; 4] =
     [Strength::AtFloor, Strength::KilledZero, Strength::NotScored, Strength::UnsampledOnly];
 const CODES: [Code; 2] = [Code::Correct, Code::Planted];
 
-/// The full cross product, code outermost (main is reset once per code).
+const KINDS: [Kind; 2] = [Kind::Test, Kind::Proof];
+
+/// The full cross product, `A`'s worlds then `P`'s.
 pub fn cells() -> Vec<Cell> {
-    CODES
+    KINDS
         .iter()
-        .flat_map(|&code| APPROVALS.iter().map(move |&approval| (code, approval)))
-        .flat_map(|(code, approval)| EVIDENCE.iter().map(move |&evidence| (code, approval, evidence)))
-        .flat_map(|(code, approval, evidence)| {
-            STRENGTHS.iter().map(move |&strength| Cell { approval, evidence, strength, code })
+        .flat_map(|&kind| CODES.iter().map(move |&code| (kind, code)))
+        .flat_map(|(kind, code)| APPROVALS.iter().map(move |&approval| (kind, code, approval)))
+        .flat_map(|(kind, code, approval)| EVIDENCE.iter().map(move |&evidence| (kind, code, approval, evidence)))
+        .flat_map(|(kind, code, approval, evidence)| {
+            STRENGTHS.iter().map(move |&strength| Cell { kind, approval, evidence, strength, code })
         })
         .collect()
 }
 
 /// The world's truth, from how it was built: planted code is violated
 /// whatever proob was told; correct code holds only when the world has an
-/// eligible approval, a passing default-branch check of this very code, and a
-/// fresh score that kills. Anything less is `Unknown`.
+/// eligible approval, a passing default-branch proof of this very code, and a
+/// fresh score that kills. Anything less, a passing test included (it samples
+/// inputs), is `Unknown`.
 pub fn truth(c: &Cell) -> Truth {
-    match (c.code, c.approval, c.evidence, c.strength) {
+    match (c.code, c.kind, c.approval, c.evidence, c.strength) {
         (Code::Planted, ..) => Truth::Violated,
-        (Code::Correct, Approval::Team, Evidence::Fresh, Strength::AtFloor) => Truth::Holds,
+        (Code::Correct, Kind::Proof, Approval::Team, Evidence::Fresh, Strength::AtFloor) => Truth::Holds,
         (Code::Correct, ..) => Truth::Unknown,
     }
 }
@@ -121,8 +148,8 @@ pub fn truth(c: &Cell) -> Truth {
 impl Cell {
     pub fn label(&self) -> String {
         format!(
-            "approval={:?} evidence={:?} strength={:?} code={:?}",
-            self.approval, self.evidence, self.strength, self.code
+            "kind={:?} approval={:?} evidence={:?} strength={:?} code={:?}",
+            self.kind, self.approval, self.evidence, self.strength, self.code
         )
     }
 }
@@ -211,6 +238,12 @@ struct Point {
     check: Value,
 }
 
+/// P at a commit: proob's hashes for it, and its proof outcome derived from the real check there.
+struct Proved {
+    hashes: Value,
+    outcome: Value,
+}
+
 struct Built {
     w: World,
     /// The fixture GitHub after PR #1 merged, with no review.
@@ -220,6 +253,9 @@ struct Built {
     at_merge: Point,
     correct: Point,
     planted: Point,
+    proved_merge: Proved,
+    proved_correct: Proved,
+    proved_planted: Proved,
     /// The real cargo-mutants outcome at the correct head.
     score: Value,
 }
@@ -237,7 +273,7 @@ fn approve(gh: &mut GitHub, a: Approval, merge: &str) {
         }
         Approval::Unreviewed => {}
         Approval::AuthorOnly => {
-            gh.review(1, 101, &BOB, merge).pr_commit(1, &BOB, BOB_COMMIT, merge, &INTRODUCED);
+            gh.review(1, 101, &BOB, merge).pr_commit(1, &BOB, BOB_COMMIT, merge, &introduced());
         }
         Approval::Revoked => {
             gh.review(1, 101, &BOB, merge).permission(&BOB, "read");
@@ -283,6 +319,28 @@ fn head(w: &World, merge: &str, code: Code) -> Fallible<String> {
     w.repo.commit(message, &ALICE, NOW - 8 * DAY)
 }
 
+/// P's proof outcome at a commit, derived from the real check there and never
+/// chosen: `verified` where the bound test found no counterexample,
+/// `proof_failed` where it found one. Any other pairing of head and check is
+/// refused, so a proof record is never fabricated against what the code does.
+fn proof_outcome(code: Code, check: &Value) -> Fallible<Value> {
+    match (code, check["result"].as_str()) {
+        (Code::Correct, Some("no_counterexample")) => Ok(json!({ "result": "verified", "rlimit": 10 })),
+        (Code::Planted, Some("counterexample")) => Ok(json!({
+            "result": "proof_failed",
+            "diagnostics": format!("postcondition not satisfied: {}", check["witness"].as_str().unwrap_or(""))
+        })),
+        _ => Err(format!("the {code:?} head's real check recorded {check}: no proof outcome follows")),
+    }
+}
+
+/// P at `at`, whose code is `code`, main reset to it, once bindings.json binds P.
+fn proved(w: &World, at: &Point, code: Code) -> Fallible<Proved> {
+    let outcome = proof_outcome(code, &at.check)?;
+    reset_main(w, &at.sha)?;
+    Ok(Proved { hashes: w.hashes(P)?, outcome })
+}
+
 /// The oracle, independent of proob: the bound test run by plain cargo in a
 /// clean checkout passes on correct code and fails on planted code.
 fn confirm(w: &World, sha: &str, code: Code) -> Fallible<()> {
@@ -305,8 +363,9 @@ fn confirm(w: &World, sha: &str, code: Code) -> Fallible<()> {
 fn build(ctx: &Ctx) -> Fallible<Built> {
     let mut w = World::new(ctx)?;
     pre_proob(&w)?;
+    propose_proof(&w)?;
     declare(&w)?;
-    let (merge, _) = merge_unreviewed(&mut w)?;
+    let (merge, _) = merge_unreviewed(&mut w, &introduced())?;
     let base = w.github.clone();
     // The real jobs run with bob's approval, as a team's would.
     approve(&mut w.github, Approval::Team, &merge);
@@ -319,10 +378,16 @@ fn build(ctx: &Ctx) -> Fallible<Built> {
     let (_, scored) = w.evidence_lines(&Event::schedule(&correct_sha, NOW - 7 * DAY), 503)?;
     let score = outcome_of(&scored, "score")?;
     let planted = point(&w, &planted_sha, 504, NOW - 7 * DAY)?;
-    match score["killed"].as_u64() {
-        Some(k) if k >= 1 => Ok(Built { w, base, merge, blob, at_merge, correct, planted, score }),
-        _ => Err(format!("the real score does not kill at the floor: {score}")),
+    if !matches!(score["killed"].as_u64(), Some(k) if k >= 1) {
+        return Err(format!("the real score does not kill at the floor: {score}"));
     }
+    // The real jobs are done; from here P is bound through bindings.json.
+    bind_proof(&w)?;
+    // The merge's `sorted` is the fixture's, before either head's edit.
+    let proved_merge = proved(&w, &at_merge, Code::Correct)?;
+    let proved_correct = proved(&w, &correct, Code::Correct)?;
+    let proved_planted = proved(&w, &planted, Code::Planted)?;
+    Ok(Built { w, base, merge, blob, at_merge, correct, planted, proved_merge, proved_correct, proved_planted, score })
 }
 
 impl Built {
@@ -333,13 +398,33 @@ impl Built {
         }
     }
 
-    fn records(&self, d: &Delivery, cell: &Cell) -> Vec<Value> {
-        let p = match d.point {
-            At::Head => self.head(cell.code),
+    fn point(&self, at: At, code: Code) -> &Point {
+        match at {
+            At::Head => self.head(code),
             At::Merge => &self.at_merge,
+        }
+    }
+
+    fn proved(&self, at: At, code: Code) -> &Proved {
+        match (at, code) {
+            (At::Merge, _) => &self.proved_merge,
+            (At::Head, Code::Correct) => &self.proved_correct,
+            (At::Head, Code::Planted) => &self.proved_planted,
+        }
+    }
+
+    /// The run's records for the cell's property, at the commit the run was at.
+    fn records(&self, d: &Delivery, cell: &Cell) -> Vec<Value> {
+        let p = self.point(d.point, cell.code);
+        let (hashes, kind, outcome) = match cell.kind {
+            Kind::Test => (&p.hashes, "check", &p.check),
+            Kind::Proof => {
+                let proved = self.proved(d.point, cell.code);
+                (&proved.hashes, "proof", &proved.outcome)
+            }
         };
-        let line = |kind: &str, outcome: Value| record(&p.hashes, kind, outcome, d.run_id, &p.sha, &self.blob, d.at);
-        let check = d.check.then(|| line("check", p.check.clone()));
+        let line = |kind: &str, outcome: Value| record(hashes, kind, outcome, d.run_id, &p.sha, &self.blob, d.at);
+        let check = d.check.then(|| line(kind, outcome.clone()));
         let score = score_outcome(cell.strength, &self.score).filter(|_| d.score).map(|o| line("score", o));
         [check, score].into_iter().flatten().collect()
     }
@@ -348,16 +433,13 @@ impl Built {
         let mut gh = self.base.clone();
         approve(&mut gh, cell.approval, &self.merge);
         deliveries(cell.evidence, cell.strength).iter().for_each(|d| {
-            let sha = match d.point {
-                At::Head => &self.head(cell.code).sha,
-                At::Merge => &self.at_merge.sha,
-            };
+            let sha = &self.point(d.point, cell.code).sha;
             gh.evidence_run(d.run_id, sha, d.event, d.branch, d.at, self.records(d, cell));
         });
         gh
     }
 
-    /// proob's word for A in `cell`'s world, with no fact cached from another world.
+    /// proob's word for the cell's property in its world, with no fact cached from another world.
     fn rendered(&mut self, cell: &Cell) -> Fallible<String> {
         self.w.github = self.github_for(cell);
         self.w.now = clock(cell.evidence);
@@ -366,7 +448,7 @@ impl Built {
             Err(e) if e.kind() != ErrorKind::NotFound => return Err(format!("{}: {e}", facts.display())),
             _ => {}
         }
-        Ok(observe(&self.w.status()?, A)?.word)
+        Ok(observe(&self.w.status()?, cell.kind.id())?.word)
     }
 }
 
@@ -401,23 +483,36 @@ mod tests {
     #[test]
     fn the_matrix_is_the_full_cross_product_without_repeats() {
         let all = cells();
-        assert_eq!(all.len(), 5 * 6 * 4 * 2);
+        let proved = all.iter().filter(|c| c.kind == Kind::Proof).count();
+        assert_eq!((all.len(), proved), (2 * 5 * 6 * 4 * 2, 5 * 6 * 4 * 2));
         assert!(all.iter().enumerate().all(|(i, c)| !all[..i].contains(c)));
     }
 
     #[test]
-    fn only_one_world_per_code_is_known_to_hold_and_planted_code_is_always_violated() {
+    fn only_the_proved_world_on_correct_code_holds_and_planted_code_is_always_violated() {
         let holds: Vec<Cell> = cells().into_iter().filter(|c| truth(c) == Truth::Holds).collect();
-        assert_eq!(
-            holds,
-            [Cell {
-                approval: Approval::Team,
-                evidence: Evidence::Fresh,
-                strength: Strength::AtFloor,
-                code: Code::Correct
-            }]
-        );
+        let world = Cell {
+            kind: Kind::Proof,
+            approval: Approval::Team,
+            evidence: Evidence::Fresh,
+            strength: Strength::AtFloor,
+            code: Code::Correct,
+        };
+        assert_eq!(holds, [world], "Holds stays reachable, and only through a proof");
+        assert!(cells().contains(&Cell { kind: Kind::Test, ..world }));
+        assert_eq!(truth(&Cell { kind: Kind::Test, ..world }), Truth::Unknown, "a test samples its inputs");
         assert!(cells().iter().filter(|c| c.code == Code::Planted).all(|c| truth(c) == Truth::Violated));
+    }
+
+    #[test]
+    fn a_proof_outcome_follows_the_real_check_and_nothing_else() {
+        let pass = json!({ "result": "no_counterexample", "budget": 256 });
+        let fail = json!({ "result": "counterexample", "witness": "v = [0]" });
+        assert_eq!(proof_outcome(Code::Correct, &pass), Ok(json!({ "result": "verified", "rlimit": 10 })));
+        assert_eq!(proof_outcome(Code::Planted, &fail).expect("derives")["result"], "proof_failed");
+        assert!(proof_outcome(Code::Planted, &pass).is_err(), "planted code never gets a passing proof");
+        assert!(proof_outcome(Code::Correct, &fail).is_err());
+        assert!(proof_outcome(Code::Correct, &json!({ "result": "errored", "reason": "x" })).is_err());
     }
 
     #[test]

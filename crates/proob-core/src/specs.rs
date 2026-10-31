@@ -47,7 +47,8 @@ pub open spec fn decl_of(s: Status) -> Decl {
 }
 
 /// The outcome that counts as positive for a kind. Any other pairing,
-/// including a kind mismatch, is not positive.
+/// including a kind mismatch, is not positive. A test's positive is evidence
+/// for `Checked (tested)`, never for `Holds`: see `verified_kind`.
 pub open spec fn positive(kind: Kind, o: PrimaryOutcome) -> bool {
     match (kind, o) {
         (Kind::Test, PrimaryOutcome::NoCounterexample) => true,
@@ -148,6 +149,16 @@ pub open spec fn check_and_governance_team_approved(s: Status, g: Governance) ->
     }
 }
 
+/// Assertion 3, the kind: a proof or a model, whose positive speaks for every
+/// input. A test samples, so its strongest word is `Checked (tested)`.
+pub open spec fn verified_kind(s: Status) -> bool {
+    match s {
+        Status::Scoped { kind: Kind::Proof, .. } => true,
+        Status::Scoped { kind: Kind::Model, .. } => true,
+        _ => false,
+    }
+}
+
 /// Assertion 3: the scope is non-empty (`Scoped`) and the latest default-branch
 /// primary evidence for the kind is fresh at the current hashes and positive.
 /// "At the current hashes" is `derive`'s `ensures` on `Primary::Fresh`.
@@ -171,8 +182,8 @@ pub open spec fn strength_at_floor(s: Status, g: Governance) -> bool {
 
 /// Assertions 1 to 4 together: what `verdict` must establish to answer `Holds`.
 pub open spec fn holds_requirements(s: Status, g: Governance) -> bool {
-    statement_team_approved(s) && check_and_governance_team_approved(s, g) && evidence_fresh_positive(s)
-        && strength_at_floor(s, g)
+    statement_team_approved(s) && check_and_governance_team_approved(s, g) && verified_kind(s)
+        && evidence_fresh_positive(s) && strength_at_floor(s, g)
 }
 
 /// Assertion 5: `Waived` requires waiver content approved by an eligible
@@ -234,9 +245,10 @@ pub open spec fn gate_config_wf(c: GateConfig) -> bool {
 }
 
 /// `Checked` carries at least one modifier; with none it would be `Holds`.
+/// `tested` is not a defect, the other two are.
 pub open spec fn verdict_wf(v: Verdict) -> bool {
     match v {
-        Verdict::Checked { strength_pending, self_signed } => strength_pending || self_signed,
+        Verdict::Checked { tested, strength_pending, self_signed } => tested || strength_pending || self_signed,
         _ => true,
     }
 }
@@ -262,6 +274,13 @@ proof fn self_signed_never_holds(s: Status, g: Governance)
         }),
     ensures
         !holds_requirements(s, g),
+{
+}
+
+/// A test-backed property never meets assertion 3, whatever else is true.
+proof fn test_never_holds(scope_hash: Digest, decl: Decl, binding: Binding, g: Governance)
+    ensures
+        !holds_requirements(Status::Scoped { kind: Kind::Test, scope_hash, decl, binding }, g),
 {
 }
 

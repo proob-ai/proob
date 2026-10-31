@@ -211,10 +211,13 @@ impl VerusRepo {
 }
 
 /// `None` when this machine has no Verus toolchain: the run's record says so.
+/// `PROOB_REQUIRE_VERUS` (CI's verify job) turns that skip into a failure, so
+/// the one job meant to exercise the real proof route cannot pass vacuously.
 fn verified_or_skipped(out: &Run) -> Option<Value> {
     let record = out.json();
     let reason = record["outcome"]["reason"].as_str().unwrap_or("");
     if record["outcome"]["result"] == "errored" && reason.contains("Verus toolchain was not found") {
+        assert!(std::env::var_os("PROOB_REQUIRE_VERUS").is_none(), "PROOB_REQUIRE_VERUS is set but {reason}");
         eprintln!("skipped: {reason}");
         return None;
     }
@@ -341,4 +344,67 @@ fn run_score_on_the_weak_spec_records_zero_kills() {
         "{record}"
     );
     assert_eq!(record["tool_versions"]["mutants-under-proof"], "mutants-under-proof-v2", "{record}");
+}
+
+/// The proof route to Holds with nothing fabricated: the verifier's own proof
+/// and mutation-under-proof records on the Verus fixture, repackaged as one
+/// evidence run on main the way the evidence job does it, under a team
+/// approval. The same records with the proof turned to `proof_failed` render
+/// Broken. One verifier run and one score run (five mutants under proof).
+#[test]
+fn real_verus_records_under_a_team_approval_hold_and_a_failed_proof_is_broken() {
+    let repo = TempRepo::new();
+    copy_tree(&verus_fixture_dir(), repo.root());
+    repo.write(".github/workflows/proob-gate.yml", GATE_YML);
+    repo.write(".github/workflows/proob-evidence.yml", EVIDENCE_YML);
+    let c1 = repo.commit("the verus fixture (PR #7)", NOW - 10 * DAY);
+    let blobs: Vec<(String, String)> =
+        repo.git(&["ls-files"]).lines().map(|path| (path.to_string(), repo.blob(&c1, path))).collect();
+    let workflow_blob = repo.blob(&c1, ".github/workflows/proob-evidence.yml");
+    // Alice's PR #7 introduces everything; Bob, another writer, approves it.
+    let governed = || {
+        let files: Vec<&str> = blobs.iter().map(|(path, _)| path.as_str()).collect();
+        let mut scenario = ScenarioBuilder::new();
+        scenario
+            .merged_pr(7, ALICE, &c1, &files)
+            .review(7, 501, BOB, "APPROVED", &c1)
+            .governance(true, true, true, true);
+        for (path, blob) in &blobs {
+            scenario.blob(&c1, path, Some(blob));
+        }
+        scenario
+    };
+    let r = VerusRepo { repo, fixture: Fixture::new(&governed().build(), None) };
+
+    let out = run(r.proob().args(["run", "check", VA, "--json"]));
+    let Some(proof) = verified_or_skipped(&out) else { return };
+    assert_eq!(proof["outcome"]["result"], "verified", "{proof}");
+    let out = run(r.proob().args(["run", "score", VA, "--json"]));
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    let score = out.json();
+    assert_eq!(score["outcome"]["result"], "scored", "{score}");
+    assert!(score["outcome"]["killed"].as_u64().unwrap_or(0) >= 1, "the default kill floor is one: {score}");
+
+    // What the evidence job adds to a run result: the run, its head, the
+    // workflow blob, and when.
+    let evidence = |result: &Value| {
+        let mut record = result.clone();
+        record["run_id"] = 101.into();
+        record["head_sha"] = c1.as_str().into();
+        record["workflow_blob"] = workflow_blob.as_str().into();
+        record["at"] = (NOW - DAY).into();
+        record
+    };
+    let word = |proof: &Value| {
+        let mut scenario = governed();
+        scenario.evidence_run(101, &c1, "schedule", "2026-10-27T00:00:00Z", vec![evidence(proof), evidence(&score)]);
+        r.fixture.write_scenario(&scenario.build());
+        let out = run(r.proob().args(["status", "--json"]));
+        assert_eq!(out.code, 0, "{}", out.stderr);
+        rows(&out.json())[VA]["word"].clone()
+    };
+    assert_eq!(word(&proof), "Holds");
+    let mut failed = proof.clone();
+    failed["outcome"] = serde_json::json!({ "result": "proof_failed", "diagnostics": "postcondition not satisfied" });
+    assert_eq!(word(&failed), "Broken");
 }

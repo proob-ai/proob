@@ -13,4 +13,4 @@ Inputs: working tree, main at 18a282080ef6, GitHub review records and default-br
 - CODEOWNERS covers proob: unknown
 - scheduled evidence last ran: never
 
-Legend: Holds (approved, checked, proven able to fail) · Checked (strength pending or self-signed) · Not checked (approved, nothing checked yet) · Re-approve (changed since approval) · Broken (negative result, empty scope, or expired waiver) · Proposed (never approved) · Waived until d (failing, human-waived)
+Legend: Holds (approved, proved, shown able to fail) · Checked (tested, strength pending, or self-signed) · Not checked (approved, nothing checked yet) · Re-approve (changed since approval) · Broken (negative result, empty scope, or expired waiver) · Proposed (never approved) · Waived until d (failing, human-waived)

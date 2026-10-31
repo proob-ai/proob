@@ -81,8 +81,15 @@ fn status_json_yields_one_status_per_verdict_class() {
     assert_eq!(report["config"]["in_force"], "approved");
     let rows = rows_by_id(&report);
     let word = |id: &str| rows[id]["verdict"]["word"].as_str().unwrap_or("<none>").to_string();
-    assert_eq!(word(PROP_A), "holds");
+    // A test tops out at Checked (tested); only the proof J holds.
+    assert_eq!(word(PROP_A), "checked");
+    assert_eq!(rows[PROP_A]["verdict"]["tested"], true);
+    assert_eq!(rows[PROP_A]["verdict"]["strength_pending"], false);
+    assert_eq!(rows[PROP_A]["verdict"]["self_signed"], false);
+    assert_eq!(rows[PROP_A]["modifiers"], json!(["tested"]));
+    assert_eq!(word(PROP_J), "holds");
     assert_eq!(word(PROP_B), "checked");
+    assert_eq!(rows[PROP_B]["verdict"]["tested"], true);
     assert_eq!(rows[PROP_B]["verdict"]["strength_pending"], true);
     assert_eq!(word(PROP_C), "not_checked");
     assert_eq!(rows[PROP_C]["verdict"]["reason"], "no_check");
@@ -100,8 +107,10 @@ fn status_json_yields_one_status_per_verdict_class() {
     assert_eq!(rows[PROP_F]["status"]["shape"], "scope_empty");
     assert_eq!(rows[PROP_G]["status"]["decl"]["window"]["issue_open"], true);
     // Words and reasons in the plan's vocabulary.
-    assert_eq!(rows[PROP_A]["word"], "Holds");
-    assert_eq!(rows[PROP_B]["word"], "Checked (strength pending)");
+    assert_eq!(rows[PROP_A]["word"], "Checked (tested)");
+    assert_eq!(rows[PROP_A]["reason"], "tested on sampled inputs, not proved");
+    assert_eq!(rows[PROP_J]["word"], "Holds");
+    assert_eq!(rows[PROP_B]["word"], "Checked (tested, strength pending)");
     assert_eq!(rows[PROP_C]["word"], "Not checked");
     assert_eq!(rows[PROP_C]["reason"], "no check bound");
     assert_eq!(rows[PROP_G]["word"], "Waived until 2026-12-31");
@@ -110,7 +119,7 @@ fn status_json_yields_one_status_per_verdict_class() {
     assert_eq!(report["footer"]["approvals_verified"], "yes");
     assert_eq!(report["footer"]["gate_required"], "yes");
     assert_eq!(report["footer"]["scheduled_evidence_age_secs"], DAY);
-    assert_eq!(report["counts"]["total"], 7);
+    assert_eq!(report["counts"]["total"], 8);
     assert_eq!(report["exit"], 0);
 }
 
@@ -122,7 +131,7 @@ fn status_summary_is_one_line() {
     assert_eq!(out.stdout.lines().count(), 1);
     assert_eq!(
         out.stdout.trim_end(),
-        "proob: 1 holds, 1 checked, 1 not checked, 1 re-approve, 1 broken, 1 proposed, 1 waived"
+        "proob: 1 holds, 2 checked, 1 not checked, 1 re-approve, 1 broken, 1 proposed, 1 waived"
     );
 }
 
@@ -233,12 +242,48 @@ fn check_passes_for_re_approve_unbound_after_grace_and_stale_evidence() {
 #[test]
 fn a_positive_result_from_this_pr_never_holds() {
     let k = with_pr();
-    let out = run(k.check(Some(&k.results(json!({ "result": "no_counterexample", "budget": 256 })))).arg("--json"));
+    // A is a test and could never hold; J is a proof that holds on main, so its
+    // this-PR verification is the case that could wrongly reach Holds.
+    let j = hashes_of(&k.c.repo, &k.c.fixture, PROP_J);
+    let results = k.results(json!({ "result": "no_counterexample", "budget": 256 }))
+        + &result_line(PROP_J, "proof", &j, json!({ "result": "verified", "rlimit": 10 }))
+        + "\n";
+    let out = run(k.check(Some(&results)).arg("--json"));
     assert_eq!(out.code, 0, "{}", out.stderr);
     let rows = rows_by_id(&out.json());
     assert_eq!(rows[PROP_A]["this_pr"], "passed 256 examples");
     assert_ne!(rows[PROP_A]["verdict"]["word"], "holds");
+    assert_eq!(rows[PROP_J]["this_pr"], "verified");
+    assert_ne!(rows[PROP_J]["verdict"]["word"], "holds");
+    assert_eq!(rows[PROP_J]["status"]["binding"]["provisional"]["state"], "provisional");
     assert_eq!(rows[PROP_A]["status"]["binding"]["provisional"]["state"], "provisional");
+}
+
+#[test]
+fn a_passing_test_takes_the_tested_row_and_a_pending_defect_takes_checked() {
+    // The approved config warns on `checked` and leaves `tested` to its default.
+    let config = CONFIG_TOML.replace("checked = \"pass\"\n", "checked = \"warn\"\n");
+    assert!(!config.contains("tested ="), "tested is left to its default");
+    let mut c = composite_with(&config);
+    c.repo.remove(&property_path(PROP_D));
+    c.repo.branch("pr");
+    c.repo.write("README.md", "docs only\n");
+    let c3 = c.repo.commit("docs only", NOW - DAY);
+    c.scenario.open_pr(9, ALICE, &c3).pr_commit(9, ALICE, &c3, &["README.md"], &[&c.c2.clone()]);
+    c.fixture.write_scenario(&c.scenario.build());
+    let out = run(c.proob().args(["check", "--base", "main", "--head", "pr", "--pr", "9", "--json"]));
+    assert_eq!(out.code, 0, "stdout: {}\nstderr: {}", out.stdout, out.stderr);
+    let report = out.json();
+    assert_eq!(report["config"]["in_force"], "approved");
+    let rows = rows_by_id(&report);
+    // A: a test at the floor, Checked (tested) and nothing else.
+    assert_eq!(rows[PROP_A]["verdict"]["word"], "checked", "{:#}", rows[PROP_A]);
+    assert_eq!(rows[PROP_A]["verdict"]["tested"], true);
+    assert_eq!(rows[PROP_A]["verdict"]["strength_pending"], false);
+    assert_eq!(rows[PROP_A]["outcome"], "pass");
+    // B: a test with no score, Checked (tested, strength pending).
+    assert_eq!(rows[PROP_B]["verdict"]["strength_pending"], true, "{:#}", rows[PROP_B]);
+    assert_eq!(rows[PROP_B]["outcome"], "warn");
 }
 
 #[test]

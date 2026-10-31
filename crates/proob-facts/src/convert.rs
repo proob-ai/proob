@@ -170,6 +170,7 @@ pub fn policy(t: &PolicyTable) -> Policy {
     Policy {
         holds: outcome(t.holds),
         checked: outcome(t.checked),
+        tested: outcome(t.tested),
         proposed: outcome(t.proposed),
         waived: outcome(t.waived),
         not_checked_within_grace: outcome(t.not_checked_within_grace),

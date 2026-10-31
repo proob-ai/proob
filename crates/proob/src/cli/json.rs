@@ -428,7 +428,7 @@ enum BrokenWhyJ {
 #[serde(tag = "word", rename_all = "snake_case")]
 enum VerdictJ {
     Holds,
-    Checked { strength_pending: bool, self_signed: bool },
+    Checked { tested: bool, strength_pending: bool, self_signed: bool },
     NotChecked { reason: NotCheckedWhyJ, self_signed: bool },
     Proposed,
     ReApprove { why: ReApproveWhyJ },
@@ -440,7 +440,9 @@ impl From<Verdict> for VerdictJ {
     fn from(v: Verdict) -> Self {
         match v {
             Verdict::Holds => VerdictJ::Holds,
-            Verdict::Checked { strength_pending, self_signed } => VerdictJ::Checked { strength_pending, self_signed },
+            Verdict::Checked { tested, strength_pending, self_signed } => {
+                VerdictJ::Checked { tested, strength_pending, self_signed }
+            }
             Verdict::NotChecked { reason, self_signed } => VerdictJ::NotChecked {
                 reason: match reason {
                     NotCheckedWhy::NoAdapter => NotCheckedWhyJ::NoAdapter,

@@ -7,7 +7,7 @@ use std::fs;
 use std::path::Path;
 
 use crate::github::{ALICE, BOB};
-use crate::verdicts::Truth::{Holds, Unknown, Violated};
+use crate::verdicts::Truth::{Unknown, Violated};
 use crate::verdicts::{self, Expect, Log, Observed, observe, run_steps};
 use crate::world::{Ctx, DAY, EVIDENCE_WORKFLOW, Event, Fallible, GATE_WORKFLOW, NOW, World, copy_tree};
 
@@ -35,23 +35,32 @@ const EVIDENCE_YML: &str = "name: proob evidence\non: [push, schedule]\njobs: {}
 pub type Step = verdicts::Step<World>;
 
 /// Truth: the code is correct at every step but the breaking PR, whose
-/// `out.pop()` is a real counterexample; it is `Holds` only once the world has
-/// bob's approval, a passing push run, and a score that kills.
+/// `out.pop()` is a real counterexample; elsewhere it is `Unknown`, since A's
+/// check is a test: even with bob's approval, a passing push run, and a score
+/// that kills, it is tested on sampled inputs, not proved.
 pub const STEPS: [(Expect, Step); 7] = [
     (Expect::status("declared on a branch", "Proposed", Unknown), declared),
     (Expect::status("merged with an eligible second reviewer", "Not checked", Unknown), merged),
     (
-        Expect::status("default-branch evidence run (push: execute, judge)", "Checked (strength pending)", Unknown),
+        Expect::status(
+            "default-branch evidence run (push: execute, judge)",
+            "Checked (tested, strength pending)",
+            Unknown,
+        ),
         push_run,
     ),
-    (Expect::status("scheduled score run (cargo-mutants)", "Holds", Holds), scheduled_run),
+    (Expect::status("scheduled score run (cargo-mutants)", "Checked (tested)", Unknown), scheduled_run),
     (
         Expect::blocks("a PR that breaks the code (gate judge)", "Broken", Violated)
             .because("counterexample on this PR"),
         breaking_pr,
     ),
     (
-        Expect::status("merge reviewed only by its author (allow_self_signed)", "Checked (self-signed)", Unknown),
+        Expect::status(
+            "merge reviewed only by its author (allow_self_signed)",
+            "Checked (tested, self-signed)",
+            Unknown,
+        ),
         self_signed,
     ),
     (Expect::status("the bound test amended on a branch", "Re-approve (check amended)", Unknown), amended_test),
@@ -102,19 +111,19 @@ pub fn declare(w: &World) -> Fallible<String> {
     w.repo.commit("declare: sorting preserves length", &ALICE, NOW - 10 * DAY)
 }
 
-/// PR #1 merges with bob's approval at its head: an eligible second reviewer.
-pub fn merge_declaration(w: &mut World) -> Fallible<String> {
-    let (sha, _) = merge_unreviewed(w)?;
+/// PR #1, adding `files`, merges with bob's approval at its head: an eligible second reviewer.
+pub fn merge_declaration(w: &mut World, files: &[&str]) -> Fallible<String> {
+    let (sha, _) = merge_unreviewed(w, files)?;
     w.github.review(1, 101, &BOB, &sha);
     Ok(sha)
 }
 
-/// PR #1 merges with no review yet; its merge and parent shas.
-pub fn merge_unreviewed(w: &mut World) -> Fallible<(String, String)> {
+/// PR #1, adding `files`, merges with no review yet; its merge and parent shas.
+pub fn merge_unreviewed(w: &mut World, files: &[&str]) -> Fallible<(String, String)> {
     let parent = w.repo.rev("main")?;
     let sha = merge(w, "declare")?;
-    w.github.merged_pr(1, &ALICE, &sha, &parent, &INTRODUCED);
-    publish_blobs(w, &sha, &INTRODUCED)?;
+    w.github.merged_pr(1, &ALICE, &sha, &parent, files);
+    publish_blobs(w, &sha, files)?;
     Ok((sha, parent))
 }
 
@@ -148,7 +157,7 @@ fn declared(w: &mut World) -> Fallible<Observed> {
 }
 
 fn merged(w: &mut World) -> Fallible<Observed> {
-    merge_declaration(w)?;
+    merge_declaration(w, &INTRODUCED)?;
     status_of_a(w)
 }
 

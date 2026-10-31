@@ -36,8 +36,8 @@ Approval attaches to these files' content. Editing any of them after merge rende
 - A row with a counterexample names a real failure of the code or of the statement. The gate will
   show that property as `Broken (counterexample on this PR)` until the code is fixed or the
   statement is amended in its own PR to `proob/properties/`.
-- After merge: `Not checked` until the default-branch run completes, then `Checked (strength
-  pending)` until a scheduled score run shows each check can fail.
+- After merge: `Not checked` until the default-branch run completes, then `Checked (tested,
+  strength pending)` until a scheduled score run shows each check can fail, then `Checked (tested)`.
 
 Opened by /proob:falsify. The agent wrote the tests and ran them locally; it did not approve
 anything and cannot.

@@ -166,7 +166,7 @@ of them renders the property `Re-approve (check amended)` until a reviewer
 approves the amendment. Falsify opens a pull request `proob/falsify-<date>`
 with the three rows and that note. Merge it with a review; the push run on
 the default branch then produces the first evidence and each property reads
-`Checked (strength pending)`.
+`Checked (tested, strength pending)`.
 
 ### 5. `/proob:verify`
 
@@ -199,8 +199,11 @@ request, since a change to a bound file reopens the check's approval.
 
 A local score moves nothing. After the falsify pull request merges and the
 nightly evidence run records a score at or above the floor, a property reads
-`Holds` if a second person approved the statement, the check, the config,
-and the workflow, and `Checked (self-signed)` if one maintainer merged them.
+`Checked (tested)` if a second person approved the statement, the check, the
+config, and the workflow, and `Checked (tested, self-signed)` if one
+maintainer merged them. That is as far as these properties go: a
+property-based test samples inputs and cannot prove, so `Holds` is reserved
+for a proof or a model.
 
 ### 6. `/proob:guard`
 

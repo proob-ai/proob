@@ -107,4 +107,5 @@ break; propose those lines and leave the adoption to the team.
 `Checked (strength pending)` until the scheduled run records a score at or above `kill_floor`;
 then `Holds` if the team approved the statement, the binding set, the config, and the workflow,
 or `Checked (self-signed)` when the only approval is the author's own. A local `verified` and a
-local score change none of this.
+local score change none of this. This is the route to `Holds`: a test-backed property, however
+strong, stops at `Checked (tested)`.
