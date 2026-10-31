@@ -1,0 +1,9 @@
+# Real Kani runs share the fixture crate, whose Cargo.lock Kani's cargo
+# rewrites for a moment; nextest runs each test in its own process, so the
+# tests' in-process lock cannot serialise them.
+[test-groups]
+kani-fixture = { max-threads = 1 }
+
+[[profile.default.overrides]]
+filter = "binary_id(proob-adapters::kani)"
+test-group = "kani-fixture"
