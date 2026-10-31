@@ -65,6 +65,72 @@ fn slow_child_is_killed_at_the_timeout() {
     assert!(started.elapsed() < 10 * SECOND, "the child was killed, not waited for");
 }
 
+/// A shell that starts a 30 s grandchild holding its stdout, writes the
+/// grandchild's pid to `pid_file`, and waits for it: `cargo kani` and CBMC.
+fn tree(pid_file: &Path) -> Vec<OsString> {
+    args(&["-c", &format!("sleep 30 & echo $! > '{}'; wait", pid_file.display())])
+}
+
+/// Whether `done` becomes true within 10 s, checked every 100 ms.
+fn eventually(done: impl Fn() -> bool) -> bool {
+    (0..100).any(|_| {
+        let now = done();
+        if !now {
+            std::thread::sleep(Duration::from_millis(100));
+        }
+        now
+    })
+}
+
+/// The pid in `pid_file` soon names no process (a killed one is reaped by init).
+fn gone(pid_file: &Path) -> bool {
+    let pid = std::fs::read_to_string(pid_file).expect("the shell wrote the grandchild's pid");
+    let alive = || {
+        std::process::Command::new("kill")
+            .args(["-0", pid.trim()])
+            .stderr(std::process::Stdio::null())
+            .status()
+            .is_ok_and(|s| s.success())
+    };
+    eventually(|| !alive())
+}
+
+#[test]
+fn a_timeout_kills_the_grandchildren_too() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let pid_file = dir.path().join("pid");
+    let started = Instant::now();
+    let err = run(Path::new("sh"), &tree(&pid_file), None, &[], Duration::from_millis(500)).unwrap_err();
+    assert!(matches!(err, SpawnError::TimedOut { .. }), "{err:?}");
+    assert!(started.elapsed() < 10 * SECOND, "a grandchild holding the pipes must not outlast the timeout");
+    assert!(gone(&pid_file), "the grandchild outlived the timeout");
+}
+
+#[test]
+fn an_interrupted_proob_takes_its_children_with_it() {
+    const CHILD: &str = "PROOB_SPAWN_TEST_INTERRUPTED";
+    if let Some(pid_file) = std::env::var_os(CHILD) {
+        // This process is the "proob" being interrupted.
+        let _ = run(Path::new("sh"), &tree(Path::new(&pid_file)), None, &[], 60 * SECOND);
+        return;
+    }
+    let dir = tempfile::tempdir().expect("tempdir");
+    let pid_file = dir.path().join("pid");
+    let mut proob = std::process::Command::new(std::env::current_exe().expect("test binary"))
+        .args(["--exact", "an_interrupted_proob_takes_its_children_with_it", "--nocapture"])
+        .env(CHILD, &pid_file)
+        .stdout(std::process::Stdio::null())
+        .spawn()
+        .expect("re-run this test as the child");
+    let started = eventually(|| std::fs::read_to_string(&pid_file).is_ok_and(|s| s.ends_with('\n')));
+    assert!(started, "the child never started its tree");
+    let sent = std::process::Command::new("kill").args(["-INT", &proob.id().to_string()]).status();
+    assert!(sent.is_ok_and(|s| s.success()));
+    let status = proob.wait().expect("the child exits");
+    assert!(!status.success(), "the interrupt ends proob");
+    assert!(gone(&pid_file), "the grandchild outlived the interrupted proob");
+}
+
 #[test]
 fn missing_program_is_a_start_error() {
     let err = run(Path::new("/nonexistent/proob-no-such-program"), &[], None, &[], SECOND).unwrap_err();

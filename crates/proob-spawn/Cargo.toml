@@ -12,6 +12,10 @@ publish = false
 [dependencies]
 wait-timeout.workspace = true
 
+[target.'cfg(unix)'.dependencies]
+# Process groups: a timeout or an interrupt kills everything a child started.
+libc.workspace = true
+
 [dev-dependencies]
 tempfile.workspace = true
 

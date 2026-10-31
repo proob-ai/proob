@@ -10,6 +10,12 @@ version as a comment.
 
 ### Fixed
 
+- A runner that timed out is killed with everything it started. Before,
+  only the direct child was killed: a grandchild that held its output open
+  (CBMC under `cargo kani`, a test binary under `cargo test`) kept running,
+  so the timeout never returned and the grandchild kept its memory. On Unix
+  each runner now leads its own process group, and a timeout, or SIGINT,
+  SIGTERM, or SIGHUP sent to proob, kills the whole group.
 - The shadow report no longer shows a property as passing when a later run
   with another seed passed after a counterexample on the same code and
   test; the counterexample is reported.

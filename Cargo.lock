@@ -1017,6 +1017,7 @@ dependencies = [
 name = "proob-spawn"
 version = "0.1.0"
 dependencies = [
+ "libc",
  "tempfile",
  "wait-timeout",
 ]
