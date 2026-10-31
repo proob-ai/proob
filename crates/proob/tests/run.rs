@@ -408,3 +408,62 @@ fn real_verus_records_under_a_team_approval_hold_and_a_failed_proof_is_broken() 
     failed["outcome"] = serde_json::json!({ "result": "proof_failed", "diagnostics": "postcondition not satisfied" });
     assert_eq!(word(&failed), "Broken");
 }
+
+// ---------------------------------------------------------------------------
+// Kani harnesses as proofs: the Kani fixture through the CLI
+// ---------------------------------------------------------------------------
+
+const KB: &str = "01K8V5NQ4A0F3R7Y2M9D6P1XKB";
+
+fn kani_fixture_dir() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/kani-crate").canonicalize().expect("fixture")
+}
+
+/// The Kani fixture with a `kani` adapter beside its `rust` one, committed;
+/// discovery needs no Kani toolchain.
+fn kani_repo() -> TempRepo {
+    let repo = TempRepo::new();
+    copy_tree(&kani_fixture_dir(), repo.root());
+    let kani = "[[adapters]]\nroot = \".\"\nlanguage = \"kani\"\nrunner = \"kani\"\nmutation_tool = \"cargo-mutants\"\n\n[policy]";
+    repo.write("proob/config.toml", &repo.read("proob/config.toml").replace("[policy]", kani));
+    repo.commit("the kani fixture", NOW - 10 * DAY);
+    repo
+}
+
+#[test]
+fn validate_and_run_name_kani_for_a_proof_bound_to_a_kani_harness() {
+    let repo = kani_repo();
+    let out = run(repo.proob().arg("validate"));
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+
+    repo.write(&property_path(KB), &repo.read(&property_path(KB)).replace("kind = \"proof\"", "kind = \"test\""));
+    let out = run(repo.proob().arg("validate"));
+    assert_eq!(out.code, 1, "{}", out.stdout);
+    assert!(
+        out.stdout.contains(&format!("{}: bound to a Kani harness at src/lib.rs:19", property_path(KB))),
+        "{}",
+        out.stdout
+    );
+    let out = run(repo.proob().args(["run", "check", KB]));
+    assert_eq!(out.code, 2);
+    assert!(
+        out.stderr.contains("kind = test but the bound check at src/lib.rs:19 is a proof, a Kani harness"),
+        "{}",
+        out.stderr
+    );
+}
+
+#[test]
+fn run_on_an_unbound_proof_in_a_kani_repository_says_how_to_bind_a_harness() {
+    let repo = kani_repo();
+    repo.write("src/lib.rs", &repo.read("src/lib.rs").replace(&format!("// proob:{KB}\n"), ""));
+    let out = run(repo.proob().args(["run", "check", KB]));
+    assert_eq!(out.code, 2);
+    assert!(out.stderr.contains(&format!("no check carries `proob:{KB}`")), "{}", out.stderr);
+    assert!(
+        out.stderr.contains(&format!("bind a Kani harness by writing `// proob:{KB}`"))
+            && out.stderr.contains("#[kani::proof]"),
+        "{}",
+        out.stderr
+    );
+}

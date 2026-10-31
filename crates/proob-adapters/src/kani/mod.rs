@@ -45,8 +45,14 @@
 //! harness code, and re-runs the harness on each sampled mutant in a
 //! temporary copy; only a failed assertion of the harness's own is a kill
 //! (`score`).
+//!
+//! # The build probe
+//!
+//! `probe` asks once whether Kani can build the crate at all, so a crate it
+//! cannot build is never declared full of proofs.
 pub mod check;
 pub mod discover;
+pub mod probe;
 pub mod score;
 pub mod tools;
 

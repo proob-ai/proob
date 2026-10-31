@@ -61,7 +61,7 @@ pub const OPERATOR_SET_KEY: &str = "mutants-under-kani";
 pub const TARGET_SUBDIR: &str = "proob-kani-score";
 
 /// One run of the harness: its result, its SARIF, its time.
-type Ran = (Result<Output, SpawnError>, Option<String>, Duration);
+pub(crate) type Ran = (Result<Output, SpawnError>, Option<String>, Duration);
 
 /// What one mutant's Kani run means.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -308,8 +308,9 @@ fn errored(reason: String, tool_versions: ToolVersions) -> Score {
     Score { outcome: ScoreOutcome::Errored { reason }, tool_versions, jobs: None }
 }
 
-/// A temporary copy of the adapter root where the harness runs on mutants.
-struct Lab<'a> {
+/// A temporary copy of the adapter root where the harness runs on mutants
+/// (and the build probe's harness, `probe`).
+pub(crate) struct Lab<'a> {
     dir: tempfile::TempDir,
     cargo_kani: &'a Path,
     target: PathBuf,
@@ -318,7 +319,12 @@ struct Lab<'a> {
 }
 
 impl<'a> Lab<'a> {
-    fn new(adapter: &KaniAdapter, tc: &'a Toolchain, root: &Path, r: &'a CheckRef) -> Result<Lab<'a>, AdapterError> {
+    pub(crate) fn new(
+        adapter: &KaniAdapter,
+        tc: &'a Toolchain,
+        root: &Path,
+        r: &'a CheckRef,
+    ) -> Result<Lab<'a>, AdapterError> {
         let dir = tempfile::tempdir().map_err(|e| AdapterError::Temp { message: e.to_string() })?;
         let copy = dir.path().join("crate");
         std::fs::create_dir(&copy).map_err(|e| AdapterError::Io { path: copy.clone(), message: e.to_string() })?;
@@ -328,14 +334,18 @@ impl<'a> Lab<'a> {
         Ok(Lab { dir, cargo_kani: &tc.cargo_kani, target, r, env: Toolchain::env(adapter.tool_env()) })
     }
 
+    /// The copy of the adapter root.
+    pub(crate) fn copy(&self) -> PathBuf {
+        self.dir.path().join("crate")
+    }
+
     /// One run of the harness in the copy: its result, its SARIF, its time.
-    fn harness(&self, timeout: Duration) -> Result<Ran, String> {
+    pub(crate) fn harness(&self, timeout: Duration) -> Result<Ran, String> {
         let sarif = self.dir.path().join("kani.sarif");
         let _ = std::fs::remove_file(&sarif);
         let _held = lock(&self.target).map_err(|e| e.to_string())?;
         let started = Instant::now();
-        let copy = self.dir.path().join("crate");
-        let out = plan(self.cargo_kani, &copy, &self.target, &sarif, self.r, timeout).envs(&self.env).run();
+        let out = plan(self.cargo_kani, &self.copy(), &self.target, &sarif, self.r, timeout).envs(&self.env).run();
         Ok((out, std::fs::read_to_string(&sarif).ok(), started.elapsed()))
     }
 
@@ -357,7 +367,7 @@ impl<'a> Lab<'a> {
 
     /// Applies `m` in the copy, runs the harness, and puts the file back.
     fn fate_of(&self, m: &Listed, timeout: Duration) -> Result<Fate, String> {
-        let path = self.dir.path().join("crate").join(&m.file);
+        let path = self.copy().join(&m.file);
         let original = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
         let mutated = patch(&original, &m.diff).map_err(|e| format!("its diff does not apply: {e}"))?;
         std::fs::write(&path, mutated).map_err(|e| format!("{}: {e}", path.display()))?;

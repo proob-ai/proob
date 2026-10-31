@@ -15,13 +15,14 @@ use crate::cli::adapters::{Discovered, discover};
 use crate::cli::backend::with_offline_backend;
 use crate::cli::error::CliError;
 use crate::cli::hash::{Hashes, find, hashes};
+use crate::cli::validate::proof_item;
 use crate::cli::workspace::{LoadedProperty, Workspace};
 use proob_adapters::{
     Availability, Binding, Budget, CheckOutcome, ProofMeasure, ScoreOutcome, Seed, availability, language_name,
 };
 use proob_core::types::Kind;
 use proob_effects::git::{Git, Repo};
-use proob_facts::config::Config;
+use proob_facts::config::{Config, Language};
 use proob_facts::convert;
 use proob_facts::evidence::{Algo, EvidenceKind, OutcomeRecord, Replay};
 use proob_facts::hex;
@@ -87,7 +88,7 @@ pub fn perform(
     opts: Options,
 ) -> Result<Outcome, CliError> {
     let (adapter, binding) = discovered.binding(property.id).ok_or_else(|| unbound(property, discovered))?;
-    check_kind(property, binding)?;
+    check_kind(property, adapter.language(), binding)?;
     let h = property_hashes(ws, config, discovered, property)?;
     let (outcome, replay, tool_versions, kind, jobs) = match what {
         What::Check => {
@@ -153,10 +154,17 @@ fn no_adapter(config: &Config, p: &LoadedProperty) -> CliError {
 }
 
 fn unbound(p: &LoadedProperty, d: &Discovered) -> CliError {
+    let kani_proof = p.file.kind.map(convert::kind) == Some(Kind::Proof)
+        && d.adapters.iter().any(|a| a.language() == Language::Kani);
     match d.uncovered.get(&p.id) {
         Some(u) => CliError::Usage(format!(
             "`proob:{}` at {} binds nothing: {}; the property is Not checked (no adapter)",
             p.file.id, u.token, u.reason
+        )),
+        None if kani_proof => CliError::Usage(format!(
+            "no check carries `proob:{}`: the property is Not checked (no check); bind a Kani harness by writing `// proob:{}` on the line above \
+             a `#[kani::proof]` fn (usually in a `#[cfg(kani)]` module of the crate under proof), with its inputs from `kani::any()`",
+            p.file.id, p.file.id
         )),
         None => CliError::Usage(format!(
             "no check carries `proob:{}`: the property is Not checked (no check); bind a test by writing `// proob:{}` on the line above its #[test] \
@@ -168,11 +176,15 @@ fn unbound(p: &LoadedProperty, d: &Discovered) -> CliError {
 }
 
 /// A property that names a kind binds only a check of that kind.
-fn check_kind(p: &LoadedProperty, b: &Binding) -> Result<(), CliError> {
+fn check_kind(p: &LoadedProperty, language: Language, b: &Binding) -> Result<(), CliError> {
+    let bound = match b.kind {
+        Kind::Proof => format!("a proof, {}", proof_item(language)),
+        k => format!("a {}", kind_name(k)),
+    };
     match p.file.kind.map(convert::kind) {
         Some(declared) if declared != b.kind => Err(CliError::invalid(
             &p.path,
-            format!("kind = {} but the bound check at {} is a {}", kind_name(declared), b.token, kind_name(b.kind)),
+            format!("kind = {} but the bound check at {} is {bound}", kind_name(declared), b.token),
         )),
         _ => Ok(()),
     }

@@ -112,7 +112,11 @@ enum Command {
         record: bool,
     },
     /// Write proob/config.toml, the two workflows, and the plugin recommendation.
-    Init,
+    Init {
+        /// Also set up Kani: its adapter, a pinned and cached install in both workflows, and the build probe.
+        #[arg(long)]
+        kani: bool,
+    },
     /// Try proob in a private copy of this repository; nothing in the repository changes until you adopt.
     Shadow {
         #[command(subcommand)]
@@ -208,7 +212,7 @@ fn dispatch(common: &Common, command: Command) -> Result<Exit, CliError> {
         Command::Run { what, id, budget, seed, record } => {
             cmd_run(common, what, &id, run::Options { budget, seed, record, json: common.json })
         }
-        Command::Init => cmd_init(common),
+        Command::Init { kani } => cmd_init(common, init::Options { kani: kani.then_some(init::KaniSetup::default()) }),
         Command::Shadow { cmd } => shadow::run(common, cmd),
         Command::Hook { .. } => Ok(Exit::Pass),
         Command::Action { mode, job } => action::run(common, mode, job),
@@ -503,11 +507,11 @@ fn cmd_run(common: &Common, what: run::What, id: &str, opts: run::Options) -> Re
     run::run(&loaded.ws, &loaded.config.candidate(), &loaded.properties, what, id, opts)
 }
 
-fn cmd_init(common: &Common) -> Result<Exit, CliError> {
+fn cmd_init(common: &Common, opts: init::Options) -> Result<Exit, CliError> {
     let ws = Workspace::open(common.repo.as_deref())?;
     let repo = proob_effects::git::Git::open(&ws.root);
     let branch = default_branch(&repo, common.default_branch.as_deref()).unwrap_or_else(|_| "main".to_string());
-    let outcome = init::run(&ws, &branch)?;
+    let outcome = init::run(&ws, &branch, opts)?;
     if common.json {
         println!("{}", serde_json::to_string_pretty(&outcome).unwrap_or_default());
     } else {
