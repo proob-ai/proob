@@ -315,6 +315,11 @@ fn a_run_that_proves_nothing_or_contradicts_its_exit_code_is_errored() {
         reason(outcome(Class::Unrecognised { detail: "x".into() }, Some(1), &r))
             .starts_with("unrecognised Kani output")
     );
+    // Killed mid-run (the system reclaiming memory, a watchdog): no verdict, no exit code.
+    assert_eq!(
+        reason(outcome(Class::Unrecognised { detail: "no VERIFICATION line".into() }, None, &r)),
+        "Kani was killed by a signal before it finished; on a machine short of memory, the system may have stopped CBMC"
+    );
 }
 
 #[test]

@@ -125,6 +125,10 @@ pub fn outcome(class: Class, code: Option<i32>, r: &CheckRef) -> CheckOutcome {
             "harness not found: Kani has no harness `{harness}` in package `{}`; was it renamed, moved, or put behind a cfg Kani does not set?",
             r.package.as_str()
         )),
+        Class::Unrecognised { .. } if code.is_none() => errored(
+            "Kani was killed by a signal before it finished; on a machine short of memory, the system may have stopped CBMC"
+                .to_string(),
+        ),
         Class::Unrecognised { detail } => errored(format!("unrecognised Kani output: {detail}")),
     }
 }
