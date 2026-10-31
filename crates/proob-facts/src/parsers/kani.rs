@@ -49,6 +49,11 @@ pub enum Class {
     VacuousCover {
         cover: String,
     },
+    /// Every check held, but an assertion of the harness's own was
+    /// unreachable, or the harness has none: the statement was never checked.
+    Vacuous {
+        assertion: String,
+    },
     /// CBMC's C preprocessor (`goto-cc`) failed on Kani's own C library.
     PreprocessorFailed {
         detail: String,
@@ -204,6 +209,12 @@ fn judge(stdout: &str, successful: bool, sarif: Option<Result<Vec<String>, Strin
     }
     if let Some(c) = checks.iter().find(|c| !c.is_cover() && !matches!(c.status.as_str(), "SUCCESS" | "UNREACHABLE")) {
         return Class::Unrecognised { detail: format!("check status `{}` for {}", c.status, c.property) };
+    }
+    if let Some(c) = with(&checks, "UNREACHABLE").find(|c| c.is_harness_assertion(harness)) {
+        return Class::Vacuous { assertion: format!("{} is UNREACHABLE", c.summary()) };
+    }
+    if !with(&checks, "SUCCESS").any(|c| c.is_harness_assertion(harness)) {
+        return Class::Vacuous { assertion: format!("`{harness}` asserts nothing itself") };
     }
     match sarif {
         Some(Ok(rules)) if rules.is_empty() => {
@@ -386,6 +397,27 @@ mod tests {
         assert!(pass().0.contains("instance is UNSATISFIABLE"));
         let Class::VacuousCover { cover } = captured("cover_unsat") else { panic!("{:?}", captured("cover_unsat")) };
         assert!(cover.starts_with("cover condition: x < 0") && cover.ends_with("is UNSATISFIABLE"), "{cover}");
+    }
+
+    #[test]
+    fn a_harness_whose_own_assertions_never_run_is_vacuous_whatever_else_passed() {
+        let (stdout, stderr, sarif) = pass();
+        let h = "verification::pass";
+        // A rustc check elsewhere that held: it says nothing about the statement.
+        let safety = "Check 4: f.arithmetic_overflow.1\n\t - Status: SUCCESS\n\t - Description: \"attempt to add with overflow\"\n\t - Location: src/lib.rs:2:5 in function f\n\n\nSUMMARY:";
+        let with_safety = stdout.replacen("\n\nSUMMARY:", safety, 1);
+        assert_eq!(classify(&with_safety, &stderr, Some(&sarif), h), Class::Verified { checks: 2 });
+        let unreachable = with_safety.replacen("Status: SUCCESS", "Status: UNREACHABLE", 1);
+        let Class::Vacuous { assertion } = classify(&unreachable, &stderr, Some(&sarif), h) else { panic!() };
+        assert!(
+            assertion.starts_with("assertion failed: r >= -10") && assertion.ends_with("is UNREACHABLE"),
+            "{assertion}"
+        );
+        let in_helper = with_safety.replace("Check 1: verification::pass.assertion.1", "Check 1: helper.assertion.1");
+        assert!(
+            matches!(classify(&in_helper, &stderr, Some(&sarif), h), Class::Vacuous { .. }),
+            "no assertion of its own"
+        );
     }
 
     #[test]

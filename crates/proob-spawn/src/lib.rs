@@ -161,8 +161,10 @@ mod group {
     use std::sync::Once;
     use std::sync::atomic::{AtomicI32, Ordering};
 
-    /// More concurrent children than this are still killed at their timeout,
-    /// just not by an interrupt.
+    /// A child beyond this many, or one spawned in the instant before it is
+    /// tracked, is killed at its timeout while proob lives, but outlives an
+    /// interrupted proob: it is outside the terminal's foreground group.
+    /// proob runs one child at a time today.
     const SLOTS: usize = 64;
     static LIVE: [AtomicI32; SLOTS] = [const { AtomicI32::new(0) }; SLOTS];
     static HANDLERS: Once = Once::new();

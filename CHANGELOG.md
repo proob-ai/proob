@@ -54,7 +54,8 @@ version as a comment.
   `#[kani::proof]` harness as a `proof`, so a property on plain Rust code
   can reach `Holds` with no proof language. A run that verifies is reported
   within the harness's bounds; a counterexample is `Broken`; anything Kani
-  cannot complete is errored with its reason, never positive. Strength is
+  cannot complete is errored with its reason, never positive, and so is a
+  harness whose own assertions are unreachable or absent. Strength is
   measured by mutation under Kani, where only a failed assertion of the
   harness's own is a kill. `proob init --kani` opts a repository in (the
   adapter, a pinned and cached Kani install in both workflows, and a build

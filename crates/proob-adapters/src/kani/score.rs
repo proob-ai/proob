@@ -28,7 +28,8 @@
 //! `verus::score::MIN_MUTANT_TIMEOUT`. Mutants beyond `max_mutants` are
 //! chosen by `mutation::sample` under the property's scoring seed and the
 //! rest counted as unsampled. The copy builds under `<target>/proob-kani-score`
-//! with `kani::check`'s lock, so dependencies build once per machine; not in
+//! under `kani::check`'s lock, held for the whole score, so dependencies
+//! build once per machine and two scores never overlap; not in
 //! `check`'s directory, and with every copied file's mtime set to now:
 //! cargo names a path package's build by its path relative to the workspace,
 //! so the copy, the real tree, and every earlier copy share one build, and a
@@ -77,13 +78,15 @@ pub enum Fate {
 /// Pure: the fate of a finished run's class and exit code.
 pub fn fate_of(class: &Class, code: Option<i32>) -> Fate {
     match class {
-        Class::Verified { .. } if code == Some(0) => Fate::Survived,
+        // The mutant made the assertions unreachable: the proof did not catch it.
+        Class::Verified { .. } | Class::Vacuous { .. } if code == Some(0) => Fate::Survived,
         Class::Failed { failure: Failure::Assertion, .. } => Fate::Killed,
         Class::Failed { failure: Failure::Safety, .. } => Fate::Safety,
         Class::Unwinding { .. } | Class::Undetermined { .. } | Class::Timeout | Class::OutOfMemory => Fate::Timeout,
         Class::Verified { .. }
         | Class::Unsupported { .. }
         | Class::VacuousCover { .. }
+        | Class::Vacuous { .. }
         | Class::PreprocessorFailed { .. }
         | Class::CompileError { .. }
         | Class::HarnessNotFound
@@ -316,6 +319,10 @@ pub(crate) struct Lab<'a> {
     target: PathBuf,
     r: &'a CheckRef,
     env: Vec<(OsString, OsString)>,
+    /// The target's lock, held for the lab's life: another lab of the same
+    /// crate shares its build (module doc), so a mutant written while that
+    /// lab builds could be read as fresh, or two CBMC runs overlap.
+    _held: std::fs::File,
 }
 
 impl<'a> Lab<'a> {
@@ -328,10 +335,11 @@ impl<'a> Lab<'a> {
         let dir = tempfile::tempdir().map_err(|e| AdapterError::Temp { message: e.to_string() })?;
         let copy = dir.path().join("crate");
         std::fs::create_dir(&copy).map_err(|e| AdapterError::Io { path: copy.clone(), message: e.to_string() })?;
+        let target = target_base(root, adapter.tool_env())?.join(TARGET_SUBDIR);
+        let _held = lock(&target)?;
         copy_tree(root, &copy)?;
         touch_tree(&copy, SystemTime::now())?;
-        let target = target_base(root, adapter.tool_env())?.join(TARGET_SUBDIR);
-        Ok(Lab { dir, cargo_kani: &tc.cargo_kani, target, r, env: Toolchain::env(adapter.tool_env()) })
+        Ok(Lab { dir, cargo_kani: &tc.cargo_kani, target, r, env: Toolchain::env(adapter.tool_env()), _held })
     }
 
     /// The copy of the adapter root.
@@ -343,7 +351,6 @@ impl<'a> Lab<'a> {
     pub(crate) fn harness(&self, timeout: Duration) -> Result<Ran, String> {
         let sarif = self.dir.path().join("kani.sarif");
         let _ = std::fs::remove_file(&sarif);
-        let _held = lock(&self.target).map_err(|e| e.to_string())?;
         let started = Instant::now();
         let out = plan(self.cargo_kani, &self.copy(), &self.target, &sarif, self.r, timeout).envs(&self.env).run();
         Ok((out, std::fs::read_to_string(&sarif).ok(), started.elapsed()))

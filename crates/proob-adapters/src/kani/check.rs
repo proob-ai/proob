@@ -117,6 +117,9 @@ pub fn outcome(class: Class, code: Option<i32>, r: &CheckRef) -> CheckOutcome {
         Class::VacuousCover { cover } => {
             errored(format!("vacuous: the harness cannot reach a case it covers: {cover}"))
         }
+        Class::Vacuous { assertion } => errored(format!(
+            "vacuous: the harness's own assertions never ran, so the statement was not checked: {assertion}"
+        )),
         Class::PreprocessorFailed { detail } => errored(format!(
             "Kani's C preprocessor failed; a non-system compiler on PATH may shadow the system one: {detail}"
         )),

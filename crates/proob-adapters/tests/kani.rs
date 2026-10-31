@@ -315,6 +315,7 @@ fn a_run_that_proves_nothing_or_contradicts_its_exit_code_is_errored() {
         reason(outcome(Class::Unrecognised { detail: "x".into() }, Some(1), &r))
             .starts_with("unrecognised Kani output")
     );
+    assert!(reason(outcome(Class::Vacuous { assertion: "a".into() }, Some(0), &r)).starts_with("vacuous: "));
     // Killed mid-run (the system reclaiming memory, a watchdog): no verdict, no exit code.
     assert_eq!(
         reason(outcome(Class::Unrecognised { detail: "no VERIFICATION line".into() }, None, &r)),
@@ -570,6 +571,7 @@ fn every_class_has_a_fate() {
         (Class::OutOfMemory, Some(1), Fate::Timeout),
         (Class::Unsupported { construct: String::new() }, Some(1), Fate::Unviable),
         (Class::VacuousCover { cover: String::new() }, Some(0), Fate::Unviable),
+        (Class::Vacuous { assertion: String::new() }, Some(0), Fate::Survived),
         (Class::PreprocessorFailed { detail: String::new() }, Some(1), Fate::Unviable),
         (Class::CompileError { detail: String::new() }, Some(1), Fate::Unviable),
         (Class::HarnessNotFound, Some(1), Fate::Unviable),
@@ -642,13 +644,18 @@ fn weak_harnesses_kill_nothing() {
     if !kani_present() {
         return;
     }
-    for text in [NO_ASSERTION, TABLE_INDEX] {
-        let (killed, survived, ..) = counts(&score(text));
-        assert_eq!(killed, 0, "{text}");
-        assert!(survived > 0, "{text}: a mutant only Rust's bounds check catches is survived, not killed");
-        // A score never leaves a mutant's build where a check, or the next score's baseline, would reuse it.
-        assert!(matches!(check(&binding(text)).outcome, CheckOutcome::Verified { .. }), "{text}");
-    }
+    let (killed, survived, ..) = counts(&score(NO_ASSERTION));
+    assert_eq!(killed, 0, "an assertion of what was assumed catches no mutant");
+    assert!(survived > 0);
+    // A score never leaves a mutant's build where a check, or the next score's baseline, would reuse it.
+    assert!(matches!(check(&binding(NO_ASSERTION)).outcome, CheckOutcome::Verified { .. }));
+    // Only Rust's bounds check looks at the result: the harness states nothing, so it never verifies.
+    let CheckOutcome::Errored { reason } = check(&binding(TABLE_INDEX)).outcome else {
+        panic!("verified a harness with no assertion")
+    };
+    assert!(reason.starts_with("vacuous: "), "{reason}");
+    let ScoreOutcome::Errored { reason } = score(TABLE_INDEX).outcome else { panic!("scored a vacuous baseline") };
+    assert!(reason.starts_with("baseline failed: "), "{reason}");
 }
 
 #[test]
