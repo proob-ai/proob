@@ -19,7 +19,7 @@ members = [
   "sim",
 ]
 # Standalone fixture packages have their own lockfiles and target directories.
-exclude = ["tests/fixtures/rust-repo", "tests/fixtures/verus-crate"]
+exclude = ["tests/fixtures/rust-repo", "tests/fixtures/verus-crate", "tests/fixtures/kani-crate"]
 
 [workspace.package]
 version = "0.1.0"

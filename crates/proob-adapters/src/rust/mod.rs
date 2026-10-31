@@ -19,7 +19,9 @@
 //! `#[…::test]`, `#[proptest]`, `#[…::proptest]`). What follows `proob:` must
 //! be one ULID and nothing else, so `proob:<ULID>:v2` and a truncated id are
 //! errors that `validate` reports, and a token above anything but a test fn
-//! is an error too. Each property binds at most one test. The check reference
+//! is an error too, except above a Kani harness (`#[kani::proof]`, also under
+//! `cfg_attr(kani, …)` and alongside `#[test]`): that token is the `kani`
+//! adapter's, skipped here and reported `uncovered`. Each property binds at most one test. The check reference
 //! is nextest's own name for the test, `<binary id> <test path>`, such as
 //! `rust-repo::props sorted_preserves_length`.
 //!
@@ -71,7 +73,9 @@ pub mod tools;
 
 use crate::argv::{Checked, Command};
 use crate::mutation::{self, Limits};
-use crate::{Adapter, AdapterError, Binding, Budget, Check, Language, RegistryError, Score, Seed, WitnessPolicy};
+use crate::{
+    Adapter, AdapterError, Binding, Budget, Check, Language, RegistryError, Score, Seed, Uncovered, WitnessPolicy,
+};
 use proob_facts::config::Adapter as AdapterConfig;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -244,5 +248,9 @@ impl Adapter for RustAdapter {
 
     fn score(&self, repo: &Path, binding: &Binding, scope_files: &[PathBuf]) -> Result<Score, AdapterError> {
         score::run(self, repo, binding, scope_files)
+    }
+
+    fn uncovered(&self, repo: &Path) -> Result<Vec<Uncovered>, AdapterError> {
+        discover::uncovered(self, repo)
     }
 }

@@ -10,6 +10,10 @@
 //! `mod` frames, and reads token lines from the original text. A token is a
 //! comment-only line `// proob:<text>`; it binds the first `fn` that follows
 //! with only blank lines, comments, and attributes between.
+//!
+//! A `fn` marked `#[kani::proof]` or `#[kani::proof_for_contract(…)]`, bare
+//! or under `#[cfg_attr(kani, …)]`, is a Kani harness, even when it also
+//! carries `#[test]`: its token is Kani's, never the Rust adapter's.
 use crate::TokenProblem;
 use proob_facts::ulid;
 
@@ -29,7 +33,26 @@ pub struct Token {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Bound {
     Test { id: u128, function: String, module_path: Vec<String> },
+    Kani { id: u128, harness: Kani, function: String, module_path: Vec<String> },
     Problem(TokenProblem),
+}
+
+/// The two Kani harness markers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Kani {
+    /// `kani::proof`.
+    Proof,
+    /// `kani::proof_for_contract(…)`.
+    Contract,
+}
+
+/// What a fn's attributes make it; a later variant wins over an earlier one.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord)]
+enum Marker {
+    #[default]
+    None,
+    Test,
+    Kani(Kani),
 }
 
 /// `mod name;` with the attributes and the inline modules around it.
@@ -244,7 +267,7 @@ struct Frame {
 #[derive(Debug, Default)]
 struct Pending {
     token: Option<(usize, String)>,
-    has_test_attr: bool,
+    marker: Marker,
     cfg_test: bool,
     path_attr: Option<String>,
 }
@@ -307,9 +330,12 @@ impl State {
         if name == "cfg" && cfg_names_test(inner) {
             self.pending.cfg_test = true;
         }
-        if matches!(last, "test" | "proptest") {
-            self.pending.has_test_attr = true;
-        }
+        let marker = match kani_marker(name, inner) {
+            Some(kani) => Marker::Kani(kani),
+            None if matches!(last, "test" | "proptest") => Marker::Test,
+            None => Marker::None,
+        };
+        self.pending.marker = self.pending.marker.max(marker);
         if name == "path" {
             self.pending.path_attr = quoted(orig);
         }
@@ -341,11 +367,16 @@ impl State {
     /// Resolves the pending token against the item that follows it.
     fn flush_token(&mut self, function: Option<&str>) {
         let Some((line, text)) = self.pending.token.take() else { return };
-        let bound = match (ulid::decode(&text), function, self.pending.has_test_attr) {
+        let bound = match (ulid::decode(&text), function, self.pending.marker) {
             (Err(error), _, _) => Bound::Problem(TokenProblem::NotUlid { text, error }),
             (Ok(_), None, _) => Bound::Problem(TokenProblem::NoFunction),
-            (Ok(_), Some(f), false) => Bound::Problem(TokenProblem::NotATest { function: f.to_string() }),
-            (Ok(id), Some(f), true) => Bound::Test { id, function: f.to_string(), module_path: self.module_path() },
+            (Ok(_), Some(f), Marker::None) => Bound::Problem(TokenProblem::NotATest { function: f.to_string() }),
+            (Ok(id), Some(f), Marker::Test) => {
+                Bound::Test { id, function: f.to_string(), module_path: self.module_path() }
+            }
+            (Ok(id), Some(f), Marker::Kani(harness)) => {
+                Bound::Kani { id, harness, function: f.to_string(), module_path: self.module_path() }
+            }
         };
         self.tokens.push(Token { line, bound });
     }
@@ -379,6 +410,38 @@ impl State {
 /// `test` as a whole word inside `cfg(...)`: `cfg(test)`, `cfg(all(test, unix))`.
 fn cfg_names_test(inner: &str) -> bool {
     inner.split(|c: char| !(c.is_alphanumeric() || c == '_')).any(|w| w == "test")
+}
+
+/// The Kani harness marker an attribute carries: `kani::proof` or
+/// `kani::proof_for_contract(…)`, bare or among a `cfg_attr`'s attributes.
+fn kani_marker(name: &str, inner: &str) -> Option<Kani> {
+    let attrs = match name {
+        "cfg_attr" => top_level_items(inner.split_once('(')?.1.strip_suffix(')')?).into_iter().skip(1).collect(),
+        _ => vec![inner],
+    };
+    attrs.into_iter().find_map(|a| match a.split('(').next().unwrap_or("").trim() {
+        "kani::proof" => Some(Kani::Proof),
+        "kani::proof_for_contract" => Some(Kani::Contract),
+        _ => None,
+    })
+}
+
+/// `text` split at the commas outside any parentheses.
+fn top_level_items(text: &str) -> Vec<&str> {
+    let (mut items, mut depth, mut start) = (Vec::new(), 0usize, 0);
+    for (i, c) in text.char_indices() {
+        match c {
+            '(' => depth += 1,
+            ')' => depth = depth.saturating_sub(1),
+            ',' if depth == 0 => {
+                items.push(&text[start..i]);
+                start = i + 1;
+            }
+            _ => {}
+        }
+    }
+    items.push(&text[start..]);
+    items
 }
 
 fn quoted(orig: &str) -> Option<String> {
@@ -502,6 +565,49 @@ fn versioned() {}
         assert_eq!(names[2], ("renamed", false, Some("x/y.rs"), vec![]));
         assert_eq!(names[3], ("deeper", true, None, vec!["inner".to_string()]));
         assert_eq!(s.mods.len(), 4);
+    }
+
+    #[test]
+    fn kani_harnesses_are_recognised_anywhere_and_win_over_test() {
+        let text = r#"
+// proob:01K8V5NQ4A0F3R7Y2M9D6P1XHA
+#[kani::proof]
+#[kani::unwind(4)]
+fn bare() {}
+
+mod checks {
+    // proob:01K8V5NQ4A0F3R7Y2M9D6P1XHB
+    #[cfg_attr(kani, kani::proof, kani::unwind(4))]
+    fn gated() {}
+
+    // proob:01K8V5NQ4A0F3R7Y2M9D6P1XHC
+    #[test]
+    #[cfg_attr(kani, kani::proof)]
+    fn both() {}
+}
+
+// proob:01K8V5NQ4A0F3R7Y2M9D6P1XHD
+#[cfg_attr(kani, kani::proof_for_contract(crate::f))]
+fn contract() {}
+
+// proob:01K8V5NQ4A0F3R7Y2M9D6P1XHE
+#[cfg_attr(kani, kani::unwind(4))]
+fn unwound_only() {}
+"#;
+        let bound: Vec<Bound> = scan(text).tokens.into_iter().map(|t| t.bound).collect();
+        let kani = |b: &Bound| match b {
+            Bound::Kani { harness, function, module_path, .. } => {
+                Some((*harness, function.clone(), module_path.clone()))
+            }
+            _ => None,
+        };
+        assert_eq!(kani(&bound[0]), Some((Kani::Proof, "bare".into(), vec![])));
+        assert_eq!(kani(&bound[1]), Some((Kani::Proof, "gated".into(), vec!["checks".into()])));
+        assert_eq!(kani(&bound[2]), Some((Kani::Proof, "both".into(), vec!["checks".into()])));
+        assert_eq!(kani(&bound[3]), Some((Kani::Contract, "contract".into(), vec![])));
+        // Another Kani attribute alone does not make a harness.
+        assert!(matches!(&bound[4], Bound::Problem(TokenProblem::NotATest { function }) if function == "unwound_only"));
+        assert_eq!(bound.len(), 5);
     }
 
     #[test]

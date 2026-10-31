@@ -1,9 +1,11 @@
 //! Discovery: walk each crate from its root through `mod` declarations,
 //! collect the bound tests, and compute every binding's set and hash.
+//! Tokens above Kani harnesses are not this adapter's: discovery skips them
+//! and `uncovered` reports them with what would bind them.
 use crate::rust::manifest::{CrateKind, CrateRoot, crate_roots, is_verus_verified, packages};
-use crate::rust::scan::{Bound, ModDecl, scan};
+use crate::rust::scan::{Bound, Kani, ModDecl, scan};
 use crate::rust::{RustAdapter, check_ref};
-use crate::{AdapterError, Binding, Location};
+use crate::{AdapterError, Binding, Location, Uncovered};
 use proob_core::binding_hash::binding_hash;
 use proob_core::scope_hash::PathDigest;
 use proob_core::types::Kind;
@@ -29,6 +31,8 @@ struct Crate {
     files: Vec<FileNode>,
     /// (file index, token line, id, test path)
     tests: Vec<(usize, usize, u128, String)>,
+    /// Tokens above Kani harnesses: (token, id, marker)
+    harnesses: Vec<(Location, u128, Kani)>,
 }
 
 pub fn discover(adapter: &RustAdapter, repo: &Path) -> Result<Vec<Binding>, AdapterError> {
@@ -39,18 +43,43 @@ pub fn discover(adapter: &RustAdapter, repo: &Path) -> Result<Vec<Binding>, Adap
         .map(|f| adapter.repo_relative(Path::new(f)))
         .collect();
     let mut bindings: Vec<Binding> = Vec::new();
-    for pkg in packages(&root, adapter.root())? {
-        // A Verus-verified crate's lib and bin roots hold proofs, not tests:
-        // the Verus adapter reads them. Its integration tests stay here.
-        let verified = is_verus_verified(&pkg.manifest);
-        for crate_root in crate_roots(&pkg)?.into_iter().filter(|r| !verified || r.kind == CrateKind::Test) {
-            let krate = walk(repo, &crate_root)?;
-            bindings.extend(bindings_of(repo, &krate, &config_files)?);
-        }
+    for krate in crates(adapter, repo)? {
+        bindings.extend(bindings_of(repo, &krate, &config_files)?);
     }
     check_distinct(&bindings)?;
     bindings.sort_by(|a, b| (&a.token.path, a.token.line).cmp(&(&b.token.path, b.token.line)));
     Ok(bindings)
+}
+
+/// Tokens above Kani harnesses: no Rust test can bind them, and the reason
+/// says what would.
+pub fn uncovered(adapter: &RustAdapter, repo: &Path) -> Result<Vec<Uncovered>, AdapterError> {
+    Ok(crates(adapter, repo)?
+        .into_iter()
+        .flat_map(|k| k.harnesses)
+        .map(|(token, id, harness)| Uncovered {
+            id,
+            token,
+            reason: match harness {
+                Kani::Proof => "a Kani harness; add a `kani` adapter (`proob init --kani`)".to_string(),
+                Kani::Contract => "a Kani contract harness; Kani contracts are not supported yet".to_string(),
+            },
+        })
+        .collect())
+}
+
+/// Every crate under the adapter root this adapter scans, walked.
+fn crates(adapter: &RustAdapter, repo: &Path) -> Result<Vec<Crate>, AdapterError> {
+    let mut out = Vec::new();
+    for pkg in packages(&adapter.root_in(repo), adapter.root())? {
+        // A Verus-verified crate's lib and bin roots hold proofs, not tests:
+        // the Verus adapter reads them. Its integration tests stay here.
+        let verified = is_verus_verified(&pkg.manifest);
+        for crate_root in crate_roots(&pkg)?.into_iter().filter(|r| !verified || r.kind == CrateKind::Test) {
+            out.push(walk(repo, &crate_root)?);
+        }
+    }
+    Ok(out)
 }
 
 fn check_distinct(bindings: &[Binding]) -> Result<(), AdapterError> {
@@ -78,7 +107,13 @@ fn repo_relative(repo: &Path, abs: &Path) -> PathBuf {
 /// Breadth-first over `mod` declarations from the crate root.
 fn walk(repo: &Path, root: &CrateRoot) -> Result<Crate, AdapterError> {
     let is_test_crate = root.kind == CrateKind::Test;
-    let mut krate = Crate { kind: root.kind, binary_id: root.binary_id.clone(), files: Vec::new(), tests: Vec::new() };
+    let mut krate = Crate {
+        kind: root.kind,
+        binary_id: root.binary_id.clone(),
+        files: Vec::new(),
+        tests: Vec::new(),
+        harnesses: Vec::new(),
+    };
     let mut seen: BTreeSet<PathBuf> = BTreeSet::new();
     let mut queue: Vec<(PathBuf, Vec<String>, bool, Option<usize>)> =
         vec![(root.file.clone(), Vec::new(), is_test_crate, None)];
@@ -103,6 +138,9 @@ fn walk(repo: &Path, root: &CrateRoot) -> Result<Crate, AdapterError> {
                         .chain([function.as_str()])
                         .collect();
                     krate.tests.push((index, token.line, *id, path.join("::")));
+                }
+                Bound::Kani { id, harness, .. } => {
+                    krate.harnesses.push((Location { path: rel.clone(), line: token.line }, *id, *harness));
                 }
                 Bound::Problem(problem) => {
                     return Err(AdapterError::Token {

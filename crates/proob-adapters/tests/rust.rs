@@ -181,6 +181,46 @@ fn a_unit_test_in_src_binds_its_file_and_its_cfg_test_modules() {
     assert_eq!(c.files, paths(&["src/parity/tests.rs"]));
 }
 
+fn kani_fixture() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/fixtures/kani-crate")
+        .canonicalize()
+        .expect("fixture exists")
+}
+
+const KANI_REASON: &str = "a Kani harness; add a `kani` adapter (`proob init --kani`)";
+
+#[test]
+fn kani_harness_tokens_are_skipped_and_reported_uncovered_with_the_fix() {
+    let repo = kani_fixture();
+    let found = discover(&repo);
+    assert_eq!(found.iter().map(|b| b.id).collect::<Vec<_>>(), vec![id("01K8V5NQ4A0F3R7Y2M9D6P1XKA")]);
+    assert_eq!(found[0].check_ref, "kani-crate::props clamp_stays_within_bounds");
+    let uncovered: Vec<(String, String, &str)> = adapter()
+        .uncovered(&repo)
+        .expect("uncovered succeeds")
+        .iter()
+        .map(|u| (ulid::encode(u.id), u.token.to_string(), if u.reason == KANI_REASON { "kani" } else { "other" }))
+        .collect();
+    assert_eq!(
+        uncovered,
+        vec![
+            ("01K8V5NQ4A0F3R7Y2M9D6P1XKB".to_string(), "src/lib.rs:19".to_string(), "kani"),
+            ("01K8V5NQ4A0F3R7Y2M9D6P1XKC".to_string(), "src/lib.rs:28".to_string(), "kani"),
+            // `#[test]` and `cfg_attr(kani, kani::proof)`: Kani's, not bound here.
+            ("01K8V5NQ4A0F3R7Y2M9D6P1XKD".to_string(), "src/lib.rs:36".to_string(), "kani"),
+            ("01K8V5NQ4A0F3R7Y2M9D6P1XKE".to_string(), "src/lib.rs:45".to_string(), "other"),
+        ]
+    );
+    let contract = adapter().uncovered(&repo).expect("uncovered succeeds").pop().expect("a contract harness");
+    assert!(contract.reason.contains("Kani contracts are not supported yet"), "{}", contract.reason);
+}
+
+#[test]
+fn the_rust_fixture_has_nothing_uncovered() {
+    assert!(adapter().uncovered(&fixture()).expect("uncovered succeeds").is_empty());
+}
+
 // ---------------------------------------------------------------------------
 // Argv: pure plans
 // ---------------------------------------------------------------------------
