@@ -249,7 +249,10 @@ fn measured(kind: EvidenceKind, o: &OutcomeRecord) -> Result<Measured, ConvertEr
         (K::Check, O::NoCounterexample { .. }) => primary(Kind::Test, PrimaryOutcome::NoCounterexample),
         (K::Check, O::Counterexample { .. }) => primary(Kind::Test, PrimaryOutcome::Counterexample),
         (K::Check, O::Errored { .. }) => primary(Kind::Test, PrimaryOutcome::Errored),
-        (K::Proof, O::Verified { .. }) => primary(Kind::Proof, PrimaryOutcome::Verified),
+        (K::Proof, O::Verified { rlimit, checks }) => match (rlimit, checks) {
+            (Some(_), None) | (None, Some(_)) => primary(Kind::Proof, PrimaryOutcome::Verified),
+            _ => Err(ConvertError::at("outcome", ConvertErrorKind::ProofMeasure)),
+        },
         (K::Proof, O::ProofFailed { .. }) => primary(Kind::Proof, PrimaryOutcome::ProofFailed),
         (K::Proof, O::Errored { .. }) => primary(Kind::Proof, PrimaryOutcome::Errored),
         (K::Model, O::NoViolation) => primary(Kind::Model, PrimaryOutcome::NoViolation),

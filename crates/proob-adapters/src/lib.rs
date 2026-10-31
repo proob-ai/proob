@@ -164,10 +164,10 @@ pub enum CheckOutcome {
         witness: Witness,
         replay: Seed,
     },
-    /// A proof: the verifier accepted the crate and the bound item under the
-    /// recorded SMT resource limit.
+    /// A proof: the verifier accepted the bound item; the measure says what
+    /// the acceptance was bounded by.
     Verified {
-        rlimit: u32,
+        measure: ProofMeasure,
     },
     /// A proof: the verifier rejected the crate; the diagnostics say where.
     ProofFailed {
@@ -176,6 +176,16 @@ pub enum CheckOutcome {
     Errored {
         reason: String,
     },
+}
+
+/// What bounds a proof, by verifier: closed, so a proof without one cannot be
+/// built.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProofMeasure {
+    /// Verus: the SMT resource limit the crate verified under.
+    Verus { rlimit: u32 },
+    /// Kani: the checks the harness passed, within its bounds.
+    Kani { checks: u32 },
 }
 
 /// Tool name and version, as the adapter probed them.

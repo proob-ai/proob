@@ -14,7 +14,9 @@ use proob_adapters::verus::scan::{Bound, scan};
 use proob_adapters::verus::score::{Fate, fate};
 use proob_adapters::verus::tools::{Resolution, Toolchain, resolve};
 use proob_adapters::verus::{VerusAdapter, parse_check_ref};
-use proob_adapters::{Adapter, AdapterError, Binding, Budget, CheckOutcome, ScoreOutcome, Seed, TokenProblem};
+use proob_adapters::{
+    Adapter, AdapterError, Binding, Budget, CheckOutcome, ProofMeasure, ScoreOutcome, Seed, TokenProblem,
+};
 use proob_core::types::Kind;
 use proob_facts::ulid;
 use proob_spawn::Output;
@@ -423,7 +425,12 @@ fn the_annotated_item_verifies_and_the_versions_are_recorded() {
     let started = Instant::now();
     let out = adapter().check(&fixture(), &binding(&fixture(), A), Budget(1), Seed(1)).expect("check runs");
     eprintln!("check(clamp) took {:?}", started.elapsed());
-    assert_eq!(out.outcome, CheckOutcome::Verified { rlimit: 10 }, "{:?}", out.outcome);
+    assert_eq!(
+        out.outcome,
+        CheckOutcome::Verified { measure: ProofMeasure::Verus { rlimit: 10 } },
+        "{:?}",
+        out.outcome
+    );
     let names: Vec<&str> = out.tool_versions.iter().map(|(k, _)| k.as_str()).collect();
     assert!(names.contains(&"verus") && names.contains(&"z3") && names.contains(&"cargo"), "{names:?}");
     assert!(out.tool_versions.iter().any(|(k, v)| k == "verus" && v.starts_with("0.20")), "{:?}", out.tool_versions);
@@ -446,7 +453,12 @@ fn a_second_check_of_an_unchanged_crate_still_reports_a_verdict() {
         .with_tool_env(vec![(OsString::from("CARGO_TARGET_DIR"), target.path().as_os_str().to_os_string())]);
     let b = adapter.discover(copy.path()).expect("discovery").into_iter().find(|b| b.id == id(A)).expect("bound");
     let first = adapter.check(copy.path(), &b, Budget(1), Seed(1)).expect("check runs");
-    assert_eq!(first.outcome, CheckOutcome::Verified { rlimit: 10 }, "{:?}", first.outcome);
+    assert_eq!(
+        first.outcome,
+        CheckOutcome::Verified { measure: ProofMeasure::Verus { rlimit: 10 } },
+        "{:?}",
+        first.outcome
+    );
     assert!(
         target
             .path()
@@ -457,7 +469,7 @@ fn a_second_check_of_an_unchanged_crate_still_reports_a_verdict() {
     let second = adapter.check(copy.path(), &b, Budget(1), Seed(1)).expect("check runs");
     assert_eq!(
         second.outcome,
-        CheckOutcome::Verified { rlimit: 10 },
+        CheckOutcome::Verified { measure: ProofMeasure::Verus { rlimit: 10 } },
         "a replayed build reports no verdict: {:?}",
         second.outcome
     );

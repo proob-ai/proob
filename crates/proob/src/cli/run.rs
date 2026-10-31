@@ -16,7 +16,9 @@ use crate::cli::backend::with_offline_backend;
 use crate::cli::error::CliError;
 use crate::cli::hash::{Hashes, find, hashes};
 use crate::cli::workspace::{LoadedProperty, Workspace};
-use proob_adapters::{Availability, Binding, Budget, CheckOutcome, ScoreOutcome, Seed, availability, language_name};
+use proob_adapters::{
+    Availability, Binding, Budget, CheckOutcome, ProofMeasure, ScoreOutcome, Seed, availability, language_name,
+};
 use proob_core::types::Kind;
 use proob_effects::git::{Git, Repo};
 use proob_facts::config::Config;
@@ -230,7 +232,12 @@ fn check_record(o: CheckOutcome) -> (OutcomeRecord, Option<Replay>) {
             OutcomeRecord::Counterexample { witness: witness.render() },
             Some(Replay { seed: replay.0.to_string(), cases: None }),
         ),
-        CheckOutcome::Verified { rlimit } => (OutcomeRecord::Verified { rlimit }, None),
+        CheckOutcome::Verified { measure: ProofMeasure::Verus { rlimit } } => {
+            (OutcomeRecord::Verified { rlimit: Some(rlimit), checks: None }, None)
+        }
+        CheckOutcome::Verified { measure: ProofMeasure::Kani { checks } } => {
+            (OutcomeRecord::Verified { rlimit: None, checks: Some(checks) }, None)
+        }
         CheckOutcome::ProofFailed { diagnostics } => (OutcomeRecord::ProofFailed { diagnostics }, None),
         CheckOutcome::Errored { reason } => (OutcomeRecord::Errored { reason }, None),
     }
@@ -306,7 +313,11 @@ pub fn outcome_text(o: &OutcomeRecord, replay: Option<&Replay>) -> String {
         }
         OutcomeRecord::NoMutants => "no mutants: nothing in the scope could be mutated".to_string(),
         OutcomeRecord::Errored { reason } => format!("errored: {reason}"),
-        OutcomeRecord::Verified { rlimit } => format!("verified (rlimit {rlimit})"),
+        OutcomeRecord::Verified { rlimit: Some(rlimit), .. } => format!("verified (rlimit {rlimit})"),
+        OutcomeRecord::Verified { checks: Some(checks), .. } => {
+            format!("verified within the harness's bounds ({checks} checks)")
+        }
+        OutcomeRecord::Verified { .. } => "verified".to_string(),
         OutcomeRecord::ProofFailed { diagnostics } => format!("proof failed: {diagnostics}"),
         OutcomeRecord::NoViolation => "no violation".to_string(),
         OutcomeRecord::Violation { trace } => format!("violation: {trace}"),

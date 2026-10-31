@@ -28,7 +28,7 @@
 use crate::argv::{Checked, Command};
 use crate::verus::tools::{Resolution, Toolchain, resolve};
 use crate::verus::{CheckRef, VerusAdapter, parse_check_ref};
-use crate::{AdapterError, Binding, Check, CheckOutcome, ToolVersions, WITNESS_CAP, cap, exit_text};
+use crate::{AdapterError, Binding, Check, CheckOutcome, ProofMeasure, ToolVersions, WITNESS_CAP, cap, exit_text};
 use proob_facts::parsers::verus::{Results, diagnostics, parse_output, summarise};
 use proob_spawn::Output;
 use std::ffi::OsString;
@@ -242,7 +242,7 @@ fn attribute(
     clean(root, &partial_dir(target), r, env);
     match plan_item(tc, root, target, r, adapter.rlimit(), ITEM_TIMEOUT).envs(env).run() {
         Ok(out) => match judge(&out) {
-            Judged::Verified => CheckOutcome::Verified { rlimit: adapter.rlimit() },
+            Judged::Verified => CheckOutcome::Verified { measure: ProofMeasure::Verus { rlimit: adapter.rlimit() } },
             Judged::Rejected(diagnostics) | Judged::VirError(diagnostics) => CheckOutcome::ProofFailed { diagnostics },
             Judged::Aborted(text) => CheckOutcome::Errored {
                 reason: format!("cargo verus focus stopped before `{item}` was judged: {text}"),

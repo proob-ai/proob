@@ -35,6 +35,12 @@ version as a comment.
   quick start; the full usage guide and benchmark tables moved to
   `docs/guide.md` and `docs/benchmark.md`. The README's GIF is recorded by
   `tools/demo/record.sh`.
+- **Breaking for older readers:** a proof's evidence record (`verified`)
+  gains an optional `checks` field for Kani, beside Verus's `rlimit`; a
+  record carries exactly one of them, and a Verus record is unchanged on the
+  wire. A proob older than this release cannot read a Kani `verified` record
+  and fails the whole retrieval, so once a repository uses Kani the gate, the
+  evidence workflow, and the local shim must run this release or newer.
 
 ### Added
 

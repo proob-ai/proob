@@ -1,14 +1,19 @@
 //! Round trips, property-based: ULID text, calendar dates, property files and
-//! configs through TOML; and the agreement of the verified glob checker with
+//! configs through TOML; verified evidence records of either measure through
+//! JSON; and the agreement of the verified glob checker with
 //! an independent plain-Rust reference.
 use proob_core::grammar::glob_ok_exec;
+use proob_core::types::{Kind, Measured, PrimaryOutcome};
 use proob_facts::config::{Adapter, Config, Language, OutcomeName, PolicyTable, Witness, parse_config};
 use proob_facts::convert::{self, GlobRule};
 use proob_facts::date::Date;
+use proob_facts::evidence::{OutcomeRecord, parse_evidence};
 use proob_facts::property::{KindName, PropertyFile, SeverityName, WaiverFile, parse_property};
 use proob_facts::ulid::{self, UlidError};
 use proptest::prelude::*;
 use proptest::test_runner::TestCaseError;
+
+const EVIDENCE: &str = include_str!("../../../tests/fixtures/properties/evidence.json");
 
 // ---------------------------------------------------------------------------
 // Independent references, written from the prose and not from the core
@@ -225,6 +230,14 @@ fn config() -> impl Strategy<Value = Config> {
         )
 }
 
+/// A `verified` outcome with exactly one measure: Verus's or Kani's.
+fn verified_outcome() -> impl Strategy<Value = OutcomeRecord> {
+    prop_oneof![
+        any::<u32>().prop_map(|r| OutcomeRecord::Verified { rlimit: Some(r), checks: None }),
+        any::<u32>().prop_map(|c| OutcomeRecord::Verified { rlimit: None, checks: Some(c) }),
+    ]
+}
+
 // ---------------------------------------------------------------------------
 // Properties
 // ---------------------------------------------------------------------------
@@ -285,6 +298,16 @@ proptest! {
         prop_assert_eq!(p.waiver.map(|w| w.until), file.waiver.as_ref().map(|w| w.until.to_secs()));
         prop_assert_eq!(p.reviewed, file.reviewed.map(Date::to_secs));
         prop_assert_eq!(p.kind.is_some(), file.kind.is_some());
+    }
+
+    #[test]
+    fn verified_evidence_round_trips_through_json_and_converts(outcome in verified_outcome()) {
+        let mut record = parse_evidence(EVIDENCE).map_err(fail)?;
+        record.outcome = outcome;
+        let back = parse_evidence(&serde_json::to_string(&record).map_err(fail)?).map_err(fail)?;
+        prop_assert_eq!(&back, &record);
+        let e = convert::evidence(&back).map_err(fail)?;
+        prop_assert_eq!(e.measured, Measured::Primary(Kind::Proof, PrimaryOutcome::Verified));
     }
 
     #[test]

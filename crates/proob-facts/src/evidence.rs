@@ -86,8 +86,14 @@ pub enum OutcomeRecord {
     Counterexample {
         witness: String,
     },
+    /// Exactly one measure: Verus's `rlimit` or Kani's `checks`. Both are
+    /// optional on the wire so a Verus record keeps its shape; conversion
+    /// refuses a record with neither or both.
     Verified {
-        rlimit: u32,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        rlimit: Option<u32>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        checks: Option<u32>,
     },
     ProofFailed {
         diagnostics: String,
