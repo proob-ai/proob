@@ -38,14 +38,20 @@
 //! only a `SUCCESSFUL` run with nothing undetermined, every cover satisfied,
 //! and at least one check proved is `Verified`; a failed assertion or Kani
 //! safety check is `ProofFailed`; anything else is `Errored` naming why.
+//!
+//! # Scoring
+//!
+//! `score` lists the scope's mutants with cargo-mutants, drops those in
+//! harness code, and re-runs the harness on each sampled mutant in a
+//! temporary copy; only a failed assertion of the harness's own is a kill
+//! (`score`).
 pub mod check;
 pub mod discover;
+pub mod score;
 pub mod tools;
 
 use crate::argv::Checked;
-use crate::{
-    Adapter, AdapterError, Binding, Budget, Check, Language, RegistryError, Score, ScoreOutcome, Seed, Uncovered,
-};
+use crate::{Adapter, AdapterError, Binding, Budget, Check, Language, RegistryError, Score, Seed, Uncovered};
 use proob_facts::config::Adapter as AdapterConfig;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -172,16 +178,8 @@ impl Adapter for KaniAdapter {
         check::run(self, repo, binding)
     }
 
-    // shortcut: no strength measure yet; mutation under Kani (the plan's U4) replaces this.
-    fn score(&self, _repo: &Path, _binding: &Binding, _scope_files: &[PathBuf]) -> Result<Score, AdapterError> {
-        Ok(Score {
-            outcome: ScoreOutcome::Errored {
-                reason: "strength under Kani is not measured yet: this proob has no mutation run for Kani harnesses"
-                    .to_string(),
-            },
-            tool_versions: Vec::new(),
-            jobs: None,
-        })
+    fn score(&self, repo: &Path, binding: &Binding, scope_files: &[PathBuf]) -> Result<Score, AdapterError> {
+        score::run(self, repo, binding, scope_files)
     }
 
     fn uncovered(&self, repo: &Path) -> Result<Vec<Uncovered>, AdapterError> {

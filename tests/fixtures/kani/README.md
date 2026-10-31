@@ -72,3 +72,17 @@ What the parser needs to know about the shape:
   and out-of-memory (`CBMC appears to have run out of memory. …`) messages,
   taken verbatim from the `kani-driver` 0.68.0 binary; the parser tests
   build those outputs from the passing capture.
+
+## The mutant listing
+
+`mutants_list.json` is cargo-mutants 27.1.0's listing of
+`tests/fixtures/kani-crate`, for the listing parser
+(`crates/proob-facts/src/parsers/cargo_mutants.rs`) and the Kani score's
+exclusion of harness code. Command, run from that crate with the same `PATH`
+(it names no local path, so nothing is replaced):
+
+    cargo mutants --package kani-crate --file src/lib.rs --list --json --diff
+
+It lists the mutants of `clamp` and of every harness in the `#[cfg(kani)]`
+module; the score keeps only `clamp`'s. Recapture it when the fixture's
+`src/lib.rs` changes.

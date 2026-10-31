@@ -102,7 +102,7 @@ pub fn outcome(class: Class, code: Option<i32>, r: &CheckRef) -> CheckOutcome {
             "nothing was checked: Kani verified `{harness}` but proved no check; a harness must assert what the statement says"
         )),
         Class::Verified { checks } => CheckOutcome::Verified { measure: ProofMeasure::Kani { checks } },
-        Class::Failed { diagnostics } => CheckOutcome::ProofFailed { diagnostics: cap(&diagnostics, WITNESS_CAP) },
+        Class::Failed { diagnostics, .. } => CheckOutcome::ProofFailed { diagnostics: cap(&diagnostics, WITNESS_CAP) },
         Class::Unsupported { construct } => {
             errored(format!("Kani cannot verify a construct this code reaches: {construct}"))
         }

@@ -214,6 +214,8 @@ fn kani_harness_tokens_are_skipped_and_reported_uncovered_with_the_fix() {
             ("01K8V5NQ4A0F3R7Y2M9D6P1XKG".to_string(), "src/lib.rs:64".to_string(), "kani"),
             ("01K8V5NQ4A0F3R7Y2M9D6P1XKH".to_string(), "src/lib.rs:74".to_string(), "kani"),
             ("01K8V5NQ4A0F3R7Y2M9D6P1XKJ".to_string(), "src/lib.rs:87".to_string(), "kani"),
+            ("01K8V5NQ4A0F3R7Y2M9D6P1XKK".to_string(), "src/lib.rs:100".to_string(), "kani"),
+            ("01K8V5NQ4A0F3R7Y2M9D6P1XKM".to_string(), "src/lib.rs:110".to_string(), "kani"),
         ]
     );
     let contract = adapter().uncovered(&repo).expect("uncovered succeeds").swap_remove(3);

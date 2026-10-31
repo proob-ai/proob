@@ -27,6 +27,7 @@ pub enum Class {
     /// the `Failed Checks:` lines with their locations.
     Failed {
         diagnostics: String,
+        failure: Failure,
     },
     /// The harness reached a construct Kani does not support.
     Unsupported {
@@ -63,6 +64,25 @@ pub enum Class {
     },
 }
 
+/// Whose check failed. Only the harness's own assertions state the property;
+/// a check Kani or rustc adds (overflow, bounds, a panic inside another
+/// function) says only that the code can panic.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Failure {
+    /// At least one failed check is an assertion written in the harness
+    /// itself: an `assertion` check whose function is the harness, with a
+    /// description that is not one of rustc's built-in checks.
+    Assertion,
+    /// Every failed check is a safety check, or an assertion in a function
+    /// other than the harness.
+    Safety,
+}
+
+/// rustc's built-in assertions (`AssertKind`): Kani reports them as the
+/// `assertion` class of the function they sit in, harness or not.
+const LANGUAGE_CHECKS: [&str; 4] =
+    ["attempt to ", "index out of bounds", "misaligned pointer dereference", "null pointer dereference"];
+
 /// One `Check N:` entry of the `RESULTS:` block.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct CheckResult {
@@ -76,6 +96,17 @@ pub struct CheckResult {
 impl CheckResult {
     fn class(&self) -> &str {
         self.property.rsplit('.').nth(1).unwrap_or("")
+    }
+
+    /// The function the check sits in: the property without `.<class>.<n>`.
+    fn function(&self) -> &str {
+        self.property.rsplitn(3, '.').nth(2).unwrap_or("")
+    }
+
+    fn is_harness_assertion(&self, harness: &str) -> bool {
+        self.function() == harness
+            && self.class() == "assertion"
+            && !LANGUAGE_CHECKS.iter().any(|p| self.description.starts_with(p))
     }
 
     fn is_cover(&self) -> bool {
@@ -131,11 +162,11 @@ pub fn classify(stdout: &str, stderr: &str, sarif: Option<&str>, harness: &str) 
             ),
         };
     }
-    judge(stdout, verdict == SUCCESSFUL, rules)
+    judge(stdout, verdict == SUCCESSFUL, rules, harness)
 }
 
 /// The verdict line was found: read the checks.
-fn judge(stdout: &str, successful: bool, sarif: Option<Result<Vec<String>, String>>) -> Class {
+fn judge(stdout: &str, successful: bool, sarif: Option<Result<Vec<String>, String>>, harness: &str) -> Class {
     let checks = results(stdout);
     if let Some(c) = with(&checks, "FAILURE").find(|c| c.class() == "unsupported_construct") {
         return Class::Unsupported { construct: c.summary() };
@@ -153,7 +184,12 @@ fn judge(stdout: &str, successful: bool, sarif: Option<Result<Vec<String>, Strin
         return if successful {
             Class::Unrecognised { detail: "a check FAILURE under a SUCCESSFUL verdict".to_string() }
         } else {
-            Class::Failed { diagnostics: failed_checks(stdout, &checks) }
+            let failure = if with(&checks, "FAILURE").any(|c| c.is_harness_assertion(harness)) {
+                Failure::Assertion
+            } else {
+                Failure::Safety
+            };
+            Class::Failed { diagnostics: failed_checks(stdout, &checks), failure }
         };
     }
     let undetermined: Vec<String> = with(&checks, "UNDETERMINED").map(CheckResult::summary).collect();
@@ -300,13 +336,42 @@ mod tests {
 
     #[test]
     fn an_assertion_and_a_safety_check_failure_are_failures_with_their_location() {
-        let Class::Failed { diagnostics } = captured("fail_assert") else { panic!("{:?}", captured("fail_assert")) };
+        let Class::Failed { diagnostics, failure } = captured("fail_assert") else {
+            panic!("{:?}", captured("fail_assert"))
+        };
         assert_eq!(
             diagnostics,
             "Failed Checks: assertion failed: buggy_abs(x) > 0\nFile: \"src/lib.rs\", line 11, in verification::fail_assert"
         );
-        let Class::Failed { diagnostics } = captured("fail_overflow") else { panic!() };
+        assert_eq!(failure, Failure::Assertion);
+        let Class::Failed { diagnostics, failure } = captured("fail_overflow") else { panic!() };
         assert!(diagnostics.contains("attempt to negate with overflow"), "{diagnostics}");
+        assert_eq!(failure, Failure::Safety, "the overflow sits in `buggy_abs`, not the harness");
+    }
+
+    #[test]
+    fn only_an_assertion_written_in_the_harness_is_an_assertion_failure() {
+        let stdout = read("fail_assert.stdout.txt").unwrap();
+        let stderr = read("fail_assert.stderr.txt").unwrap();
+        let failure = |out: &str| match classify(out, &stderr, None, "verification::fail_assert") {
+            Class::Failed { failure, .. } => failure,
+            other => panic!("{other:?}"),
+        };
+        assert_eq!(failure(&stdout), Failure::Assertion);
+        // rustc's own checks inside the harness are safety checks.
+        for builtin in
+            ["attempt to add with overflow", "index out of bounds: the length is less than or equal to the given index"]
+        {
+            let out = stdout.replace("\"assertion failed: buggy_abs(x) > 0\"", &format!("\"{builtin}\""));
+            assert_eq!(failure(&out), Failure::Safety, "{builtin}");
+        }
+        // A check of another class in the harness, or an assertion in another function.
+        let pointer =
+            stdout.replace("verification::fail_assert.assertion.1", "verification::fail_assert.pointer_dereference.1");
+        assert_eq!(failure(&pointer), Failure::Safety);
+        let helper = stdout
+            .replace("Check 2: verification::fail_assert.assertion.1", "Check 2: verification::helper.assertion.1");
+        assert_eq!(failure(&helper), Failure::Safety);
     }
 
     #[test]

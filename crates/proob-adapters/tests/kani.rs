@@ -1,17 +1,23 @@
 //! The Kani adapter against `tests/fixtures/kani-crate`: discovery and
 //! binding sets (pure), the argv it builds (pure), config refusals, the
-//! outcome table over the captured Kani 0.68.0 outputs in
-//! `tests/fixtures/kani`, and real runs through `cargo kani`. Real runs need
+//! outcome table and the mutant-fate table over the captured Kani 0.68.0
+//! outputs in `tests/fixtures/kani`, the mutant listing and its exclusion of
+//! harness code, and real runs through `cargo kani` (check and score). Real runs need
 //! the pinned toolchain (`cargo-kani` on `PATH` and its bundle); when it does
 //! not resolve they say so and return.
+use proob_adapters::argv::Checked;
 use proob_adapters::kani::check::{judge, outcome, plan};
+use proob_adapters::kani::score::{Fate, OPERATOR_SET, fate, fate_of, harness_code, list_plan, patch};
 use proob_adapters::kani::tools::{Resolution, resolve};
 use proob_adapters::kani::{KaniAdapter, parse_check_ref};
-use proob_adapters::{Adapter, Binding, Budget, Check, CheckOutcome, Location, ProofMeasure, RegistryError, Seed};
+use proob_adapters::{
+    Adapter, Binding, Budget, Check, CheckOutcome, Location, ProofMeasure, RegistryError, Score, ScoreOutcome, Seed,
+};
 use proob_core::types::Kind;
-use proob_facts::parsers::kani::Class;
+use proob_facts::parsers::cargo_mutants::{Listed, parse_listing};
+use proob_facts::parsers::kani::{Class, Failure};
 use proob_facts::ulid;
-use proob_spawn::Output;
+use proob_spawn::{Output, SpawnError};
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -27,6 +33,10 @@ const PLANTED: &str = "01K8V5NQ4A0F3R7Y2M9D6P1XKF";
 const UNSUPPORTED: &str = "01K8V5NQ4A0F3R7Y2M9D6P1XKG";
 const SHORT_UNWIND: &str = "01K8V5NQ4A0F3R7Y2M9D6P1XKH";
 const UNREACHABLE_COVER: &str = "01K8V5NQ4A0F3R7Y2M9D6P1XKJ";
+/// Asserts nothing about `clamp`'s result.
+const NO_ASSERTION: &str = "01K8V5NQ4A0F3R7Y2M9D6P1XKK";
+/// Only Rust's bounds check looks at `clamp`'s result.
+const TABLE_INDEX: &str = "01K8V5NQ4A0F3R7Y2M9D6P1XKM";
 
 fn id(text: &str) -> u128 {
     ulid::decode(text).expect("ulid")
@@ -80,7 +90,17 @@ fn reason(c: &Check) -> &str {
 fn discovery_binds_every_kani_harness_as_a_proof_and_leaves_the_proptest_and_the_contract() {
     let found = discover(&fixture());
     let ids: Vec<u128> = found.iter().map(|b| b.id).collect();
-    let expected = [PASSING, GATED, TEST_AND_HARNESS, PLANTED, UNSUPPORTED, SHORT_UNWIND, UNREACHABLE_COVER];
+    let expected = [
+        PASSING,
+        GATED,
+        TEST_AND_HARNESS,
+        PLANTED,
+        UNSUPPORTED,
+        SHORT_UNWIND,
+        UNREACHABLE_COVER,
+        NO_ASSERTION,
+        TABLE_INDEX,
+    ];
     assert_eq!(ids, expected.map(id).to_vec(), "sorted by token location");
     assert!(!ids.contains(&id(PROPTEST)) && !ids.contains(&id(CONTRACT)));
     let b = binding(PASSING);
@@ -328,7 +348,13 @@ fn kani_present() -> bool {
     }
 }
 
+/// Real runs one at a time: Kani's cargo rewrites the fixture's Cargo.lock
+/// for the length of a check (`check::restore` puts it back), which a
+/// parallel score's before-and-after comparison would otherwise see.
+static REAL_RUN: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 fn check(b: &Binding) -> Check {
+    let _one = REAL_RUN.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
     let out = adapter().check(&fixture(), b, Budget(1), Seed(1)).expect("check runs");
     eprintln!("check({}) = {:?}", b.check_ref, out.outcome);
     out
@@ -401,4 +427,229 @@ fn a_check_leaves_cargo_lock_as_it_found_it() {
     assert!(!lock.exists(), "a lock file Kani created where there was none is removed");
     restore(&lock, None).expect("restore");
     assert!(!lock.exists(), "no lock file before or after is a no-op");
+}
+
+// ---------------------------------------------------------------------------
+// Score: listing, exclusion, fates (pure)
+// ---------------------------------------------------------------------------
+
+fn listing() -> Vec<Listed> {
+    let json = std::fs::read_to_string(captures().join("mutants_list.json")).expect("captured listing");
+    parse_listing(&json).expect("parses")
+}
+
+fn fixture_files() -> Vec<Checked> {
+    vec![Checked::path(Path::new("src/lib.rs")).expect("checked")]
+}
+
+#[test]
+fn the_captured_listing_keeps_only_mutants_outside_harness_code_and_every_diff_applies() {
+    let listed = listing();
+    assert!(listed.iter().all(|m| !m.diff.is_empty()), "every mutant carries its diff");
+    let code = harness_code(&adapter(), &fixture(), &fixture_files()).expect("reads");
+    let kept: Vec<&Listed> = listed.iter().filter(|m| !code.contains(m)).collect();
+    assert!(!kept.is_empty() && kept.len() < listed.len());
+    assert!(
+        kept.iter().all(|m| m.function.as_deref() == Some("clamp")),
+        "{:?}",
+        kept.iter().map(|m| &m.name).collect::<Vec<_>>()
+    );
+    assert!(listed.iter().filter(|m| m.function.as_deref() != Some("clamp")).all(|m| code.contains(m)));
+    let text = std::fs::read_to_string(fixture().join("src/lib.rs")).expect("fixture");
+    for m in &listed {
+        let mutated = patch(&text, &m.diff).unwrap_or_else(|e| panic!("{}: {e}", m.name));
+        assert_ne!(mutated, text, "{}", m.name);
+        assert!(mutated.contains("~ changed by cargo-mutants ~"), "{}", m.name);
+    }
+}
+
+/// A harness file reached through `#[cfg(kani)] mod proofs;`, and a harness
+/// outside any `cfg(kani)` module, in a crate of their own.
+#[test]
+fn harness_files_and_harness_functions_are_harness_code() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let root = tmp.path();
+    write(root, "Cargo.toml", "[package]\nname = \"h\"\nversion = \"0.1.0\"\nedition = \"2024\"\n");
+    write(
+        root,
+        "src/lib.rs",
+        "#[cfg(kani)]\nmod proofs;\npub fn f() -> i32 { 1 }\n\n// proob:01K8V5NQ4A0F3R7Y2M9D6P1XWC\n#[cfg_attr(kani, kani::proof)]\nfn bare() { assert!(f() == 1); }\n",
+    );
+    write(
+        root,
+        "src/proofs.rs",
+        "// proob:01K8V5NQ4A0F3R7Y2M9D6P1XWD\n#[kani::proof]\nfn holds() { assert!(super::f() == 1); }\n",
+    );
+    let files = ["src/lib.rs", "src/proofs.rs"].map(|f| Checked::path(Path::new(f)).expect("checked"));
+    let code = harness_code(&adapter(), root, &files).expect("reads");
+    let mutant = |file: &str, line: usize, function: Option<&str>| Listed {
+        name: format!("{file}:{line}"),
+        file: file.to_string(),
+        line,
+        function: function.map(str::to_string),
+        diff: String::new(),
+    };
+    assert!(code.contains(&mutant("src/proofs.rs", 3, Some("holds"))), "a file under cfg(kani)");
+    assert!(code.contains(&mutant("src/lib.rs", 7, Some("bare"))), "a harness function");
+    assert!(!code.contains(&mutant("src/lib.rs", 3, Some("f"))), "the code under proof");
+}
+
+#[test]
+fn the_listing_argv_names_the_package_and_each_scope_file_and_asks_for_diffs() {
+    let r = parse_check_ref("kani-crate verification::clamp_stays_within_bounds").expect("parses");
+    let files = [
+        Checked::path(Path::new("src/lib.rs")).expect("checked"),
+        Checked::path(Path::new("src/a.rs")).expect("checked"),
+    ];
+    let command = list_plan(Path::new("cargo"), &fixture(), &r.package, &files);
+    assert_eq!(
+        strs(command.args()),
+        [
+            "mutants",
+            "--package",
+            "kani-crate",
+            "--file",
+            "src/lib.rs",
+            "--file",
+            "src/a.rs",
+            "--list",
+            "--json",
+            "--diff"
+        ]
+    );
+}
+
+fn fate_of_capture(case: &str) -> Fate {
+    let (out, sarif) = captured(case);
+    let harness = match case {
+        "harness_not_found" => "verification::nope".to_string(),
+        "preprocessor_failed" => "verification::pass".to_string(),
+        "compile_error" => "verification::broken".to_string(),
+        _ => format!("verification::{case}"),
+    };
+    fate(Ok(&out), sarif.as_deref(), &harness).expect("a fate")
+}
+
+#[test]
+fn each_captured_run_lands_on_its_row_of_the_mutant_fate_table() {
+    let rows = [
+        ("fail_assert", Fate::Killed),
+        ("fail_overflow", Fate::Safety),
+        ("pass", Fate::Survived),
+        ("unwind_short", Fate::Timeout),
+        ("unsupported", Fate::Unviable),
+        ("cover_unsat", Fate::Unviable),
+        ("harness_not_found", Fate::Unviable),
+        ("preprocessor_failed", Fate::Unviable),
+        ("compile_error", Fate::Unviable),
+    ];
+    for (case, expected) in rows {
+        assert_eq!(fate_of_capture(case), expected, "{case}");
+    }
+}
+
+#[test]
+fn every_class_has_a_fate() {
+    let failed = |failure| Class::Failed { diagnostics: String::new(), failure };
+    let rows = [
+        (Class::Verified { checks: 3 }, Some(0), Fate::Survived),
+        (Class::Verified { checks: 0 }, Some(0), Fate::Survived),
+        (Class::Verified { checks: 3 }, Some(1), Fate::Unviable),
+        (failed(Failure::Assertion), Some(1), Fate::Killed),
+        (failed(Failure::Safety), Some(1), Fate::Safety),
+        (Class::Unwinding { at: String::new() }, Some(1), Fate::Timeout),
+        (Class::Undetermined { checks: vec![] }, Some(1), Fate::Timeout),
+        (Class::Timeout, Some(1), Fate::Timeout),
+        (Class::OutOfMemory, Some(1), Fate::Timeout),
+        (Class::Unsupported { construct: String::new() }, Some(1), Fate::Unviable),
+        (Class::VacuousCover { cover: String::new() }, Some(0), Fate::Unviable),
+        (Class::PreprocessorFailed { detail: String::new() }, Some(1), Fate::Unviable),
+        (Class::CompileError { detail: String::new() }, Some(1), Fate::Unviable),
+        (Class::HarnessNotFound, Some(1), Fate::Unviable),
+        (Class::Unrecognised { detail: String::new() }, Some(1), Fate::Unviable),
+    ];
+    for (class, code, expected) in rows {
+        assert_eq!(fate_of(&class, code), expected, "{class:?}");
+    }
+    let timed_out = SpawnError::TimedOut { program: PathBuf::from("cargo-kani"), after: Duration::from_secs(1) };
+    assert_eq!(fate(Err(&timed_out), None, "h"), Ok(Fate::Timeout), "the per-mutant limit");
+    let start = SpawnError::Start { program: PathBuf::from("cargo-kani"), message: "gone".into() };
+    assert!(fate(Err(&start), None, "h").is_err(), "a toolchain that cannot start aborts the score");
+}
+
+#[test]
+fn a_missing_toolchain_scores_errored_with_the_stable_hint() {
+    let home = tempfile::tempdir().expect("tempdir");
+    let env = vec![
+        (OsString::from("PATH"), home.path().join("nothing").into_os_string()),
+        (OsString::from("HOME"), home.path().as_os_str().to_os_string()),
+        (OsString::from("KANI_HOME"), OsString::new()),
+    ];
+    let none = KaniAdapter::at(".").with_tool_env(env);
+    let out = none.score(&fixture(), &binding(PASSING), &paths(&["src/lib.rs"])).expect("score returns a result");
+    let ScoreOutcome::Errored { reason } = out.outcome else { panic!("{:?}", out.outcome) };
+    assert!(reason.starts_with("the Kani toolchain was not found"), "{reason}");
+}
+
+// ---------------------------------------------------------------------------
+// Score: real runs
+// ---------------------------------------------------------------------------
+
+fn score(text: &str) -> Score {
+    let _one = REAL_RUN.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    let lock = fixture().join("Cargo.lock");
+    let before = std::fs::read(&lock).expect("lock");
+    let started = std::time::Instant::now();
+    let b = binding(text);
+    let out = adapter().score(&fixture(), &b, &paths(&["src/lib.rs"])).expect("score runs");
+    eprintln!("score({}) = {:?} in {:.0?}", b.check_ref, out.outcome, started.elapsed());
+    assert_eq!(std::fs::read(&lock).expect("lock"), before, "Cargo.lock is left as it was");
+    out
+}
+
+fn counts(s: &Score) -> (u32, u32, u32, u32, u32) {
+    match s.outcome {
+        ScoreOutcome::Scored { killed, survived, timeout, unviable, unsampled } => {
+            (killed, survived, timeout, unviable, unsampled)
+        }
+        ref other => panic!("{other:?}"),
+    }
+}
+
+#[test]
+fn a_meaningful_harness_kills_mutants_and_records_its_tools() {
+    if !kani_present() {
+        return;
+    }
+    let s = score(PASSING);
+    let (killed, ..) = counts(&s);
+    assert!(killed >= 1, "{:?}", s.outcome);
+    let version = |k: &str| s.tool_versions.iter().find(|(name, _)| name == k).map(|(_, v)| v.as_str());
+    assert_eq!(version("mutants-under-kani"), Some(OPERATOR_SET));
+    assert_eq!(version("kani"), Some("0.68.0"));
+    assert!(version("cargo-mutants").is_some(), "{:?}", s.tool_versions);
+}
+
+#[test]
+fn weak_harnesses_kill_nothing() {
+    if !kani_present() {
+        return;
+    }
+    for text in [NO_ASSERTION, TABLE_INDEX] {
+        let (killed, survived, ..) = counts(&score(text));
+        assert_eq!(killed, 0, "{text}");
+        assert!(survived > 0, "{text}: a mutant only Rust's bounds check catches is survived, not killed");
+        // A score never leaves a mutant's build where a check, or the next score's baseline, would reuse it.
+        assert!(matches!(check(&binding(text)).outcome, CheckOutcome::Verified { .. }), "{text}");
+    }
+}
+
+#[test]
+fn a_baseline_that_does_not_verify_is_errored_naming_the_failure() {
+    if !kani_present() {
+        return;
+    }
+    let ScoreOutcome::Errored { reason } = score(PLANTED).outcome else { panic!("scored a failing baseline") };
+    assert!(reason.starts_with("baseline failed: the harness does not verify before any mutation"), "{reason}");
+    assert!(reason.contains("assertion failed: clamp(x, lo, hi) == x"), "{reason}");
 }

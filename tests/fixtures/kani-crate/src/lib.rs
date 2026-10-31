@@ -93,4 +93,25 @@ mod verification {
         kani::cover!(y < lo, "below the lower bound");
         assert!(lo <= y && y <= hi);
     }
+
+    // The harnesses below are the score's real-run cases: each is a weak
+    // proof that mutation must read as weak.
+
+    // proob:01K8V5NQ4A0F3R7Y2M9D6P1XKK
+    #[kani::proof]
+    fn clamp_runs_with_ordered_bounds() {
+        let (x, lo, hi): (i32, i32, i32) = (kani::any(), kani::any(), kani::any());
+        kani::assume(lo <= hi);
+        let _ = clamp(x, lo, hi);
+        // Asserts only what it assumed: nothing about the result.
+        assert!(lo <= hi);
+    }
+
+    // proob:01K8V5NQ4A0F3R7Y2M9D6P1XKM
+    #[kani::proof]
+    fn clamp_indexes_a_table() {
+        let table = [0u8; 11];
+        // Only Rust's own bounds check looks at the result.
+        let _entry = table[clamp(kani::any(), 0, 10) as usize];
+    }
 }

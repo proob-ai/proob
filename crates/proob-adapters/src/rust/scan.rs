@@ -21,6 +21,9 @@ use proob_facts::ulid;
 pub struct Scan {
     pub tokens: Vec<Token>,
     pub mods: Vec<ModDecl>,
+    /// The first and last lines of each outermost inline module under
+    /// `#[cfg(kani)]`: code only Kani compiles.
+    pub kani_spans: Vec<(usize, usize)>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -262,6 +265,8 @@ fn blank_char_literal(chars: &[char], from: usize, out: &mut String) -> usize {
 #[derive(Debug, Default)]
 struct Frame {
     depth_at_open: usize,
+    /// The line of the `mod` item.
+    line: usize,
     name: String,
     cfg_test: bool,
     cfg_kani: bool,
@@ -283,6 +288,7 @@ struct State {
     pending: Pending,
     tokens: Vec<Token>,
     mods: Vec<ModDecl>,
+    kani_spans: Vec<(usize, usize)>,
 }
 
 const TOKEN_PREFIX: &str = "proob:";
@@ -369,6 +375,7 @@ impl State {
         let inline = match decl {
             Some((name, ModShape::Inline)) => Some(Frame {
                 depth_at_open: 0,
+                line: n,
                 name,
                 cfg_test: self.pending.cfg_test || self.in_cfg_test(),
                 cfg_kani: self.pending.cfg_kani || self.in_cfg_kani(),
@@ -376,7 +383,7 @@ impl State {
             _ => None,
         };
         self.pending = Pending::default();
-        self.braces(masked, inline);
+        self.braces(n, masked, inline);
     }
 
     /// Resolves the pending token against the item that follows it.
@@ -396,7 +403,7 @@ impl State {
         self.tokens.push(Token { line, bound });
     }
 
-    fn braces(&mut self, masked: &str, mut inline: Option<Frame>) {
+    fn braces(&mut self, n: usize, masked: &str, mut inline: Option<Frame>) {
         for c in masked.chars() {
             match c {
                 '{' => {
@@ -406,8 +413,12 @@ impl State {
                     }
                 }
                 '}' => {
-                    if self.stack.last().is_some_and(|f| f.depth_at_open == self.depth) {
-                        self.stack.pop();
+                    if self.stack.last().is_some_and(|f| f.depth_at_open == self.depth)
+                        && let Some(frame) = self.stack.pop()
+                        && frame.cfg_kani
+                        && !self.in_cfg_kani()
+                    {
+                        self.kani_spans.push((frame.line, n));
                     }
                     self.depth = self.depth.saturating_sub(1);
                 }
@@ -418,7 +429,7 @@ impl State {
 
     fn finish(mut self) -> Scan {
         self.flush_token(None);
-        Scan { tokens: self.tokens, mods: self.mods }
+        Scan { tokens: self.tokens, mods: self.mods, kani_spans: self.kani_spans }
     }
 }
 
@@ -587,6 +598,14 @@ fn versioned() {}
         let s = scan("#[cfg(kani)]\nmod a;\n#[cfg(kani)]\nmod v {\n    mod b;\n}\nmod c;\n");
         let kani: Vec<(&str, bool)> = s.mods.iter().map(|m| (m.name.as_str(), m.cfg_kani)).collect();
         assert_eq!(kani, vec![("a", true), ("b", true), ("c", false)]);
+    }
+
+    #[test]
+    fn the_lines_of_each_outermost_cfg_kani_inline_module_are_kept() {
+        let s = scan(
+            "fn a() {}\n#[cfg(kani)]\nmod v {\n    mod w {\n        fn b() {}\n    }\n}\nmod c { fn d() {} }\n#[cfg(kani)]\nmod e { }\n",
+        );
+        assert_eq!(s.kani_spans, vec![(3, 7), (10, 10)]);
     }
 
     #[test]

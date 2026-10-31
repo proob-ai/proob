@@ -1,0 +1,1026 @@
+[
+  {
+    "diff": "--- src/lib.rs\n+++ replace clamp -> i32 with 0\n@@ -1,20 +1,14 @@\n //! One pure function, checked two ways: a proptest under `tests/` and Kani\n //! harnesses in `verification`, compiled only under `cargo kani`.\n \n /// `x` clamped into `lo..=hi`; `lo` wins when the bounds cross.\n pub fn clamp(x: i32, lo: i32, hi: i32) -> i32 {\n-    if x < lo {\n-        lo\n-    } else if x > hi {\n-        hi.max(lo)\n-    } else {\n-        x\n-    }\n+    0 /* ~ changed by cargo-mutants ~ */\n }\n \n #[cfg(kani)]\n mod verification {\n     use super::clamp;\n \n     // proob:01K8V5NQ4A0F3R7Y2M9D6P1XKB\n     #[kani::proof]\n",
+    "file": "src/lib.rs",
+    "function": {
+      "function_name": "clamp",
+      "return_type": "-> i32",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 13
+        },
+        "start": {
+          "column": 1,
+          "line": 4
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "src/lib.rs:6:5: replace clamp -> i32 with 0",
+    "package": "kani-crate",
+    "replacement": "0",
+    "span": {
+      "end": {
+        "column": 6,
+        "line": 12
+      },
+      "start": {
+        "column": 5,
+        "line": 6
+      }
+    }
+  },
+  {
+    "diff": "--- src/lib.rs\n+++ replace clamp -> i32 with 1\n@@ -1,20 +1,14 @@\n //! One pure function, checked two ways: a proptest under `tests/` and Kani\n //! harnesses in `verification`, compiled only under `cargo kani`.\n \n /// `x` clamped into `lo..=hi`; `lo` wins when the bounds cross.\n pub fn clamp(x: i32, lo: i32, hi: i32) -> i32 {\n-    if x < lo {\n-        lo\n-    } else if x > hi {\n-        hi.max(lo)\n-    } else {\n-        x\n-    }\n+    1 /* ~ changed by cargo-mutants ~ */\n }\n \n #[cfg(kani)]\n mod verification {\n     use super::clamp;\n \n     // proob:01K8V5NQ4A0F3R7Y2M9D6P1XKB\n     #[kani::proof]\n",
+    "file": "src/lib.rs",
+    "function": {
+      "function_name": "clamp",
+      "return_type": "-> i32",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 13
+        },
+        "start": {
+          "column": 1,
+          "line": 4
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "src/lib.rs:6:5: replace clamp -> i32 with 1",
+    "package": "kani-crate",
+    "replacement": "1",
+    "span": {
+      "end": {
+        "column": 6,
+        "line": 12
+      },
+      "start": {
+        "column": 5,
+        "line": 6
+      }
+    }
+  },
+  {
+    "diff": "--- src/lib.rs\n+++ replace clamp -> i32 with -1\n@@ -1,20 +1,14 @@\n //! One pure function, checked two ways: a proptest under `tests/` and Kani\n //! harnesses in `verification`, compiled only under `cargo kani`.\n \n /// `x` clamped into `lo..=hi`; `lo` wins when the bounds cross.\n pub fn clamp(x: i32, lo: i32, hi: i32) -> i32 {\n-    if x < lo {\n-        lo\n-    } else if x > hi {\n-        hi.max(lo)\n-    } else {\n-        x\n-    }\n+    -1 /* ~ changed by cargo-mutants ~ */\n }\n \n #[cfg(kani)]\n mod verification {\n     use super::clamp;\n \n     // proob:01K8V5NQ4A0F3R7Y2M9D6P1XKB\n     #[kani::proof]\n",
+    "file": "src/lib.rs",
+    "function": {
+      "function_name": "clamp",
+      "return_type": "-> i32",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 13
+        },
+        "start": {
+          "column": 1,
+          "line": 4
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "src/lib.rs:6:5: replace clamp -> i32 with -1",
+    "package": "kani-crate",
+    "replacement": "-1",
+    "span": {
+      "end": {
+        "column": 6,
+        "line": 12
+      },
+      "start": {
+        "column": 5,
+        "line": 6
+      }
+    }
+  },
+  {
+    "diff": "--- src/lib.rs\n+++ replace < with == in clamp\n@@ -1,14 +1,14 @@\n //! One pure function, checked two ways: a proptest under `tests/` and Kani\n //! harnesses in `verification`, compiled only under `cargo kani`.\n \n /// `x` clamped into `lo..=hi`; `lo` wins when the bounds cross.\n pub fn clamp(x: i32, lo: i32, hi: i32) -> i32 {\n-    if x < lo {\n+    if x == /* ~ changed by cargo-mutants ~ */ lo {\n         lo\n     } else if x > hi {\n         hi.max(lo)\n     } else {\n         x\n     }\n }\n \n",
+    "file": "src/lib.rs",
+    "function": {
+      "function_name": "clamp",
+      "return_type": "-> i32",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 13
+        },
+        "start": {
+          "column": 1,
+          "line": 4
+        }
+      }
+    },
+    "genre": "BinaryOperator",
+    "name": "src/lib.rs:6:10: replace < with == in clamp",
+    "package": "kani-crate",
+    "replacement": "==",
+    "span": {
+      "end": {
+        "column": 11,
+        "line": 6
+      },
+      "start": {
+        "column": 10,
+        "line": 6
+      }
+    }
+  },
+  {
+    "diff": "--- src/lib.rs\n+++ replace < with > in clamp\n@@ -1,14 +1,14 @@\n //! One pure function, checked two ways: a proptest under `tests/` and Kani\n //! harnesses in `verification`, compiled only under `cargo kani`.\n \n /// `x` clamped into `lo..=hi`; `lo` wins when the bounds cross.\n pub fn clamp(x: i32, lo: i32, hi: i32) -> i32 {\n-    if x < lo {\n+    if x > /* ~ changed by cargo-mutants ~ */ lo {\n         lo\n     } else if x > hi {\n         hi.max(lo)\n     } else {\n         x\n     }\n }\n \n",
+    "file": "src/lib.rs",
+    "function": {
+      "function_name": "clamp",
+      "return_type": "-> i32",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 13
+        },
+        "start": {
+          "column": 1,
+          "line": 4
+        }
+      }
+    },
+    "genre": "BinaryOperator",
+    "name": "src/lib.rs:6:10: replace < with > in clamp",
+    "package": "kani-crate",
+    "replacement": ">",
+    "span": {
+      "end": {
+        "column": 11,
+        "line": 6
+      },
+      "start": {
+        "column": 10,
+        "line": 6
+      }
+    }
+  },
+  {
+    "diff": "--- src/lib.rs\n+++ replace < with <= in clamp\n@@ -1,14 +1,14 @@\n //! One pure function, checked two ways: a proptest under `tests/` and Kani\n //! harnesses in `verification`, compiled only under `cargo kani`.\n \n /// `x` clamped into `lo..=hi`; `lo` wins when the bounds cross.\n pub fn clamp(x: i32, lo: i32, hi: i32) -> i32 {\n-    if x < lo {\n+    if x <= /* ~ changed by cargo-mutants ~ */ lo {\n         lo\n     } else if x > hi {\n         hi.max(lo)\n     } else {\n         x\n     }\n }\n \n",
+    "file": "src/lib.rs",
+    "function": {
+      "function_name": "clamp",
+      "return_type": "-> i32",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 13
+        },
+        "start": {
+          "column": 1,
+          "line": 4
+        }
+      }
+    },
+    "genre": "BinaryOperator",
+    "name": "src/lib.rs:6:10: replace < with <= in clamp",
+    "package": "kani-crate",
+    "replacement": "<=",
+    "span": {
+      "end": {
+        "column": 11,
+        "line": 6
+      },
+      "start": {
+        "column": 10,
+        "line": 6
+      }
+    }
+  },
+  {
+    "diff": "--- src/lib.rs\n+++ replace > with == in clamp\n@@ -1,16 +1,16 @@\n //! One pure function, checked two ways: a proptest under `tests/` and Kani\n //! harnesses in `verification`, compiled only under `cargo kani`.\n \n /// `x` clamped into `lo..=hi`; `lo` wins when the bounds cross.\n pub fn clamp(x: i32, lo: i32, hi: i32) -> i32 {\n     if x < lo {\n         lo\n-    } else if x > hi {\n+    } else if x == /* ~ changed by cargo-mutants ~ */ hi {\n         hi.max(lo)\n     } else {\n         x\n     }\n }\n \n #[cfg(kani)]\n mod verification {\n",
+    "file": "src/lib.rs",
+    "function": {
+      "function_name": "clamp",
+      "return_type": "-> i32",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 13
+        },
+        "start": {
+          "column": 1,
+          "line": 4
+        }
+      }
+    },
+    "genre": "BinaryOperator",
+    "name": "src/lib.rs:8:17: replace > with == in clamp",
+    "package": "kani-crate",
+    "replacement": "==",
+    "span": {
+      "end": {
+        "column": 18,
+        "line": 8
+      },
+      "start": {
+        "column": 17,
+        "line": 8
+      }
+    }
+  },
+  {
+    "diff": "--- src/lib.rs\n+++ replace > with < in clamp\n@@ -1,16 +1,16 @@\n //! One pure function, checked two ways: a proptest under `tests/` and Kani\n //! harnesses in `verification`, compiled only under `cargo kani`.\n \n /// `x` clamped into `lo..=hi`; `lo` wins when the bounds cross.\n pub fn clamp(x: i32, lo: i32, hi: i32) -> i32 {\n     if x < lo {\n         lo\n-    } else if x > hi {\n+    } else if x < /* ~ changed by cargo-mutants ~ */ hi {\n         hi.max(lo)\n     } else {\n         x\n     }\n }\n \n #[cfg(kani)]\n mod verification {\n",
+    "file": "src/lib.rs",
+    "function": {
+      "function_name": "clamp",
+      "return_type": "-> i32",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 13
+        },
+        "start": {
+          "column": 1,
+          "line": 4
+        }
+      }
+    },
+    "genre": "BinaryOperator",
+    "name": "src/lib.rs:8:17: replace > with < in clamp",
+    "package": "kani-crate",
+    "replacement": "<",
+    "span": {
+      "end": {
+        "column": 18,
+        "line": 8
+      },
+      "start": {
+        "column": 17,
+        "line": 8
+      }
+    }
+  },
+  {
+    "diff": "--- src/lib.rs\n+++ replace > with >= in clamp\n@@ -1,16 +1,16 @@\n //! One pure function, checked two ways: a proptest under `tests/` and Kani\n //! harnesses in `verification`, compiled only under `cargo kani`.\n \n /// `x` clamped into `lo..=hi`; `lo` wins when the bounds cross.\n pub fn clamp(x: i32, lo: i32, hi: i32) -> i32 {\n     if x < lo {\n         lo\n-    } else if x > hi {\n+    } else if x >= /* ~ changed by cargo-mutants ~ */ hi {\n         hi.max(lo)\n     } else {\n         x\n     }\n }\n \n #[cfg(kani)]\n mod verification {\n",
+    "file": "src/lib.rs",
+    "function": {
+      "function_name": "clamp",
+      "return_type": "-> i32",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 13
+        },
+        "start": {
+          "column": 1,
+          "line": 4
+        }
+      }
+    },
+    "genre": "BinaryOperator",
+    "name": "src/lib.rs:8:17: replace > with >= in clamp",
+    "package": "kani-crate",
+    "replacement": ">=",
+    "span": {
+      "end": {
+        "column": 18,
+        "line": 8
+      },
+      "start": {
+        "column": 17,
+        "line": 8
+      }
+    }
+  },
+  {
+    "diff": "--- src/lib.rs\n+++ replace verification::clamp_stays_within_bounds with ()\n@@ -14,20 +14,17 @@\n \n #[cfg(kani)]\n mod verification {\n     use super::clamp;\n \n     // proob:01K8V5NQ4A0F3R7Y2M9D6P1XKB\n     #[kani::proof]\n     fn clamp_stays_within_bounds() {\n-        let (x, lo, hi) = (kani::any(), kani::any(), kani::any());\n-        kani::assume(lo <= hi);\n-        let y = clamp(x, lo, hi);\n-        assert!(lo <= y && y <= hi);\n+        () /* ~ changed by cargo-mutants ~ */\n     }\n \n     // proob:01K8V5NQ4A0F3R7Y2M9D6P1XKC\n     #[cfg_attr(kani, kani::proof)]\n     fn clamp_keeps_values_inside() {\n         let (x, lo, hi) = (kani::any(), kani::any(), kani::any());\n         kani::assume(lo <= x && x <= hi);\n         assert_eq!(clamp(x, lo, hi), x);\n",
+    "file": "src/lib.rs",
+    "function": {
+      "function_name": "verification::clamp_stays_within_bounds",
+      "return_type": "",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 26
+        },
+        "start": {
+          "column": 5,
+          "line": 20
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "src/lib.rs:22:9: replace verification::clamp_stays_within_bounds with ()",
+    "package": "kani-crate",
+    "replacement": "()",
+    "span": {
+      "end": {
+        "column": 37,
+        "line": 25
+      },
+      "start": {
+        "column": 9,
+        "line": 22
+      }
+    }
+  },
+  {
+    "diff": "--- src/lib.rs\n+++ replace <= with > in verification::clamp_stays_within_bounds\n@@ -15,17 +15,17 @@\n #[cfg(kani)]\n mod verification {\n     use super::clamp;\n \n     // proob:01K8V5NQ4A0F3R7Y2M9D6P1XKB\n     #[kani::proof]\n     fn clamp_stays_within_bounds() {\n         let (x, lo, hi) = (kani::any(), kani::any(), kani::any());\n-        kani::assume(lo <= hi);\n+        kani::assume(lo > /* ~ changed by cargo-mutants ~ */ hi);\n         let y = clamp(x, lo, hi);\n         assert!(lo <= y && y <= hi);\n     }\n \n     // proob:01K8V5NQ4A0F3R7Y2M9D6P1XKC\n     #[cfg_attr(kani, kani::proof)]\n     fn clamp_keeps_values_inside() {\n         let (x, lo, hi) = (kani::any(), kani::any(), kani::any());\n",
+    "file": "src/lib.rs",
+    "function": {
+      "function_name": "verification::clamp_stays_within_bounds",
+      "return_type": "",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 26
+        },
+        "start": {
+          "column": 5,
+          "line": 20
+        }
+      }
+    },
+    "genre": "BinaryOperator",
+    "name": "src/lib.rs:23:25: replace <= with > in verification::clamp_stays_within_bounds",
+    "package": "kani-crate",
+    "replacement": ">",
+    "span": {
+      "end": {
+        "column": 27,
+        "line": 23
+      },
+      "start": {
+        "column": 25,
+        "line": 23
+      }
+    }
+  },
+  {
+    "diff": "--- src/lib.rs\n+++ replace verification::clamp_keeps_values_inside with ()\n@@ -23,19 +23,17 @@\n         kani::assume(lo <= hi);\n         let y = clamp(x, lo, hi);\n         assert!(lo <= y && y <= hi);\n     }\n \n     // proob:01K8V5NQ4A0F3R7Y2M9D6P1XKC\n     #[cfg_attr(kani, kani::proof)]\n     fn clamp_keeps_values_inside() {\n-        let (x, lo, hi) = (kani::any(), kani::any(), kani::any());\n-        kani::assume(lo <= x && x <= hi);\n-        assert_eq!(clamp(x, lo, hi), x);\n+        () /* ~ changed by cargo-mutants ~ */\n     }\n \n     // proob:01K8V5NQ4A0F3R7Y2M9D6P1XKD\n     #[test]\n     #[cfg_attr(kani, kani::proof)]\n     fn clamp_is_idempotent() {\n         let (x, lo, hi) = (kani::any(), kani::any(), kani::any());\n         let once = clamp(x, lo, hi);\n",
+    "file": "src/lib.rs",
+    "function": {
+      "function_name": "verification::clamp_keeps_values_inside",
+      "return_type": "",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 34
+        },
+        "start": {
+          "column": 5,
+          "line": 29
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "src/lib.rs:31:9: replace verification::clamp_keeps_values_inside with ()",
+    "package": "kani-crate",
+    "replacement": "()",
+    "span": {
+      "end": {
+        "column": 41,
+        "line": 33
+      },
+      "start": {
+        "column": 9,
+        "line": 31
+      }
+    }
+  },
+  {
+    "diff": "--- src/lib.rs\n+++ replace && with || in verification::clamp_keeps_values_inside\n@@ -24,17 +24,17 @@\n         let y = clamp(x, lo, hi);\n         assert!(lo <= y && y <= hi);\n     }\n \n     // proob:01K8V5NQ4A0F3R7Y2M9D6P1XKC\n     #[cfg_attr(kani, kani::proof)]\n     fn clamp_keeps_values_inside() {\n         let (x, lo, hi) = (kani::any(), kani::any(), kani::any());\n-        kani::assume(lo <= x && x <= hi);\n+        kani::assume(lo <= x || /* ~ changed by cargo-mutants ~ */ x <= hi);\n         assert_eq!(clamp(x, lo, hi), x);\n     }\n \n     // proob:01K8V5NQ4A0F3R7Y2M9D6P1XKD\n     #[test]\n     #[cfg_attr(kani, kani::proof)]\n     fn clamp_is_idempotent() {\n         let (x, lo, hi) = (kani::any(), kani::any(), kani::any());\n",
+    "file": "src/lib.rs",
+    "function": {
+      "function_name": "verification::clamp_keeps_values_inside",
+      "return_type": "",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 34
+        },
+        "start": {
+          "column": 5,
+          "line": 29
+        }
+      }
+    },
+    "genre": "BinaryOperator",
+    "name": "src/lib.rs:32:30: replace && with || in verification::clamp_keeps_values_inside",
+    "package": "kani-crate",
+    "replacement": "||",
+    "span": {
+      "end": {
+        "column": 32,
+        "line": 32
+      },
+      "start": {
+        "column": 30,
+        "line": 32
+      }
+    }
+  },
+  {
+    "diff": "--- src/lib.rs\n+++ replace <= with > in verification::clamp_keeps_values_inside\n@@ -24,17 +24,17 @@\n         let y = clamp(x, lo, hi);\n         assert!(lo <= y && y <= hi);\n     }\n \n     // proob:01K8V5NQ4A0F3R7Y2M9D6P1XKC\n     #[cfg_attr(kani, kani::proof)]\n     fn clamp_keeps_values_inside() {\n         let (x, lo, hi) = (kani::any(), kani::any(), kani::any());\n-        kani::assume(lo <= x && x <= hi);\n+        kani::assume(lo > /* ~ changed by cargo-mutants ~ */ x && x <= hi);\n         assert_eq!(clamp(x, lo, hi), x);\n     }\n \n     // proob:01K8V5NQ4A0F3R7Y2M9D6P1XKD\n     #[test]\n     #[cfg_attr(kani, kani::proof)]\n     fn clamp_is_idempotent() {\n         let (x, lo, hi) = (kani::any(), kani::any(), kani::any());\n",
+    "file": "src/lib.rs",
+    "function": {
+      "function_name": "verification::clamp_keeps_values_inside",
+      "return_type": "",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 34
+        },
+        "start": {
+          "column": 5,
+          "line": 29
+        }
+      }
+    },
+    "genre": "BinaryOperator",
+    "name": "src/lib.rs:32:25: replace <= with > in verification::clamp_keeps_values_inside",
+    "package": "kani-crate",
+    "replacement": ">",
+    "span": {
+      "end": {
+        "column": 27,
+        "line": 32
+      },
+      "start": {
+        "column": 25,
+        "line": 32
+      }
+    }
+  },
+  {
+    "diff": "--- src/lib.rs\n+++ replace <= with > in verification::clamp_keeps_values_inside\n@@ -24,17 +24,17 @@\n         let y = clamp(x, lo, hi);\n         assert!(lo <= y && y <= hi);\n     }\n \n     // proob:01K8V5NQ4A0F3R7Y2M9D6P1XKC\n     #[cfg_attr(kani, kani::proof)]\n     fn clamp_keeps_values_inside() {\n         let (x, lo, hi) = (kani::any(), kani::any(), kani::any());\n-        kani::assume(lo <= x && x <= hi);\n+        kani::assume(lo <= x && x > /* ~ changed by cargo-mutants ~ */ hi);\n         assert_eq!(clamp(x, lo, hi), x);\n     }\n \n     // proob:01K8V5NQ4A0F3R7Y2M9D6P1XKD\n     #[test]\n     #[cfg_attr(kani, kani::proof)]\n     fn clamp_is_idempotent() {\n         let (x, lo, hi) = (kani::any(), kani::any(), kani::any());\n",
+    "file": "src/lib.rs",
+    "function": {
+      "function_name": "verification::clamp_keeps_values_inside",
+      "return_type": "",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 34
+        },
+        "start": {
+          "column": 5,
+          "line": 29
+        }
+      }
+    },
+    "genre": "BinaryOperator",
+    "name": "src/lib.rs:32:35: replace <= with > in verification::clamp_keeps_values_inside",
+    "package": "kani-crate",
+    "replacement": ">",
+    "span": {
+      "end": {
+        "column": 37,
+        "line": 32
+      },
+      "start": {
+        "column": 35,
+        "line": 32
+      }
+    }
+  },
+  {
+    "diff": "--- src/lib.rs\n+++ replace verification::clamp_contract with ()\n@@ -43,17 +43,17 @@\n     }\n \n     // proob:01K8V5NQ4A0F3R7Y2M9D6P1XKE\n     // Never compiled: contracts need `-Z function-contracts` and `clamp` has\n     // none; the harness shows the scanner the contract form only.\n     #[cfg(any())]\n     #[kani::proof_for_contract(clamp)]\n     fn clamp_contract() {\n-        clamp(kani::any(), kani::any(), kani::any());\n+        () /* ~ changed by cargo-mutants ~ */\n     }\n \n     // The harnesses below are the adapter's real-run cases: each reaches one\n     // row of the outcome table.\n \n     // proob:01K8V5NQ4A0F3R7Y2M9D6P1XKF\n     #[kani::proof]\n     fn clamp_is_identity_planted_failure() {\n",
+    "file": "src/lib.rs",
+    "function": {
+      "function_name": "verification::clamp_contract",
+      "return_type": "",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 52
+        },
+        "start": {
+          "column": 5,
+          "line": 48
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "src/lib.rs:51:9: replace verification::clamp_contract with ()",
+    "package": "kani-crate",
+    "replacement": "()",
+    "span": {
+      "end": {
+        "column": 54,
+        "line": 51
+      },
+      "start": {
+        "column": 9,
+        "line": 51
+      }
+    }
+  },
+  {
+    "diff": "--- src/lib.rs\n+++ replace verification::clamp_is_identity_planted_failure with ()\n@@ -52,18 +52,17 @@\n     }\n \n     // The harnesses below are the adapter's real-run cases: each reaches one\n     // row of the outcome table.\n \n     // proob:01K8V5NQ4A0F3R7Y2M9D6P1XKF\n     #[kani::proof]\n     fn clamp_is_identity_planted_failure() {\n-        let (x, lo, hi) = (kani::any(), kani::any(), kani::any());\n-        assert_eq!(clamp(x, lo, hi), x);\n+        () /* ~ changed by cargo-mutants ~ */\n     }\n \n     // proob:01K8V5NQ4A0F3R7Y2M9D6P1XKG\n     #[kani::proof]\n     fn clamp_through_inline_asm() {\n         let x: u64 = kani::any();\n         let y: u64;\n         // `mov` reads the same on x86_64 and aarch64.\n",
+    "file": "src/lib.rs",
+    "function": {
+      "function_name": "verification::clamp_is_identity_planted_failure",
+      "return_type": "",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 62
+        },
+        "start": {
+          "column": 5,
+          "line": 58
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "src/lib.rs:60:9: replace verification::clamp_is_identity_planted_failure with ()",
+    "package": "kani-crate",
+    "replacement": "()",
+    "span": {
+      "end": {
+        "column": 41,
+        "line": 61
+      },
+      "start": {
+        "column": 9,
+        "line": 60
+      }
+    }
+  },
+  {
+    "diff": "--- src/lib.rs\n+++ replace verification::clamp_through_inline_asm with ()\n@@ -59,21 +59,17 @@\n     fn clamp_is_identity_planted_failure() {\n         let (x, lo, hi) = (kani::any(), kani::any(), kani::any());\n         assert_eq!(clamp(x, lo, hi), x);\n     }\n \n     // proob:01K8V5NQ4A0F3R7Y2M9D6P1XKG\n     #[kani::proof]\n     fn clamp_through_inline_asm() {\n-        let x: u64 = kani::any();\n-        let y: u64;\n-        // `mov` reads the same on x86_64 and aarch64.\n-        unsafe { core::arch::asm!(\"mov {0}, {1}\", out(reg) y, in(reg) x) };\n-        assert!(clamp(y as i32, 0, 1) <= 1);\n+        () /* ~ changed by cargo-mutants ~ */\n     }\n \n     // proob:01K8V5NQ4A0F3R7Y2M9D6P1XKH\n     #[kani::proof]\n     #[kani::unwind(3)]\n     fn clamp_in_a_loop_with_a_short_unwind() {\n         let n: u8 = kani::any();\n         kani::assume(n < 10);\n",
+    "file": "src/lib.rs",
+    "function": {
+      "function_name": "verification::clamp_through_inline_asm",
+      "return_type": "",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 72
+        },
+        "start": {
+          "column": 5,
+          "line": 65
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "src/lib.rs:67:9: replace verification::clamp_through_inline_asm with ()",
+    "package": "kani-crate",
+    "replacement": "()",
+    "span": {
+      "end": {
+        "column": 45,
+        "line": 71
+      },
+      "start": {
+        "column": 9,
+        "line": 67
+      }
+    }
+  },
+  {
+    "diff": "--- src/lib.rs\n+++ replace verification::clamp_in_a_loop_with_a_short_unwind with ()\n@@ -70,23 +70,17 @@\n         unsafe { core::arch::asm!(\"mov {0}, {1}\", out(reg) y, in(reg) x) };\n         assert!(clamp(y as i32, 0, 1) <= 1);\n     }\n \n     // proob:01K8V5NQ4A0F3R7Y2M9D6P1XKH\n     #[kani::proof]\n     #[kani::unwind(3)]\n     fn clamp_in_a_loop_with_a_short_unwind() {\n-        let n: u8 = kani::any();\n-        kani::assume(n < 10);\n-        let mut i = 0u8;\n-        while i < n {\n-            assert!(clamp(i32::from(i), 0, 9) == i32::from(i));\n-            i += 1;\n-        }\n+        () /* ~ changed by cargo-mutants ~ */\n     }\n \n     // proob:01K8V5NQ4A0F3R7Y2M9D6P1XKJ\n     #[kani::proof]\n     fn clamp_covers_an_unreachable_case() {\n         let (x, lo, hi) = (kani::any(), kani::any(), kani::any());\n         kani::assume(lo <= hi);\n         let y = clamp(x, lo, hi);\n",
+    "file": "src/lib.rs",
+    "function": {
+      "function_name": "verification::clamp_in_a_loop_with_a_short_unwind",
+      "return_type": "",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 85
+        },
+        "start": {
+          "column": 5,
+          "line": 75
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "src/lib.rs:78:9: replace verification::clamp_in_a_loop_with_a_short_unwind with ()",
+    "package": "kani-crate",
+    "replacement": "()",
+    "span": {
+      "end": {
+        "column": 10,
+        "line": 84
+      },
+      "start": {
+        "column": 9,
+        "line": 78
+      }
+    }
+  },
+  {
+    "diff": "--- src/lib.rs\n+++ replace < with == in verification::clamp_in_a_loop_with_a_short_unwind\n@@ -71,17 +71,17 @@\n         assert!(clamp(y as i32, 0, 1) <= 1);\n     }\n \n     // proob:01K8V5NQ4A0F3R7Y2M9D6P1XKH\n     #[kani::proof]\n     #[kani::unwind(3)]\n     fn clamp_in_a_loop_with_a_short_unwind() {\n         let n: u8 = kani::any();\n-        kani::assume(n < 10);\n+        kani::assume(n == /* ~ changed by cargo-mutants ~ */ 10);\n         let mut i = 0u8;\n         while i < n {\n             assert!(clamp(i32::from(i), 0, 9) == i32::from(i));\n             i += 1;\n         }\n     }\n \n     // proob:01K8V5NQ4A0F3R7Y2M9D6P1XKJ\n",
+    "file": "src/lib.rs",
+    "function": {
+      "function_name": "verification::clamp_in_a_loop_with_a_short_unwind",
+      "return_type": "",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 85
+        },
+        "start": {
+          "column": 5,
+          "line": 75
+        }
+      }
+    },
+    "genre": "BinaryOperator",
+    "name": "src/lib.rs:79:24: replace < with == in verification::clamp_in_a_loop_with_a_short_unwind",
+    "package": "kani-crate",
+    "replacement": "==",
+    "span": {
+      "end": {
+        "column": 25,
+        "line": 79
+      },
+      "start": {
+        "column": 24,
+        "line": 79
+      }
+    }
+  },
+  {
+    "diff": "--- src/lib.rs\n+++ replace < with > in verification::clamp_in_a_loop_with_a_short_unwind\n@@ -71,17 +71,17 @@\n         assert!(clamp(y as i32, 0, 1) <= 1);\n     }\n \n     // proob:01K8V5NQ4A0F3R7Y2M9D6P1XKH\n     #[kani::proof]\n     #[kani::unwind(3)]\n     fn clamp_in_a_loop_with_a_short_unwind() {\n         let n: u8 = kani::any();\n-        kani::assume(n < 10);\n+        kani::assume(n > /* ~ changed by cargo-mutants ~ */ 10);\n         let mut i = 0u8;\n         while i < n {\n             assert!(clamp(i32::from(i), 0, 9) == i32::from(i));\n             i += 1;\n         }\n     }\n \n     // proob:01K8V5NQ4A0F3R7Y2M9D6P1XKJ\n",
+    "file": "src/lib.rs",
+    "function": {
+      "function_name": "verification::clamp_in_a_loop_with_a_short_unwind",
+      "return_type": "",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 85
+        },
+        "start": {
+          "column": 5,
+          "line": 75
+        }
+      }
+    },
+    "genre": "BinaryOperator",
+    "name": "src/lib.rs:79:24: replace < with > in verification::clamp_in_a_loop_with_a_short_unwind",
+    "package": "kani-crate",
+    "replacement": ">",
+    "span": {
+      "end": {
+        "column": 25,
+        "line": 79
+      },
+      "start": {
+        "column": 24,
+        "line": 79
+      }
+    }
+  },
+  {
+    "diff": "--- src/lib.rs\n+++ replace < with <= in verification::clamp_in_a_loop_with_a_short_unwind\n@@ -71,17 +71,17 @@\n         assert!(clamp(y as i32, 0, 1) <= 1);\n     }\n \n     // proob:01K8V5NQ4A0F3R7Y2M9D6P1XKH\n     #[kani::proof]\n     #[kani::unwind(3)]\n     fn clamp_in_a_loop_with_a_short_unwind() {\n         let n: u8 = kani::any();\n-        kani::assume(n < 10);\n+        kani::assume(n <= /* ~ changed by cargo-mutants ~ */ 10);\n         let mut i = 0u8;\n         while i < n {\n             assert!(clamp(i32::from(i), 0, 9) == i32::from(i));\n             i += 1;\n         }\n     }\n \n     // proob:01K8V5NQ4A0F3R7Y2M9D6P1XKJ\n",
+    "file": "src/lib.rs",
+    "function": {
+      "function_name": "verification::clamp_in_a_loop_with_a_short_unwind",
+      "return_type": "",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 85
+        },
+        "start": {
+          "column": 5,
+          "line": 75
+        }
+      }
+    },
+    "genre": "BinaryOperator",
+    "name": "src/lib.rs:79:24: replace < with <= in verification::clamp_in_a_loop_with_a_short_unwind",
+    "package": "kani-crate",
+    "replacement": "<=",
+    "span": {
+      "end": {
+        "column": 25,
+        "line": 79
+      },
+      "start": {
+        "column": 24,
+        "line": 79
+      }
+    }
+  },
+  {
+    "diff": "--- src/lib.rs\n+++ replace < with == in verification::clamp_in_a_loop_with_a_short_unwind\n@@ -73,17 +73,17 @@\n \n     // proob:01K8V5NQ4A0F3R7Y2M9D6P1XKH\n     #[kani::proof]\n     #[kani::unwind(3)]\n     fn clamp_in_a_loop_with_a_short_unwind() {\n         let n: u8 = kani::any();\n         kani::assume(n < 10);\n         let mut i = 0u8;\n-        while i < n {\n+        while i == /* ~ changed by cargo-mutants ~ */ n {\n             assert!(clamp(i32::from(i), 0, 9) == i32::from(i));\n             i += 1;\n         }\n     }\n \n     // proob:01K8V5NQ4A0F3R7Y2M9D6P1XKJ\n     #[kani::proof]\n     fn clamp_covers_an_unreachable_case() {\n",
+    "file": "src/lib.rs",
+    "function": {
+      "function_name": "verification::clamp_in_a_loop_with_a_short_unwind",
+      "return_type": "",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 85
+        },
+        "start": {
+          "column": 5,
+          "line": 75
+        }
+      }
+    },
+    "genre": "BinaryOperator",
+    "name": "src/lib.rs:81:17: replace < with == in verification::clamp_in_a_loop_with_a_short_unwind",
+    "package": "kani-crate",
+    "replacement": "==",
+    "span": {
+      "end": {
+        "column": 18,
+        "line": 81
+      },
+      "start": {
+        "column": 17,
+        "line": 81
+      }
+    }
+  },
+  {
+    "diff": "--- src/lib.rs\n+++ replace < with > in verification::clamp_in_a_loop_with_a_short_unwind\n@@ -73,17 +73,17 @@\n \n     // proob:01K8V5NQ4A0F3R7Y2M9D6P1XKH\n     #[kani::proof]\n     #[kani::unwind(3)]\n     fn clamp_in_a_loop_with_a_short_unwind() {\n         let n: u8 = kani::any();\n         kani::assume(n < 10);\n         let mut i = 0u8;\n-        while i < n {\n+        while i > /* ~ changed by cargo-mutants ~ */ n {\n             assert!(clamp(i32::from(i), 0, 9) == i32::from(i));\n             i += 1;\n         }\n     }\n \n     // proob:01K8V5NQ4A0F3R7Y2M9D6P1XKJ\n     #[kani::proof]\n     fn clamp_covers_an_unreachable_case() {\n",
+    "file": "src/lib.rs",
+    "function": {
+      "function_name": "verification::clamp_in_a_loop_with_a_short_unwind",
+      "return_type": "",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 85
+        },
+        "start": {
+          "column": 5,
+          "line": 75
+        }
+      }
+    },
+    "genre": "BinaryOperator",
+    "name": "src/lib.rs:81:17: replace < with > in verification::clamp_in_a_loop_with_a_short_unwind",
+    "package": "kani-crate",
+    "replacement": ">",
+    "span": {
+      "end": {
+        "column": 18,
+        "line": 81
+      },
+      "start": {
+        "column": 17,
+        "line": 81
+      }
+    }
+  },
+  {
+    "diff": "--- src/lib.rs\n+++ replace < with <= in verification::clamp_in_a_loop_with_a_short_unwind\n@@ -73,17 +73,17 @@\n \n     // proob:01K8V5NQ4A0F3R7Y2M9D6P1XKH\n     #[kani::proof]\n     #[kani::unwind(3)]\n     fn clamp_in_a_loop_with_a_short_unwind() {\n         let n: u8 = kani::any();\n         kani::assume(n < 10);\n         let mut i = 0u8;\n-        while i < n {\n+        while i <= /* ~ changed by cargo-mutants ~ */ n {\n             assert!(clamp(i32::from(i), 0, 9) == i32::from(i));\n             i += 1;\n         }\n     }\n \n     // proob:01K8V5NQ4A0F3R7Y2M9D6P1XKJ\n     #[kani::proof]\n     fn clamp_covers_an_unreachable_case() {\n",
+    "file": "src/lib.rs",
+    "function": {
+      "function_name": "verification::clamp_in_a_loop_with_a_short_unwind",
+      "return_type": "",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 85
+        },
+        "start": {
+          "column": 5,
+          "line": 75
+        }
+      }
+    },
+    "genre": "BinaryOperator",
+    "name": "src/lib.rs:81:17: replace < with <= in verification::clamp_in_a_loop_with_a_short_unwind",
+    "package": "kani-crate",
+    "replacement": "<=",
+    "span": {
+      "end": {
+        "column": 18,
+        "line": 81
+      },
+      "start": {
+        "column": 17,
+        "line": 81
+      }
+    }
+  },
+  {
+    "diff": "--- src/lib.rs\n+++ replace += with -= in verification::clamp_in_a_loop_with_a_short_unwind\n@@ -75,17 +75,17 @@\n     #[kani::proof]\n     #[kani::unwind(3)]\n     fn clamp_in_a_loop_with_a_short_unwind() {\n         let n: u8 = kani::any();\n         kani::assume(n < 10);\n         let mut i = 0u8;\n         while i < n {\n             assert!(clamp(i32::from(i), 0, 9) == i32::from(i));\n-            i += 1;\n+            i -= /* ~ changed by cargo-mutants ~ */ 1;\n         }\n     }\n \n     // proob:01K8V5NQ4A0F3R7Y2M9D6P1XKJ\n     #[kani::proof]\n     fn clamp_covers_an_unreachable_case() {\n         let (x, lo, hi) = (kani::any(), kani::any(), kani::any());\n         kani::assume(lo <= hi);\n",
+    "file": "src/lib.rs",
+    "function": {
+      "function_name": "verification::clamp_in_a_loop_with_a_short_unwind",
+      "return_type": "",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 85
+        },
+        "start": {
+          "column": 5,
+          "line": 75
+        }
+      }
+    },
+    "genre": "BinaryOperator",
+    "name": "src/lib.rs:83:15: replace += with -= in verification::clamp_in_a_loop_with_a_short_unwind",
+    "package": "kani-crate",
+    "replacement": "-=",
+    "span": {
+      "end": {
+        "column": 17,
+        "line": 83
+      },
+      "start": {
+        "column": 15,
+        "line": 83
+      }
+    }
+  },
+  {
+    "diff": "--- src/lib.rs\n+++ replace += with *= in verification::clamp_in_a_loop_with_a_short_unwind\n@@ -75,17 +75,17 @@\n     #[kani::proof]\n     #[kani::unwind(3)]\n     fn clamp_in_a_loop_with_a_short_unwind() {\n         let n: u8 = kani::any();\n         kani::assume(n < 10);\n         let mut i = 0u8;\n         while i < n {\n             assert!(clamp(i32::from(i), 0, 9) == i32::from(i));\n-            i += 1;\n+            i *= /* ~ changed by cargo-mutants ~ */ 1;\n         }\n     }\n \n     // proob:01K8V5NQ4A0F3R7Y2M9D6P1XKJ\n     #[kani::proof]\n     fn clamp_covers_an_unreachable_case() {\n         let (x, lo, hi) = (kani::any(), kani::any(), kani::any());\n         kani::assume(lo <= hi);\n",
+    "file": "src/lib.rs",
+    "function": {
+      "function_name": "verification::clamp_in_a_loop_with_a_short_unwind",
+      "return_type": "",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 85
+        },
+        "start": {
+          "column": 5,
+          "line": 75
+        }
+      }
+    },
+    "genre": "BinaryOperator",
+    "name": "src/lib.rs:83:15: replace += with *= in verification::clamp_in_a_loop_with_a_short_unwind",
+    "package": "kani-crate",
+    "replacement": "*=",
+    "span": {
+      "end": {
+        "column": 17,
+        "line": 83
+      },
+      "start": {
+        "column": 15,
+        "line": 83
+      }
+    }
+  },
+  {
+    "diff": "--- src/lib.rs\n+++ replace verification::clamp_covers_an_unreachable_case with ()\n@@ -82,21 +82,17 @@\n             assert!(clamp(i32::from(i), 0, 9) == i32::from(i));\n             i += 1;\n         }\n     }\n \n     // proob:01K8V5NQ4A0F3R7Y2M9D6P1XKJ\n     #[kani::proof]\n     fn clamp_covers_an_unreachable_case() {\n-        let (x, lo, hi) = (kani::any(), kani::any(), kani::any());\n-        kani::assume(lo <= hi);\n-        let y = clamp(x, lo, hi);\n-        kani::cover!(y < lo, \"below the lower bound\");\n-        assert!(lo <= y && y <= hi);\n+        () /* ~ changed by cargo-mutants ~ */\n     }\n \n     // The harnesses below are the score's real-run cases: each is a weak\n     // proof that mutation must read as weak.\n \n     // proob:01K8V5NQ4A0F3R7Y2M9D6P1XKK\n     #[kani::proof]\n     fn clamp_runs_with_ordered_bounds() {\n",
+    "file": "src/lib.rs",
+    "function": {
+      "function_name": "verification::clamp_covers_an_unreachable_case",
+      "return_type": "",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 95
+        },
+        "start": {
+          "column": 5,
+          "line": 88
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "src/lib.rs:90:9: replace verification::clamp_covers_an_unreachable_case with ()",
+    "package": "kani-crate",
+    "replacement": "()",
+    "span": {
+      "end": {
+        "column": 37,
+        "line": 94
+      },
+      "start": {
+        "column": 9,
+        "line": 90
+      }
+    }
+  },
+  {
+    "diff": "--- src/lib.rs\n+++ replace <= with > in verification::clamp_covers_an_unreachable_case\n@@ -83,17 +83,17 @@\n             i += 1;\n         }\n     }\n \n     // proob:01K8V5NQ4A0F3R7Y2M9D6P1XKJ\n     #[kani::proof]\n     fn clamp_covers_an_unreachable_case() {\n         let (x, lo, hi) = (kani::any(), kani::any(), kani::any());\n-        kani::assume(lo <= hi);\n+        kani::assume(lo > /* ~ changed by cargo-mutants ~ */ hi);\n         let y = clamp(x, lo, hi);\n         kani::cover!(y < lo, \"below the lower bound\");\n         assert!(lo <= y && y <= hi);\n     }\n \n     // The harnesses below are the score's real-run cases: each is a weak\n     // proof that mutation must read as weak.\n \n",
+    "file": "src/lib.rs",
+    "function": {
+      "function_name": "verification::clamp_covers_an_unreachable_case",
+      "return_type": "",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 95
+        },
+        "start": {
+          "column": 5,
+          "line": 88
+        }
+      }
+    },
+    "genre": "BinaryOperator",
+    "name": "src/lib.rs:91:25: replace <= with > in verification::clamp_covers_an_unreachable_case",
+    "package": "kani-crate",
+    "replacement": ">",
+    "span": {
+      "end": {
+        "column": 27,
+        "line": 91
+      },
+      "start": {
+        "column": 25,
+        "line": 91
+      }
+    }
+  },
+  {
+    "diff": "--- src/lib.rs\n+++ replace verification::clamp_runs_with_ordered_bounds with ()\n@@ -95,21 +95,17 @@\n     }\n \n     // The harnesses below are the score's real-run cases: each is a weak\n     // proof that mutation must read as weak.\n \n     // proob:01K8V5NQ4A0F3R7Y2M9D6P1XKK\n     #[kani::proof]\n     fn clamp_runs_with_ordered_bounds() {\n-        let (x, lo, hi): (i32, i32, i32) = (kani::any(), kani::any(), kani::any());\n-        kani::assume(lo <= hi);\n-        let _ = clamp(x, lo, hi);\n-        // Asserts only what it assumed: nothing about the result.\n-        assert!(lo <= hi);\n+        () /* ~ changed by cargo-mutants ~ */\n     }\n \n     // proob:01K8V5NQ4A0F3R7Y2M9D6P1XKM\n     #[kani::proof]\n     fn clamp_indexes_a_table() {\n         let table = [0u8; 11];\n         // Only Rust's own bounds check looks at the result.\n         let _entry = table[clamp(kani::any(), 0, 10) as usize];\n",
+    "file": "src/lib.rs",
+    "function": {
+      "function_name": "verification::clamp_runs_with_ordered_bounds",
+      "return_type": "",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 108
+        },
+        "start": {
+          "column": 5,
+          "line": 101
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "src/lib.rs:103:9: replace verification::clamp_runs_with_ordered_bounds with ()",
+    "package": "kani-crate",
+    "replacement": "()",
+    "span": {
+      "end": {
+        "column": 27,
+        "line": 107
+      },
+      "start": {
+        "column": 9,
+        "line": 103
+      }
+    }
+  },
+  {
+    "diff": "--- src/lib.rs\n+++ replace <= with > in verification::clamp_runs_with_ordered_bounds\n@@ -96,17 +96,17 @@\n \n     // The harnesses below are the score's real-run cases: each is a weak\n     // proof that mutation must read as weak.\n \n     // proob:01K8V5NQ4A0F3R7Y2M9D6P1XKK\n     #[kani::proof]\n     fn clamp_runs_with_ordered_bounds() {\n         let (x, lo, hi): (i32, i32, i32) = (kani::any(), kani::any(), kani::any());\n-        kani::assume(lo <= hi);\n+        kani::assume(lo > /* ~ changed by cargo-mutants ~ */ hi);\n         let _ = clamp(x, lo, hi);\n         // Asserts only what it assumed: nothing about the result.\n         assert!(lo <= hi);\n     }\n \n     // proob:01K8V5NQ4A0F3R7Y2M9D6P1XKM\n     #[kani::proof]\n     fn clamp_indexes_a_table() {\n",
+    "file": "src/lib.rs",
+    "function": {
+      "function_name": "verification::clamp_runs_with_ordered_bounds",
+      "return_type": "",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 108
+        },
+        "start": {
+          "column": 5,
+          "line": 101
+        }
+      }
+    },
+    "genre": "BinaryOperator",
+    "name": "src/lib.rs:104:25: replace <= with > in verification::clamp_runs_with_ordered_bounds",
+    "package": "kani-crate",
+    "replacement": ">",
+    "span": {
+      "end": {
+        "column": 27,
+        "line": 104
+      },
+      "start": {
+        "column": 25,
+        "line": 104
+      }
+    }
+  },
+  {
+    "diff": "--- src/lib.rs\n+++ replace verification::clamp_indexes_a_table with ()\n@@ -105,13 +105,11 @@\n         let _ = clamp(x, lo, hi);\n         // Asserts only what it assumed: nothing about the result.\n         assert!(lo <= hi);\n     }\n \n     // proob:01K8V5NQ4A0F3R7Y2M9D6P1XKM\n     #[kani::proof]\n     fn clamp_indexes_a_table() {\n-        let table = [0u8; 11];\n-        // Only Rust's own bounds check looks at the result.\n-        let _entry = table[clamp(kani::any(), 0, 10) as usize];\n+        () /* ~ changed by cargo-mutants ~ */\n     }\n }\n",
+    "file": "src/lib.rs",
+    "function": {
+      "function_name": "verification::clamp_indexes_a_table",
+      "return_type": "",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 116
+        },
+        "start": {
+          "column": 5,
+          "line": 111
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "src/lib.rs:113:9: replace verification::clamp_indexes_a_table with ()",
+    "package": "kani-crate",
+    "replacement": "()",
+    "span": {
+      "end": {
+        "column": 64,
+        "line": 115
+      },
+      "start": {
+        "column": 9,
+        "line": 113
+      }
+    }
+  }
+]
