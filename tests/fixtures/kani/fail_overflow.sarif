@@ -1,0 +1,49 @@
+{
+  "version": "2.1.0",
+  "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "Kani",
+          "version": "0.68.0",
+          "informationUri": "https://github.com/model-checking/kani",
+          "rules": [
+            {
+              "id": "kani.cbmc.assertion",
+              "shortDescription": {
+                "text": "CBMC property `assertion`"
+              }
+            }
+          ]
+        }
+      },
+      "results": [
+        {
+          "ruleId": "kani.cbmc.assertion",
+          "level": "error",
+          "message": {
+            "text": "[verification::fail_overflow] attempt to negate with overflow"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "src/lib.rs"
+                },
+                "region": {
+                  "startLine": 2,
+                  "startColumn": 46
+                }
+              }
+            }
+          ],
+          "properties": {
+            "harness": "verification::fail_overflow",
+            "propertyName": "buggy_abs.assertion.1"
+          }
+        }
+      ]
+    }
+  ]
+}

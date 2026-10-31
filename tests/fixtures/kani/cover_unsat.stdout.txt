@@ -1,0 +1,66 @@
+Kani Rust Verifier 0.68.0 (cargo plugin)
+CBMC 6.11.0
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | #![feature(register_tool)]
+  |            ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+Checking harness verification::cover_unsat...
+CBMC 6.11.0 (cbmc-6.11.0)
+CBMC version 6.11.0 (cbmc-6.11.0) 64-bit arm64 macos
+Reading GOTO program from file <crate>/target/kani/aarch64-apple-darwin/debug/build/kani-capture/564763309ff8e79b/out/kani_capture-564763309ff8e79b__RNvNtCs21h8GYWxv5p_12kani_capture12verification11cover_unsat.out
+Generating GOTO Program
+Adding CPROVER library (arm64)
+Removal of function pointers and virtual functions
+Generic Property Instrumentation
+Running with 16 object bits, 48 offset bits (user-specified)
+Starting Bounded Model Checking
+Runtime Symex: 0.00195954s
+size of program expression: 204 steps
+slicing removed 94 assignments
+Generated 4 VCC(s), 4 remaining after simplification
+Runtime Postprocess Equation: 3.3167e-05s
+Passing problem to propositional reduction
+converting SSA
+Runtime Convert SSA: 0.000287375s
+Running propositional reduction
+Post-processing
+Runtime Post-process: 7.041e-06s
+Solving with CaDiCaL 3.0.0
+304 variables, 614 clauses
+SAT checker: instance is SATISFIABLE
+Runtime Solver: 5.7333e-05s
+Runtime decision procedure: 0.000381458s
+Running propositional reduction
+Solving with CaDiCaL 3.0.0
+305 variables, 615 clauses
+SAT checker: instance is UNSATISFIABLE
+Runtime Solver: 0.000116s
+Runtime decision procedure: 0.000131083s
+
+RESULTS:
+Check 1: verification::cover_unsat.cover.1
+	 - Status: UNSATISFIABLE
+	 - Description: "cover condition: x < 0"
+	 - Location: src/lib.rs:18:71 in function verification::cover_unsat
+
+Check 2: verification::cover_unsat.assertion.1
+	 - Status: SUCCESS
+	 - Description: "assertion failed: clamp(x, 0, 5) >= 0"
+	 - Location: src/lib.rs:18:92 in function verification::cover_unsat
+
+
+SUMMARY:
+ ** 0 of 1 failed
+
+ ** 0 of 1 cover properties satisfied
+
+
+VERIFICATION:- SUCCESSFUL
+Verification Time: 0.009596375s
+
+Manual Harness Summary:
+Complete - 1 successfully verified harnesses, 0 failures, 1 total.

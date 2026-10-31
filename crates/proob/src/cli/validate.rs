@@ -193,7 +193,7 @@ fn check_bindings(
         .filter_map(|a| {
             let root = a.root.trim_start_matches("./").trim_end_matches('/').to_string();
             match a.language {
-                Language::Rust | Language::Verus => Some((".rs", root)),
+                Language::Rust | Language::Verus | Language::Kani => Some((".rs", root)),
                 Language::Python => Some((".py", root)),
                 Language::Tla => None,
             }

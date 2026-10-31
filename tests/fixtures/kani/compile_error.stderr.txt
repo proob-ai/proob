@@ -1,0 +1,2 @@
+   Compiling kani-compile-err v0.1.0 (<crate>)
+error: could not compile `kani-compile-err` (lib) due to 1 previous error

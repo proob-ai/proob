@@ -1,0 +1,49 @@
+{
+  "version": "2.1.0",
+  "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "Kani",
+          "version": "0.68.0",
+          "informationUri": "https://github.com/model-checking/kani",
+          "rules": [
+            {
+              "id": "kani.cbmc.assertion",
+              "shortDescription": {
+                "text": "CBMC property `assertion`"
+              }
+            }
+          ]
+        }
+      },
+      "results": [
+        {
+          "ruleId": "kani.cbmc.assertion",
+          "level": "error",
+          "message": {
+            "text": "[verification::fail_assert] assertion failed: buggy_abs(x) > 0"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "src/lib.rs"
+                },
+                "region": {
+                  "startLine": 11,
+                  "startColumn": 78
+                }
+              }
+            }
+          ],
+          "properties": {
+            "harness": "verification::fail_assert",
+            "propertyName": "verification::fail_assert.assertion.1"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -4,6 +4,7 @@
 //! `ParseError` naming what was wrong.
 pub mod cargo_mutants;
 pub mod junit;
+pub mod kani;
 pub mod mutmut;
 pub mod verus;
 pub mod xml;

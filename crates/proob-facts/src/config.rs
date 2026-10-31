@@ -163,6 +163,9 @@ pub enum Language {
     Verus,
     Python,
     Tla,
+    /// Kani harnesses in ordinary Rust crates: `runner = "kani"`,
+    /// `mutation_tool = "cargo-mutants"`.
+    Kani,
 }
 
 /// How much of a counterexample evidence records carry.

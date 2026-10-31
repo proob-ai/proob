@@ -1,0 +1,12 @@
+Kani Rust Verifier 0.68.0 (cargo plugin)
+CBMC 6.11.0
+error[E0308]: mismatched types
+ --> src/lib.rs:4:31
+  |
+4 |     fn broken() { let x: u8 = "not a number"; assert!(x == 0); }
+  |                          --   ^^^^^^^^^^^^^^ expected `u8`, found `&str`
+  |                          |
+  |                          expected due to this
+
+For more information about this error, try `rustc --explain E0308`.
+error: Failed to execute cargo (exit status: 101). Found 1 compilation errors.

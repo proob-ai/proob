@@ -155,7 +155,13 @@ fn policy_table() -> impl Strategy<Value = PolicyTable> {
 }
 
 fn language() -> impl Strategy<Value = Language> {
-    prop_oneof![Just(Language::Rust), Just(Language::Verus), Just(Language::Python), Just(Language::Tla)]
+    prop_oneof![
+        Just(Language::Rust),
+        Just(Language::Verus),
+        Just(Language::Python),
+        Just(Language::Tla),
+        Just(Language::Kani)
+    ]
 }
 
 fn adapter() -> impl Strategy<Value = Adapter> {

@@ -1,0 +1,76 @@
+Kani Rust Verifier 0.68.0 (cargo plugin)
+CBMC 6.11.0
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | #![feature(register_tool)]
+  |            ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+Checking harness verification::unwind_short...
+CBMC 6.11.0 (cbmc-6.11.0)
+CBMC version 6.11.0 (cbmc-6.11.0) 64-bit arm64 macos
+Reading GOTO program from file <crate>/target/kani/aarch64-apple-darwin/debug/build/kani-capture/afe45f608eaa26fc/out/kani_capture-afe45f608eaa26fc__RNvNtCs21h8GYWxv5p_12kani_capture12verification12unwind_short.out
+Generating GOTO Program
+Adding CPROVER library (arm64)
+Removal of function pointers and virtual functions
+Generic Property Instrumentation
+Running with 16 object bits, 48 offset bits (user-specified)
+Starting Bounded Model Checking
+Unwinding loop _RNvCs21h8GYWxv5p_12kani_capture6sum_to.0 iteration 1 file src/lib.rs line 3 column 68 function sum_to thread 0
+Unwinding loop _RNvCs21h8GYWxv5p_12kani_capture6sum_to.0 iteration 2 file src/lib.rs line 3 column 68 function sum_to thread 0
+Not unwinding loop _RNvCs21h8GYWxv5p_12kani_capture6sum_to.0 iteration 3 file src/lib.rs line 3 column 68 function sum_to thread 0
+Runtime Symex: 0.00319333s
+size of program expression: 185 steps
+slicing removed 137 assignments
+Generated 13 VCC(s), 7 remaining after simplification
+Runtime Postprocess Equation: 4.2083e-05s
+Passing problem to propositional reduction
+converting SSA
+Runtime Convert SSA: 0.00023425s
+Running propositional reduction
+Post-processing
+Runtime Post-process: 7.042e-06s
+Solving with CaDiCaL 3.0.0
+209 variables, 365 clauses
+SAT checker: instance is SATISFIABLE
+Runtime Solver: 4.7458e-05s
+Runtime decision procedure: 0.000318626s
+Running propositional reduction
+Solving with CaDiCaL 3.0.0
+210 variables, 366 clauses
+SAT checker: instance is SATISFIABLE
+Runtime Solver: 1.9083e-05s
+Runtime decision procedure: 3.9292e-05s
+
+RESULTS:
+Check 1: sum_to.assertion.1
+	 - Status: UNDETERMINED
+	 - Description: "attempt to add with overflow"
+	 - Location: src/lib.rs:3:82 in function sum_to
+
+Check 2: sum_to.assertion.2
+	 - Status: UNDETERMINED
+	 - Description: "attempt to add with overflow"
+	 - Location: src/lib.rs:3:97 in function sum_to
+
+Check 3: sum_to.unwind.0
+	 - Status: FAILURE
+	 - Description: "unwinding assertion loop 0"
+	 - Location: src/lib.rs:3:68 in function sum_to
+
+
+SUMMARY:
+ ** 1 of 3 failed (2 undetermined)
+Failed Checks: unwinding assertion loop 0
+ File: "src/lib.rs", line 3, in sum_to
+
+VERIFICATION:- FAILED
+[Kani] info: Verification output shows one or more unwinding failures.
+[Kani] tip: Consider increasing the unwinding value or disabling `--unwinding-assertions`.
+Verification Time: 0.012941s
+
+Manual Harness Summary:
+Verification failed for - verification::unwind_short
+Complete - 0 successfully verified harnesses, 1 failures, 1 total.

@@ -61,6 +61,8 @@ pub struct ModDecl {
     pub name: String,
     pub path_attr: Option<String>,
     pub cfg_test: bool,
+    /// Under `#[cfg(kani)]`, on the declaration or an enclosing inline module.
+    pub cfg_kani: bool,
     pub module_path: Vec<String>,
     pub line: usize,
 }
@@ -262,6 +264,7 @@ struct Frame {
     depth_at_open: usize,
     name: String,
     cfg_test: bool,
+    cfg_kani: bool,
 }
 
 #[derive(Debug, Default)]
@@ -269,6 +272,7 @@ struct Pending {
     token: Option<(usize, String)>,
     marker: Marker,
     cfg_test: bool,
+    cfg_kani: bool,
     path_attr: Option<String>,
 }
 
@@ -290,6 +294,10 @@ impl State {
 
     fn in_cfg_test(&self) -> bool {
         self.stack.iter().any(|f| f.cfg_test)
+    }
+
+    fn in_cfg_kani(&self) -> bool {
+        self.stack.iter().any(|f| f.cfg_kani)
     }
 
     fn line(&mut self, n: usize, orig: &str, masked: &str) {
@@ -327,8 +335,11 @@ impl State {
         let inner = masked.trim_start_matches("#[").trim_end_matches(']').trim();
         let name = inner.split(|c: char| c == '(' || c == '=' || c.is_whitespace()).next().unwrap_or("").trim();
         let last = name.rsplit("::").next().unwrap_or(name);
-        if name == "cfg" && cfg_names_test(inner) {
+        if name == "cfg" && cfg_names(inner, "test") {
             self.pending.cfg_test = true;
+        }
+        if name == "cfg" && cfg_names(inner, "kani") {
+            self.pending.cfg_kani = true;
         }
         let marker = match kani_marker(name, inner) {
             Some(kani) => Marker::Kani(kani),
@@ -348,6 +359,7 @@ impl State {
                 name: name.clone(),
                 path_attr: self.pending.path_attr.clone(),
                 cfg_test: self.pending.cfg_test || self.in_cfg_test(),
+                cfg_kani: self.pending.cfg_kani || self.in_cfg_kani(),
                 module_path: self.module_path(),
                 line: n,
             });
@@ -355,9 +367,12 @@ impl State {
         let function = fn_name(masked);
         self.flush_token(function.as_deref());
         let inline = match decl {
-            Some((name, ModShape::Inline)) => {
-                Some(Frame { depth_at_open: 0, name, cfg_test: self.pending.cfg_test || self.in_cfg_test() })
-            }
+            Some((name, ModShape::Inline)) => Some(Frame {
+                depth_at_open: 0,
+                name,
+                cfg_test: self.pending.cfg_test || self.in_cfg_test(),
+                cfg_kani: self.pending.cfg_kani || self.in_cfg_kani(),
+            }),
             _ => None,
         };
         self.pending = Pending::default();
@@ -408,8 +423,8 @@ impl State {
 }
 
 /// `test` as a whole word inside `cfg(...)`: `cfg(test)`, `cfg(all(test, unix))`.
-fn cfg_names_test(inner: &str) -> bool {
-    inner.split(|c: char| !(c.is_alphanumeric() || c == '_')).any(|w| w == "test")
+fn cfg_names(inner: &str, word: &str) -> bool {
+    inner.split(|c: char| !(c.is_alphanumeric() || c == '_')).any(|w| w == word)
 }
 
 /// The Kani harness marker an attribute carries: `kani::proof` or
@@ -565,6 +580,13 @@ fn versioned() {}
         assert_eq!(names[2], ("renamed", false, Some("x/y.rs"), vec![]));
         assert_eq!(names[3], ("deeper", true, None, vec!["inner".to_string()]));
         assert_eq!(s.mods.len(), 4);
+    }
+
+    #[test]
+    fn cfg_kani_marks_a_mod_declaration_and_those_inside_an_inline_module() {
+        let s = scan("#[cfg(kani)]\nmod a;\n#[cfg(kani)]\nmod v {\n    mod b;\n}\nmod c;\n");
+        let kani: Vec<(&str, bool)> = s.mods.iter().map(|m| (m.name.as_str(), m.cfg_kani)).collect();
+        assert_eq!(kani, vec![("a", true), ("b", true), ("c", false)]);
     }
 
     #[test]

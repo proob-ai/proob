@@ -1,0 +1,72 @@
+Kani Rust Verifier 0.68.0 (cargo plugin)
+CBMC 6.11.0
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | #![feature(register_tool)]
+  |            ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+Checking harness verification::fail_assert...
+CBMC 6.11.0 (cbmc-6.11.0)
+CBMC version 6.11.0 (cbmc-6.11.0) 64-bit arm64 macos
+Reading GOTO program from file <crate>/target/kani/aarch64-apple-darwin/debug/build/kani-capture/7c421bbba2dbeeb3/out/kani_capture-7c421bbba2dbeeb3__RNvNtCs21h8GYWxv5p_12kani_capture12verification11fail_assert.out
+Generating GOTO Program
+Adding CPROVER library (arm64)
+Removal of function pointers and virtual functions
+Generic Property Instrumentation
+Running with 16 object bits, 48 offset bits (user-specified)
+Starting Bounded Model Checking
+Runtime Symex: 0.00153175s
+size of program expression: 143 steps
+slicing removed 61 assignments
+Generated 4 VCC(s), 4 remaining after simplification
+Runtime Postprocess Equation: 2.8875e-05s
+Passing problem to propositional reduction
+converting SSA
+Runtime Convert SSA: 0.000286292s
+Running propositional reduction
+Post-processing
+Runtime Post-process: 6.958e-06s
+Solving with CaDiCaL 3.0.0
+268 variables, 664 clauses
+SAT checker: instance is SATISFIABLE
+Runtime Solver: 5.0833e-05s
+Runtime decision procedure: 0.000374374s
+Running propositional reduction
+Solving with CaDiCaL 3.0.0
+269 variables, 665 clauses
+SAT checker: instance is SATISFIABLE
+Runtime Solver: 0.0001195s
+Runtime decision procedure: 0.000151125s
+Running propositional reduction
+Solving with CaDiCaL 3.0.0
+270 variables, 666 clauses
+SAT checker: instance is UNSATISFIABLE
+Runtime Solver: 3.0834e-05s
+Runtime decision procedure: 7.5375e-05s
+
+RESULTS:
+Check 1: buggy_abs.assertion.1
+	 - Status: SUCCESS
+	 - Description: "attempt to negate with overflow"
+	 - Location: src/lib.rs:2:46 in function buggy_abs
+
+Check 2: verification::fail_assert.assertion.1
+	 - Status: FAILURE
+	 - Description: "assertion failed: buggy_abs(x) > 0"
+	 - Location: src/lib.rs:11:78 in function verification::fail_assert
+
+
+SUMMARY:
+ ** 1 of 2 failed
+Failed Checks: assertion failed: buggy_abs(x) > 0
+ File: "src/lib.rs", line 11, in verification::fail_assert
+
+VERIFICATION:- FAILED
+Verification Time: 0.014731458s
+
+Manual Harness Summary:
+Verification failed for - verification::fail_assert
+Complete - 0 successfully verified harnesses, 1 failures, 1 total.
