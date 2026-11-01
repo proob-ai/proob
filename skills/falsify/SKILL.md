@@ -279,12 +279,12 @@ the code under proof is the property's scope, hashed with the statement.
 For a TLA+ model the binding set is the module, its `.cfg`, and every module beside it that it
 reaches through `EXTENDS` or `INSTANCE`; an edit to any of them reads `Re-approve (check
 amended)`. The code the spec models is the property's scope, and it is watched differently: any
-commit to a scope file after the statement's approving merge reads `Re-approve (spec drifted: n
-commits to the modelled scope)`, because nothing checks that changed code still follows the
-spec. Only a new approval of the statement clears it: a re-affirmation PR (`/proob:guard`
-proposes one) after the reviewer re-reads the spec against the code, with the spec amended
-first when the code changed the design. Commits to the scope between the statement's approval
-and this PR count too. Drift is file-granular: a refactor flags it as surely as a change of
+commit to a scope file after the later of the statement's and the spec's approving merges reads
+`Re-approve (spec drifted: n commits to the modelled scope)`, because nothing checks that
+changed code still follows the spec. A new approval of either clears it: a PR that amends the
+spec when the code changed the design, or a re-affirmation of the statement (`/proob:guard`
+proposes one) when it did not, each after the reviewer re-reads the spec against the code.
+Merging this PR approves the spec, so drift counts from its merge. Drift is file-granular: a refactor flags it as surely as a change of
 behaviour. Say this in the PR, so the team knows that touching the modelled code asks them to
 re-read the spec.
 

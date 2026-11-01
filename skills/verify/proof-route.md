@@ -186,7 +186,8 @@ property, the initial predicate, or the cfg): `=` and `#`, `<` and `<=`, `>` and
 - `unsampled`: as for Verus.
 
 A model-bound property reads `Not checked`, then `Checked (strength pending)`, then `Holds` for
-the design over its constants. Any commit to its scope after the statement's approval reads
+the design over its constants. Any commit to its scope after the later of the statement's and the spec's approvals reads
 `Re-approve (spec drifted: n commits to the modelled scope)`: drift is file-granular, so it
-flags a refactor as surely as a change of behaviour, and only a re-approval of the statement,
-after a reviewer re-reads the spec against the code, clears it.
+flags a refactor as surely as a change of behaviour. A merged review that re-approves either,
+after a reviewer re-reads the spec against the code, clears it: an amended spec when the code
+changed the design, or a re-affirmation of the statement when it did not.

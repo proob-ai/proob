@@ -53,8 +53,8 @@ statement covers; approving it makes it part of what `Holds` will mean for that 
     second server, …>
   - `CHECK_DEADLOCK FALSE`: <why the code may stop there> (omit when the cfg does not set it)
 - Drift: once approved, any commit to `<scope files>` reads `Re-approve (spec drifted: n commits
-  to the modelled scope)` until the statement is re-approved, so a reviewer re-reads this spec
-  against the changed code. It flags every change to those files, a refactor included; it cannot
+  to the modelled scope)` until the spec or the statement is re-approved, so a reviewer re-reads
+  this spec against the changed code. It flags every change to those files, a refactor included; it cannot
   tell whether the code still follows the spec.
 
 <details><summary>Violation trace (only when TLC found one)</summary>
