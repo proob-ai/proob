@@ -173,6 +173,16 @@ fn check_bindings(
                                 ),
                             ));
                         }
+                        Some(d) if b.kind == Kind::Model && d.kind.map(convert::kind) != Some(Kind::Model) => {
+                            problems.push(Problem::at(
+                                &d.path,
+                                None,
+                                format!(
+                                    "bound to a TLA+ definition at {}, so its primary evidence is a model check: set `kind = \"model\"`",
+                                    b.token
+                                ),
+                            ));
+                        }
                         Some(_) => {}
                     }
                 }
@@ -198,12 +208,12 @@ fn check_bindings(
         .adapters
         .iter()
         .filter(|a| availability(a.language) == Availability::Available)
-        .filter_map(|a| {
+        .map(|a| {
             let root = a.root.trim_start_matches("./").trim_end_matches('/').to_string();
             match a.language {
-                Language::Rust | Language::Verus | Language::Kani => Some((".rs", root)),
-                Language::Python => Some((".py", root)),
-                Language::Tla => None,
+                Language::Rust | Language::Verus | Language::Kani => (".rs", root),
+                Language::Python => (".py", root),
+                Language::Tla => (".tla", root),
             }
         })
         .collect()

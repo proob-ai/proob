@@ -201,6 +201,37 @@ fn init_refuses_to_clobber_an_unreadable_settings_file() {
 }
 
 // ---------------------------------------------------------------------------
+// --tla
+// ---------------------------------------------------------------------------
+
+#[test]
+fn init_tla_writes_the_adapter_and_says_how_to_provide_tlc() {
+    let repo = TempRepo::new();
+    repo.write("specs/Mutex.tla", "---- MODULE Mutex ----\n====\n");
+    repo.commit("start", NOW - DAY);
+    let out = run(repo.proob().args(["init", "--tla"]));
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    let parsed = proob_facts::config::parse_config(&repo.read("proob/config.toml")).expect("parses");
+    let languages: Vec<Language> = parsed.adapters.iter().map(|a| a.language).collect();
+    assert_eq!(languages, vec![Language::Tla]);
+    assert!(out.stdout.contains("PROOB_TLA2TOOLS"), "{}", out.stdout);
+    assert!(repo.read(".github/workflows/proob-evidence.yml").contains("PROOB_TLA2TOOLS"));
+
+    // A config that exists is kept; the block it lacks is printed.
+    let repo = TempRepo::new();
+    repo.write("Cargo.toml", "[package]\nname = \"x\"\n");
+    repo.commit("start", NOW - DAY);
+    assert_eq!(run(repo.proob().arg("init")).code, 0);
+    let out = run(repo.proob().args(["init", "--tla"]));
+    assert!(
+        out.stdout.contains("tla: proob/config.toml exists and was kept; add this adapter block:"),
+        "{}",
+        out.stdout
+    );
+    assert!(!repo.read("proob/config.toml").contains("language = \"tla\""));
+}
+
+// ---------------------------------------------------------------------------
 // --kani
 // ---------------------------------------------------------------------------
 

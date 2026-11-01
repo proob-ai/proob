@@ -482,11 +482,11 @@ fn run_is_a_closed_error_without_an_adapter() {
     let out = run(c.proob().args(["run", "check", PROP_A]));
     assert_eq!(out.code, 2);
     assert!(out.stderr.contains("no adapters"), "{}", out.stderr);
-    // A language whose adapter has not landed yet names the unit that brings it.
+    // The TLA+ adapter over a tree without a tokened spec binds nothing.
     c.repo.write("proob/config.toml", &format!("{CONFIG_TOML}\n[[adapters]]\nroot = \".\"\nlanguage = \"tla\"\nrunner = \"tlc\"\nmutation_tool = \"spec-mutants\"\n"));
     let out = run(c.proob().args(["run", "score", PROP_A]));
     assert_eq!(out.code, 2);
-    assert!(out.stderr.contains("no adapter for language tla yet (it arrives in U12)"), "{}", out.stderr);
+    assert!(out.stderr.contains("no check carries"), "{}", out.stderr);
     // The Python adapter over a tree without a tokened pytest test binds nothing.
     c.repo.write("proob/config.toml", &format!("{CONFIG_TOML}\n[[adapters]]\nroot = \".\"\nlanguage = \"python\"\nrunner = \"pytest\"\nmutation_tool = \"mutmut\"\n"));
     let out = run(c.proob().args(["run", "score", PROP_A]));
