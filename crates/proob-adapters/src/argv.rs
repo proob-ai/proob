@@ -186,6 +186,14 @@ impl Command {
         self
     }
 
+    /// A positional path the adapter owns, for a tool without a separator
+    /// (TLC's spec file). Absolute, so never read as an option.
+    pub fn own_path(mut self, path: &Path) -> Command {
+        debug_assert!(path.is_absolute(), "an owned path is absolute");
+        self.args.push(path.as_os_str().to_os_string());
+        self
+    }
+
     /// The end-of-options separator; everything after it is a checked value.
     pub fn separator(mut self) -> Command {
         if !self.separated {

@@ -255,6 +255,8 @@ fn check_record(o: CheckOutcome) -> (OutcomeRecord, Option<Replay>) {
             (OutcomeRecord::Verified { rlimit: None, checks: Some(checks) }, None)
         }
         CheckOutcome::ProofFailed { diagnostics } => (OutcomeRecord::ProofFailed { diagnostics }, None),
+        CheckOutcome::NoViolation => (OutcomeRecord::NoViolation, None),
+        CheckOutcome::Violation { trace } => (OutcomeRecord::Violation { trace }, None),
         CheckOutcome::Errored { reason } => (OutcomeRecord::Errored { reason }, None),
     }
 }

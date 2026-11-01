@@ -20,19 +20,32 @@ pub enum Class {
     NoError,
     /// A state violates the invariant `invariant`; `trace` is the error
     /// trace's first and last states.
-    InvariantViolated { invariant: String, trace: String },
+    InvariantViolated {
+        invariant: String,
+        trace: String,
+    },
     /// A behaviour violates a temporal property; `trace` as above.
-    TemporalViolated { trace: String },
+    TemporalViolated {
+        trace: String,
+    },
     /// A reachable state has no successor and the cfg checks deadlock.
-    Deadlock { trace: String },
+    Deadlock {
+        trace: String,
+    },
     /// SANY could not parse a module.
-    ParseError { detail: String },
+    ParseError {
+        detail: String,
+    },
     /// SANY parsed the modules but rejected their meaning (an unknown name, a
     /// wrong arity).
-    SemanticError { detail: String },
+    SemanticError {
+        detail: String,
+    },
     /// The JVM ran out of memory.
     OutOfMemory,
-    Unrecognised { detail: String },
+    Unrecognised {
+        detail: String,
+    },
 }
 
 const NO_ERROR: &str = "Model checking completed. No error has been found.";
@@ -227,18 +240,31 @@ mod tests {
         assert!(matches!(classify(header, ""), Class::Unrecognised { .. }), "started, never finished");
         let both = format!("{NO_ERROR}\nError: Invariant Inv is violated.\n");
         assert!(matches!(classify(&both, ""), Class::Unrecognised { .. }), "a completion and an error");
-        let unknown = format!("{NO_ERROR}\nError: The invariant Inv specified in the configuration file is not defined.\n");
+        let unknown =
+            format!("{NO_ERROR}\nError: The invariant Inv specified in the configuration file is not defined.\n");
         assert!(matches!(classify(&unknown, ""), Class::Unrecognised { .. }), "an error TLC printed beside completing");
         let two = "Error: Invariant A is violated.\nError: Deadlock reached.\n";
         assert!(matches!(classify(two, ""), Class::Unrecognised { .. }));
         assert!(matches!(classify("Error: Invariant a b is violated.\n", ""), Class::Unrecognised { .. }));
         // Not captured: a JVM out of memory, whatever else it printed.
-        assert_eq!(classify(NO_ERROR, "Exception in thread \"main\" java.lang.OutOfMemoryError: Java heap space"), Class::OutOfMemory);
+        assert_eq!(
+            classify(NO_ERROR, "Exception in thread \"main\" java.lang.OutOfMemoryError: Java heap space"),
+            Class::OutOfMemory
+        );
     }
 
     #[test]
     fn a_lone_variable_and_a_lasso_are_read_as_states() {
-        let lines = ["State 1: <Initial predicate>", "x = 0", "", "State 2: <Inc>", "x = 1", "", "Back to state 1: <Inc>", "Finished"];
+        let lines = [
+            "State 1: <Initial predicate>",
+            "x = 0",
+            "",
+            "State 2: <Inc>",
+            "x = 1",
+            "",
+            "Back to state 1: <Inc>",
+            "Finished",
+        ];
         assert_eq!(trace(&lines), "State 1: <Initial predicate>\nx = 0\n… (3 states in all)\nBack to state 1: <Inc>");
     }
 }
