@@ -62,6 +62,11 @@ version as a comment.
   names, on Java from `PATH`. `proob init --tla` adds the adapter (the
   workflows do not install TLC yet), and `proob validate` rejects a TLA+
   token on a property whose kind is not `model`.
+- Skills for the model route: with a `tla` adapter, `/proob:declare` may
+  propose `kind = "model"` for a protocol-shaped scope, and `/proob:falsify`
+  writes a TLA+ spec under `proob/specs/` citing the code each action
+  models, runs TLC, and lists the constants and what the model leaves out
+  in the pull request's "Model-checked for" block.
 - A memory budget for every runner proob starts: while it runs, proob reads
   the resident memory of its process group every half second and kills the
   group once it passes `PROOB_MEMORY_LIMIT_MB` (default: half the physical
