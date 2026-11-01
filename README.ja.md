@@ -1,4 +1,4 @@
-<!-- translated from README.md sha256:f6d452f6efeb6d027d07a6795c9e8589ab88526191181b670872f490fd392584 -->
+<!-- translated from README.md sha256:c96e9c0e0a3b185910d75fb5a798fb48cbabc5733091bc7b769a0dde56fd5f13 -->
 # proob
 
 [![ci](https://github.com/proob-ai/proob/actions/workflows/ci.yml/badge.svg)](https://github.com/proob-ai/proob/actions/workflows/ci.yml)
@@ -42,7 +42,7 @@ Claude Code で、あなたのリポジトリの中で：
 /proob:try
 ```
 
-`/proob:try` は `~/.proob/shadow/` 以下の非公開コピーで動くため、あなたのファイル、`.git`、`git status` はそのままです。pytest、Hypothesis、mutmut を入れた Python、または cargo-nextest と cargo-mutants を入れた Rust が必要です（[詳細](docs/guide.md#install)）。
+`/proob:try` は `~/.proob/shadow/` 以下の非公開コピーで動くため、あなたのファイル、`.git`、`git status` はそのままです。pytest、Hypothesis、mutmut を入れた Python、または cargo-nextest と cargo-mutants を入れた Rust が必要です。足りないものは `/proob:setup` がインストールします（[詳細](docs/guide.md#install)）。
 
 結果が気に入ったら、レポートの最後にそれを残す 3 つの手順があります：
 
@@ -66,6 +66,7 @@ proob が今あるループに加えるのは、必須チェック一つとレ�
 | `/proob:falsify` | 承認された各プロパティをプロパティベーステスト、または Rust では [Verus](https://github.com/verus-lang/verus) の証明に紐付ける |
 | `/proob:verify` | proob がコードを変異させ、各チェックが実際に失敗しうることを示す |
 | `/proob:guard` | プルリクエストごと、毎晩、セッションごとに、どのプロパティがまだ成り立つかを示す |
+| `/proob:setup` | チェックに必要なツールをこのマシンにインストールする。各ステップはあなたが承認してから実行する |
 
 各プロパティの状態は `Holds`、`Checked`、`Not checked`、`Re-approve`、`Broken`、`Proposed`、`Waived` のいずれかです。`Holds` は、作成者以外のレビュアーが承認し、デフォルトブランチからの新しい証拠があり、チェックが失敗しうることが示されていることを意味します。`Holds` は証明またはモデルに限られ、プロパティベーステストは `Checked (tested)` までです。レビューするだけのチームメイトには GitHub だけで足ります。各スキル、状態、チーム設定、CLI は[ガイド](docs/guide.md)（英語）にあります。
 

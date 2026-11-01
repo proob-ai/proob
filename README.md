@@ -41,7 +41,7 @@ In Claude Code, inside your repository:
 /proob:try
 ```
 
-`/proob:try` works on a private copy under `~/.proob/shadow/`, so your files, your `.git`, and `git status` stay exactly as they were. You need Python with pytest, Hypothesis, and mutmut, or Rust with cargo-nextest and cargo-mutants ([details](docs/guide.md#install)).
+`/proob:try` works on a private copy under `~/.proob/shadow/`, so your files, your `.git`, and `git status` stay exactly as they were. You need Python with pytest, Hypothesis, and mutmut, or Rust with cargo-nextest and cargo-mutants; `/proob:setup` installs what is missing ([details](docs/guide.md#install)).
 
 If you like what it found, the report ends with three steps to keep it:
 
@@ -65,6 +65,7 @@ proob adds one required check and one review habit to the loop you already have.
 | `/proob:falsify` | it binds each approved property to a property-based test, or to a [Verus](https://github.com/verus-lang/verus) proof in Rust |
 | `/proob:verify` | proob mutates the code to show each check can actually fail |
 | `/proob:guard` | every pull request, every night, every session: which properties still hold |
+| `/proob:setup` | it installs the tools your checks need on this machine, each step only after you say yes |
 
 Every property gets one status: `Holds`, `Checked`, `Not checked`, `Re-approve`, `Broken`, `Proposed`, or `Waived`. `Holds` means approved by a reviewer other than the author, with fresh evidence from your default branch and a check shown able to fail. `Holds` is reserved for a proof or a model, and a property-based test reaches `Checked (tested)`. A teammate who only reviews needs nothing but GitHub. The [guide](docs/guide.md) covers each skill, the statuses, team setup, and the CLI.
 

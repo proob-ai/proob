@@ -1,6 +1,6 @@
 # proob guide
 
-Everything the [README](../README.md) leaves out: installing, the five skills, the status words, team setup, and why a verdict can be trusted. Benchmark details are in [benchmark.md](benchmark.md).
+Everything the [README](../README.md) leaves out: installing, the skills, the status words, team setup, and why a verdict can be trusted. Benchmark details are in [benchmark.md](benchmark.md).
 
 ## Install
 
@@ -23,7 +23,10 @@ Requirements:
 
 - **GitHub read access**, for a verified status: `gh auth login`, or `GITHUB_TOKEN` in the environment. Without it every status is marked `unverified` and nothing reads `Holds`.
 - **Python projects:** pytest 9.1.1, Hypothesis 6.169.4, and mutmut 3.8.0 in the environment your tests run in ([`tools/python-tools.txt`](../tools/python-tools.txt)).
-- **Rust projects:** cargo-nextest and cargo-mutants. For the proof route, the pinned Verus release, which [`tools/get-verus.sh`](../tools/get-verus.sh) fetches.
+- **Rust projects:** cargo-nextest 0.9.150 and cargo-mutants 27.1.0. For the proof route, the pinned Verus release, which [`tools/get-verus.sh`](../tools/get-verus.sh) fetches, or Kani at the version in [`tools/kani.toml`](../tools/kani.toml).
+- **TLA+ models:** Java 11 or later, and `tla2tools.jar` of the TLA+ release in [`tools/tla.toml`](../tools/tla.toml), named by `PROOB_TLA2TOOLS`.
+
+`proob doctor` reports, for each adapter `proob/config.toml` lists, whether this machine has its tools at the versions proob accepts, and the exact command for anything missing; it installs nothing. `/proob:setup` runs it and installs what is missing, one step at a time, each only after you say yes. The workflows `proob init` writes install their own pinned tools in CI.
 
 ## Usage
 
@@ -118,7 +121,7 @@ For a protocol, a retry loop, or a state machine, a property can be a model: an 
 proob init --tla
 ```
 
-It adds the TLA+ adapter to `proob/config.toml` (`language = "tla"`, `runner = "tlc"`, `mutation_tool = "spec-mutants"`). TLC runs on Java 11 or later, from the `tla2tools.jar` that `PROOB_TLA2TOOLS` names. proob never looks for the jar anywhere else: with the variable unset, or naming no file, or with no `java` on `PATH`, a check is errored and says how to set it. The workflows `proob init` writes do not install TLC yet; add a step to each execute job that provides Java and the jar and sets `PROOB_TLA2TOOLS`.
+It adds the TLA+ adapter to `proob/config.toml` (`language = "tla"`, `runner = "tlc"`, `mutation_tool = "spec-mutants"`). TLC runs on Java 11 or later, from the `tla2tools.jar` that `PROOB_TLA2TOOLS` names. proob never looks for the jar anywhere else: with the variable unset, or naming no file, or with no `java` on `PATH`, a check is errored and says how to set it. The workflows `proob init` writes download the jar of the release pinned in [`tools/tla.toml`](../tools/tla.toml) (TLA+ 1.7.4), refuse it unless its SHA-256 matches, and set `PROOB_TLA2TOOLS`; a workflow that already exists is kept, and `proob init --tla` prints the steps to add. On your machine, `/proob:setup` does the same with your approval, and `proob doctor` reports a jar other than the pinned release as not ready: TLC's output is what the adapter parses, and it is tested against that release.
 
 A model property declares `kind = "model"` and binds one definition. Write `\* proob:<ULID>` on the line directly above the invariant or property it checks, a definition without parameters at the start of a line (`MutualExclusion == …`), in a `.tla` module whose `.cfg` sits beside it with the same base name. The binding set is the module, its `.cfg`, and every module beside it that it reaches through `EXTENDS` or `INSTANCE`; standard modules such as `Naturals` live in the jar, whose TLC release each result records. `proob validate` rejects a TLA+ token on a property of another kind.
 
@@ -141,6 +144,7 @@ What a model does not cover:
 The skills drive the `proob` binary, which you can also run directly:
 
 ```sh
+proob doctor                # what this machine lacks to run each adapter (installs nothing)
 proob validate              # check proob's files and binding tokens
 proob status                # derive every property's status
 proob check --base main --head HEAD   # the gate: status plus policy for this change

@@ -1,4 +1,4 @@
-<!-- translated from README.md sha256:f6d452f6efeb6d027d07a6795c9e8589ab88526191181b670872f490fd392584 -->
+<!-- translated from README.md sha256:c96e9c0e0a3b185910d75fb5a798fb48cbabc5733091bc7b769a0dde56fd5f13 -->
 # proob
 
 [![ci](https://github.com/proob-ai/proob/actions/workflows/ci.yml/badge.svg)](https://github.com/proob-ai/proob/actions/workflows/ci.yml)
@@ -42,7 +42,7 @@
 /proob:try
 ```
 
-`/proob:try` 在 `~/.proob/shadow/` 下的私有副本中工作，所以你的文件、`.git` 和 `git status` 都保持原样。你需要带有 pytest、Hypothesis 和 mutmut 的 Python，或带有 cargo-nextest 和 cargo-mutants 的 Rust（[详情](docs/guide.md#install)）。
+`/proob:try` 在 `~/.proob/shadow/` 下的私有副本中工作，所以你的文件、`.git` 和 `git status` 都保持原样。你需要带有 pytest、Hypothesis 和 mutmut 的 Python，或带有 cargo-nextest 和 cargo-mutants 的 Rust；缺少的工具由 `/proob:setup` 安装（[详情](docs/guide.md#install)）。
 
 如果你认可它的发现，报告末尾有保留它们的三个步骤：
 
@@ -66,6 +66,7 @@ proob 在你已有的流程上只增加一个必需检查和一个审查习惯�
 | `/proob:falsify` | 把每条已批准的性质绑定到一个基于性质的测试，或在 Rust 中绑定到一个 [Verus](https://github.com/verus-lang/verus) 证明 |
 | `/proob:verify` | proob 变异代码，表明每个检查确实可能失败 |
 | `/proob:guard` | 每个拉取请求、每晚、每次会话：哪些性质仍然成立 |
+| `/proob:setup` | 在本机安装检查所需的工具，每一步都在你同意后才执行 |
 
 每条性质都有一个状态：`Holds`、`Checked`、`Not checked`、`Re-approve`、`Broken`、`Proposed` 或 `Waived`。`Holds` 表示由作者以外的审查者批准、有来自默认分支的新鲜证据，并且检查被证明能够失败。`Holds` 只保留给证明或模型，基于性质的测试最高达到 `Checked (tested)`。只做审查的队友只需要 GitHub。[指南](docs/guide.md)（英文）介绍每个技能、各个状态、团队设置和命令行。
 

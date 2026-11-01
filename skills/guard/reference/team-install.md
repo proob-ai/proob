@@ -47,6 +47,10 @@ What a teammate sees, in order:
    environment. Without one every rendering carries the `unverified` marker
    and nothing reads Holds; the PR check and the default-branch runs are
    verified regardless.
+6. To run checks locally they need the tools each adapter drives (cargo-nextest,
+   the pinned Python tools, Kani, Verus, Java and TLC). `proob doctor` lists
+   what is missing on their machine; `/proob:setup` installs it, each step
+   after they approve it.
 
 Reviewing and approving a declaration needs no plugin at all: an approving
 review on the pull request, by someone with write access who did not write

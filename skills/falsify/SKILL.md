@@ -198,7 +198,7 @@ For a Kani harness:
 | "nothing was checked: …" | fix the harness: assert what the statement says |
 | "the crate did not compile under Kani: …" | fix the harness if your code is wrong; otherwise stop and quote it |
 | "harness not found: …" | fix the token's placement or the harness path |
-| "the Kani toolchain was not found …" | stop and quote it: the install is the human's |
+| "the Kani toolchain was not found …" | stop and quote it: the install is the human's, and `/proob:setup` does it with their approval |
 | anything else ("Kani could not decide …", "unrecognised Kani output: …") | stop and quote it |
 
 Never shrink a size bound or add an assume to get past an unwind failure, a timeout, or out of
@@ -225,7 +225,7 @@ For a TLA+ model:
 | "TLC could not parse the spec: …", "TLC rejected the spec (semantic error): …" | fix your spec's syntax or names; never by removing what the invariant reads |
 | "deadlock reached: …" | read the trace: if the code really stops there (every request served, the protocol over), add `CHECK_DEADLOCK FALSE` to the cfg and say so in the PR; if the code would go on, your spec is missing an action: add it |
 | "TLC timed out …", "TLC used more than … MB …", "TLC ran out of Java heap …" | the state space is too large for these constants. You may propose smaller ones, but a smaller constant is a narrower claim: say in "Model-checked for" which one shrank, from what, and what it leaves out. Never shrink one below the case the statement is about |
-| "TLC was not found …" | stop and quote it: Java and the jar are the human's install |
+| "TLC was not found …" | stop and quote it: Java and the jar are the human's install, and `/proob:setup` does it with their approval |
 | anything else ("TLC reported invariant … violated, but only … was checked", "unrecognised TLC output: …", "TLC was killed …", "TLC did not run: …") | stop and quote it |
 
 A model has no fallback: if TLC cannot take the spec, say so and leave the property unbound.
