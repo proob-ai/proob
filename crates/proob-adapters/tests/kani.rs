@@ -6,7 +6,7 @@
 //! the pinned toolchain (`cargo-kani` on `PATH` and its bundle); when it does
 //! not resolve they say so and return.
 use proob_adapters::argv::Checked;
-use proob_adapters::kani::check::{judge, outcome, plan};
+use proob_adapters::kani::check::{judge, outcome, plan, stopped};
 use proob_adapters::kani::score::{Fate, OPERATOR_SET, fate, fate_of, harness_code, list_plan, patch};
 use proob_adapters::kani::tools::{Resolution, resolve};
 use proob_adapters::kani::{KaniAdapter, parse_check_ref};
@@ -324,6 +324,21 @@ fn a_run_that_proves_nothing_or_contradicts_its_exit_code_is_errored() {
 }
 
 #[test]
+fn a_run_stopped_for_memory_is_errored_never_a_verdict() {
+    let oom = SpawnError::OutOfMemory {
+        program: PathBuf::from("cargo-kani"),
+        limit_bytes: 4096 << 20,
+        peak_bytes: 5000 << 20,
+    };
+    assert_eq!(
+        stopped(&oom),
+        CheckOutcome::Errored {
+            reason: "Kani used more than 4096 MB and was stopped (out of memory); raise PROOB_MEMORY_LIMIT_MB or shrink the harness's bounds".into()
+        }
+    );
+}
+
+#[test]
 fn a_missing_toolchain_yields_errored_with_the_stable_hint() {
     let home = tempfile::tempdir().expect("tempdir");
     let env = vec![
@@ -582,6 +597,9 @@ fn every_class_has_a_fate() {
     }
     let timed_out = SpawnError::TimedOut { program: PathBuf::from("cargo-kani"), after: Duration::from_secs(1) };
     assert_eq!(fate(Err(&timed_out), None, "h"), Ok(Fate::Timeout), "the per-mutant limit");
+    let oom =
+        SpawnError::OutOfMemory { program: PathBuf::from("cargo-kani"), limit_bytes: 1 << 30, peak_bytes: 2 << 30 };
+    assert_eq!(fate(Err(&oom), None, "h"), Ok(Fate::Timeout), "the memory budget: no verdict, never killed");
     let start = SpawnError::Start { program: PathBuf::from("cargo-kani"), message: "gone".into() };
     assert!(fate(Err(&start), None, "h").is_err(), "a toolchain that cannot start aborts the score");
 }

@@ -98,11 +98,15 @@ pub fn perform(
             let (outcome, replay) = check_record(check.outcome);
             (outcome, replay, check.tool_versions, evidence_kind(binding.kind), None)
         }
-        What::Score => {
-            let scope: Vec<PathBuf> = h.scope_files.iter().map(PathBuf::from).collect();
-            let score = adapter.score(&ws.root, binding, &scope).map_err(crate::cli::adapters::adapter_error)?;
-            (score_record(score.outcome), None, score.tool_versions, EvidenceKind::Score, score.jobs.map(|j| j.line()))
-        }
+        What::Score => match proob_adapters::mutation::room(&ws.root) {
+            Err(reason) => (OutcomeRecord::Errored { reason }, None, Vec::new(), EvidenceKind::Score, None),
+            Ok(()) => {
+                let scope: Vec<PathBuf> = h.scope_files.iter().map(PathBuf::from).collect();
+                let score = adapter.score(&ws.root, binding, &scope).map_err(crate::cli::adapters::adapter_error)?;
+                let jobs = score.jobs.map(|j| j.line());
+                (score_record(score.outcome), None, score.tool_versions, EvidenceKind::Score, jobs)
+            }
+        },
     };
     let record = RunResultRecord {
         schema_version: 1,

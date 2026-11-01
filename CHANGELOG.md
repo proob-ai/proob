@@ -50,6 +50,14 @@ version as a comment.
 
 ### Added
 
+- A memory budget for every runner proob starts: while it runs, proob reads
+  the resident memory of its process group every half second and kills the
+  group once it passes `PROOB_MEMORY_LIMIT_MB` (default: half the physical
+  memory; `0` turns the watch off). A run stopped for memory is errored, and
+  a mutant stopped for memory counts as a timeout, never killed or survived.
+  CBMC under Kani took 6 to 13 GB per harness (`bench/results/kani-v1.md`).
+- A score, and a Kani check, refuse to start with an errored reason when the
+  volume they build on has under 2 GB free.
 - Proofs on ordinary Rust with Kani 0.68.0: a `kani` adapter binds a
   `#[kani::proof]` harness as a `proof`, so a property on plain Rust code
   can reach `Holds` with no proof language. A run that verifies is reported

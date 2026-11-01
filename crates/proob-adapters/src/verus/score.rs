@@ -9,7 +9,8 @@
 //! - the verifier accepts it: **survived** (the specification cannot tell);
 //! - rustc or Verus cannot check it at all (no JSON, or a VIR error): **unviable**,
 //!   excluded from every denominator;
-//! - the resource limit is exhausted or the process times out: **timeout**.
+//! - the resource limit is exhausted, or the process times out or passes
+//!   proob's memory budget: **timeout**.
 //!
 //! The unmutated copy is verified first (the baseline); if it does not
 //! verify, nothing is scored. Mutants beyond `max_mutants` are counted as
@@ -52,7 +53,7 @@ pub enum Fate {
 /// same way and the score would mean nothing.
 pub fn fate(run: Result<&Output, &SpawnError>) -> Result<Fate, String> {
     match run {
-        Err(SpawnError::TimedOut { .. }) => Ok(Fate::Timeout),
+        Err(SpawnError::TimedOut { .. } | SpawnError::OutOfMemory { .. }) => Ok(Fate::Timeout),
         Err(e) => Err(e.to_string()),
         Ok(out) => Ok(match judge(out) {
             Judged::Verified => Fate::Survived,
@@ -257,6 +258,12 @@ mod tests {
         assert_eq!(fate(Ok(&out(101, VIR, "error: cannot call function with mode exec\n"))), Ok(Fate::Unviable));
         let timeout = SpawnError::TimedOut { program: PathBuf::from("cargo-verus"), after: Duration::from_secs(1) };
         assert_eq!(fate(Err(&timeout)), Ok(Fate::Timeout));
+        let oom = SpawnError::OutOfMemory {
+            program: PathBuf::from("cargo-verus"),
+            limit_bytes: 1 << 30,
+            peak_bytes: 2 << 30,
+        };
+        assert_eq!(fate(Err(&oom)), Ok(Fate::Timeout), "the memory budget: no verdict, never killed");
         let start = SpawnError::Start { program: PathBuf::from("cargo-verus"), message: "no such file".into() };
         assert!(fate(Err(&start)).is_err(), "a toolchain that cannot start aborts the score");
     }
