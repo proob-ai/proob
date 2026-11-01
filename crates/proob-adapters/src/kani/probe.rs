@@ -10,7 +10,7 @@
 //! build once with the score's), and run as `check` runs a harness, so the
 //! reason a probe fails is the one a check would give.
 use crate::argv::Checked;
-use crate::kani::check::{TIMEOUT, judge};
+use crate::kani::check::{TIMEOUT, judge, stopped};
 use crate::kani::score::Lab;
 use crate::kani::tools::{Resolution, resolve};
 use crate::kani::{CheckRef, KaniAdapter};
@@ -64,7 +64,7 @@ pub fn run(adapter: &KaniAdapter, repo: &Path) -> Probe {
             Err(SpawnError::TimedOut { after, .. }) => CheckOutcome::Errored {
                 reason: format!("Kani timed out after {} minutes building the crate", after.as_secs() / 60),
             },
-            Err(e) => CheckOutcome::Errored { reason: format!("cargo kani did not run: {e}") },
+            Err(e) => stopped(&e),
         })
     });
     match ran {

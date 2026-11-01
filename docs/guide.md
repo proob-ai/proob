@@ -185,3 +185,4 @@ For a proof, strength is measured by mutation under proof: proob changes the cod
 - mutmut needs `os.fork`, so Python checks are scored on Linux and macOS only.
 - A Kani proof holds only within its harness's bounds, and Kani cannot run on Windows (see [Proofs on ordinary Rust](#proofs-on-ordinary-rust-kani)).
 - TLA+ is not supported yet.
+- Every runner proob starts (a test runner, Verus, Kani and CBMC) is held to a memory budget: once its process group's resident memory passes `PROOB_MEMORY_LIMIT_MB` megabytes, proob kills the group. The default is half the machine's physical memory; `0` turns the budget off. A run stopped for memory is reported as errored with the limit it passed, and a mutant stopped for memory counts as a timeout, never killed or survived. A score, or a Kani check, does not start when the volume it builds on has under 2 GB free.

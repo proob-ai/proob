@@ -18,7 +18,7 @@
 //!   harness's own assertions did not catch was not caught;
 //! - `SUCCESSFUL`: **survived**;
 //! - unwinding failure, undetermined checks, CBMC timeout or out of memory,
-//!   or the per-mutant limit: **timeout**;
+//!   the per-mutant limit, or proob's memory budget: **timeout**;
 //! - anything Kani cannot check (compile error, unsupported construct,
 //!   harness not found, a vacuous cover, unrecognised output): **unviable**,
 //!   excluded from every denominator.
@@ -36,7 +36,7 @@
 //! copied file keeps its old mtime, which would let cargo reuse an earlier
 //! mutant's build as fresh.
 use crate::argv::{Checked, Command};
-use crate::kani::check::{judge, plan, restore};
+use crate::kani::check::{judge, out_of_memory, plan, restore};
 use crate::kani::tools::{Resolution, Toolchain, resolve};
 use crate::kani::{CheckRef, KaniAdapter, parse_check_ref};
 use crate::mutation::sample;
@@ -98,7 +98,8 @@ pub fn fate_of(class: &Class, code: Option<i32>) -> Fate {
 /// aborts the score (`Err`): every later mutant would fail the same way.
 pub fn fate(run: Result<&Output, &SpawnError>, sarif: Option<&str>, harness: &str) -> Result<Fate, String> {
     match run {
-        Err(SpawnError::TimedOut { .. }) => Ok(Fate::Timeout),
+        // A mutant that took more memory than the budget has no verdict, as one that took more time.
+        Err(SpawnError::TimedOut { .. } | SpawnError::OutOfMemory { .. }) => Ok(Fate::Timeout),
         Err(e) => Err(e.to_string()),
         Ok(out) => {
             let class =
@@ -367,6 +368,7 @@ impl<'a> Lab<'a> {
                 other => format!("{other:?}"),
             },
             Err(SpawnError::TimedOut { after, .. }) => format!("Kani timed out after {} minutes", after.as_secs() / 60),
+            Err(SpawnError::OutOfMemory { limit_bytes, .. }) => out_of_memory(limit_bytes),
             Err(e) => return Err(format!("baseline did not run: {e}")),
         };
         Err(format!("baseline failed: the harness does not verify before any mutation: {why}"))

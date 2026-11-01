@@ -1,6 +1,6 @@
 [package]
 name = "proob-spawn"
-description = "The only place proob starts a child process: argv arrays, no shell, no inherited stdin, captured output, a timeout"
+description = "The only place proob starts a child process: argv arrays, no shell, no inherited stdin, captured output, a timeout, a memory budget"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -13,7 +13,7 @@ publish = false
 wait-timeout.workspace = true
 
 [target.'cfg(unix)'.dependencies]
-# Process groups: a timeout or an interrupt kills everything a child started.
+# Process groups: a timeout, the memory budget, or an interrupt kills everything a child started.
 libc.workspace = true
 
 [dev-dependencies]
