@@ -7,7 +7,9 @@ printed `verified`.
 
 Two verifiers take a proof: Verus, for a crate written in Verus (the sections below), and Kani,
 for ordinary Rust when `proob/config.toml` has an adapter with `language = "kani"` (the last
-section). Kani is Rust only; Python has no proof route in this release.
+section). Kani is Rust only; Python has no proof route in this release. A `kind = "model"`
+property takes the model route instead, in any language: a TLA+ spec of the design, checked by
+TLC, when `proob/config.toml` has an adapter with `language = "tla"` (the last section).
 
 ## What binds a proof
 
@@ -153,3 +155,38 @@ property's scope (never of harness code) and re-runs the one harness on each, `m
 A Kani-bound property reads as above: `Not checked`, then `Checked (strength pending)`, then
 `Holds`, and a Kani `Holds` means within the harness's bounds: inputs outside them were not
 checked.
+
+## The model route: a TLA+ spec of the design
+
+`/proob:falsify` writes the spec under `proob/specs/` and binds its invariant (its
+`conventions.md` has the convention); verify reads the run and the score. A model is a claim
+about the design over the constants in its `.cfg`, never about the code: TLC never runs the
+code, and nothing checks that the code follows the spec.
+
+`check` runs TLC on the module with only the bound name checked. `outcome.result` is
+`no_violation`, `violation` (with `trace`: the violated property and the trace's first and last
+states), or `errored` (with `reason`); `tool_versions` records the TLC release. The words for a
+local `no_violation` are "model-checked locally over the constants in the cfg: unverified until
+the default-branch run". A `violation` is read as a counterexample: quote the trace, offer the
+two exits (fix the design in the code and the spec, or amend the statement).
+
+`score`, operator set `tla-spec-mutants-v1`, mutates the spec's actions (never the bound
+property, the initial predicate, or the cfg): `=` and `#`, `<` and `<=`, `>` and `>=`, `+ 1` and
+`- 1`, one conjunct of a `/\` list dropped, `TRUE` and `FALSE`. Read the JSON as:
+
+- `killed`: TLC found the bound property violated in the mutated spec. The property can tell
+  that design change apart.
+- `survived`: the mutated spec still satisfies the property over these constants. Either the
+  mutated line does not matter to the statement, or the constants are too small to reach the
+  case where it does (one client cannot collide with another), or the property is weaker than
+  the statement. Propose a stronger invariant or a constant that reaches the case; never a
+  narrower one.
+- `timeout`: the mutant ran past its limit or out of memory.
+- `unviable`: the mutant did not parse, or deadlocked; outside the denominator.
+- `unsampled`: as for Verus.
+
+A model-bound property reads `Not checked`, then `Checked (strength pending)`, then `Holds` for
+the design over its constants. Any commit to its scope after the statement's approval reads
+`Re-approve (spec drifted: n commits to the modelled scope)`: drift is file-granular, so it
+flags a refactor as surely as a change of behaviour, and only a re-approval of the statement,
+after a reviewer re-reads the spec against the code, clears it.

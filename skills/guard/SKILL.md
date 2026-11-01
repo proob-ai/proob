@@ -140,13 +140,21 @@ A property is a re-affirmation candidate when either holds:
 - `verdict.word` is `re_approve` and `verdict.why.kind` is
   `reviewer_access_revoked`: the approver no longer has write access, so
   their approval no longer vouches.
+- `verdict.word` is `re_approve` and `verdict.why.kind` is `spec_drifted`:
+  a model property's scope changed since approval (`verdict.why.commits`
+  commits), whatever `drift_threshold` says, because nothing checks that the
+  changed code still follows the spec. Say the reviewer must re-read the
+  spec the property is bound to against the changed code, and that if the
+  design changed, the spec needs amending (`/proob:falsify`) before the
+  re-affirmation.
 
 Not candidates: `statement_amended`, `check_amended`, `config_amended`,
 `workflow_amended` (the amendment PR needs a review, not a new date),
 `proposed` (needs its first review), `broken` (needs a fix).
 
 List the candidates with id, title, and reason (`14 scope commits since
-approval, threshold 10`, or `approver lost write access`). If there is at
+approval, threshold 10`, `approver lost write access`, or `spec drifted: 3
+commits to the modelled scope`). If there is at
 least one, propose the re-affirmation PR described in
 [reference/reaffirmation.md](reference/reaffirmation.md) and, when the user
 agrees, carry it out exactly as written there: one branch
