@@ -54,8 +54,10 @@ pub enum Outcome {
         cases: u64,
         seed: String,
     },
-    /// A proof or a model checked locally.
-    Checks,
+    /// A proof or a model checked locally; a Kani proof only within its harness's bounds.
+    Checks {
+        within_bounds: bool,
+    },
     Fails {
         input: String,
         seed: Option<String>,
@@ -191,7 +193,8 @@ pub fn outcome_of(o: &OutcomeRecord, replay: Option<&Replay>) -> Outcome {
         OutcomeRecord::Counterexample { witness } => Outcome::Fails { input: one_line(witness), seed: seed(replay) },
         OutcomeRecord::ProofFailed { diagnostics } => Outcome::Fails { input: one_line(diagnostics), seed: None },
         OutcomeRecord::Violation { trace } => Outcome::Fails { input: one_line(trace), seed: None },
-        OutcomeRecord::Verified { .. } | OutcomeRecord::NoViolation => Outcome::Checks,
+        OutcomeRecord::Verified { checks, .. } => Outcome::Checks { within_bounds: checks.is_some() },
+        OutcomeRecord::NoViolation => Outcome::Checks { within_bounds: false },
         OutcomeRecord::Errored { reason } => Outcome::Errored { reason: one_line(reason) },
         OutcomeRecord::Scored { .. } | OutcomeRecord::NoMutants => Outcome::NotRun,
     }
@@ -229,7 +232,7 @@ fn one_line(text: &str) -> String {
 pub fn counts(rows: &[Row]) -> Counts {
     rows.iter().fold(Counts { tried: rows.len(), ..Counts::default() }, |c, r| match r.outcome {
         Outcome::Fails { .. } => Counts { fails: c.fails + 1, ..c },
-        Outcome::Passes { .. } | Outcome::Checks => Counts { passes: c.passes + 1, ..c },
+        Outcome::Passes { .. } | Outcome::Checks { .. } => Counts { passes: c.passes + 1, ..c },
         Outcome::NoTest | Outcome::NotRun => Counts { not_run: c.not_run + 1, ..c },
         Outcome::Errored { .. } => Counts { errored: c.errored + 1, ..c },
     })
@@ -272,7 +275,12 @@ fn result_text(r: &Row) -> String {
         Outcome::Passes { cases, seed } => {
             format!("passes {cases} cases (seed {seed}) · {}", strength_text(id, &r.strength))
         }
-        Outcome::Checks => format!("the proof checks locally · {}", strength_text(id, &r.strength)),
+        Outcome::Checks { within_bounds: false } => {
+            format!("the proof checks locally · {}", strength_text(id, &r.strength))
+        }
+        Outcome::Checks { within_bounds: true } => {
+            format!("verified locally within the harness's bounds · {}", strength_text(id, &r.strength))
+        }
         Outcome::Fails { input, seed: Some(s) } => {
             format!("fails: input {input} · replay: proob --shadow run check {id} --seed {s}")
         }
@@ -443,6 +451,15 @@ mod tests {
         assert_eq!(primary(&[&fail, &err, &pass]), Some(&fail));
         assert_eq!(primary(&[&pass, &err]), Some(&err), "with no failure, the newest run");
         assert_eq!(primary(&[]), None);
+    }
+
+    #[test]
+    fn a_kani_proof_is_reported_within_its_harness_bounds_and_a_verus_one_is_not() {
+        let text = |o: &str| result_text(&row(outcome_of(&record(o).outcome, None), Strength::NotScored));
+        assert!(
+            text(r#"{"result":"verified","checks":13}"#).starts_with("verified locally within the harness's bounds")
+        );
+        assert!(text(r#"{"result":"verified","rlimit":10}"#).starts_with("the proof checks locally"));
     }
 
     fn row(outcome: Outcome, strength: Strength) -> Row {

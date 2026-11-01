@@ -1,0 +1,18 @@
+# The Kani fixture: a standalone package (the proob workspace excludes this
+# directory, and the empty [workspace] table below keeps cargo from looking
+# any further up) whose proptest and Kani harnesses share one crate. Plain
+# cargo builds and tests it; the harnesses compile only under `cargo kani`.
+[package]
+name = "kani-crate"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dev-dependencies]
+proptest = "1.12"
+
+[lints.rust]
+# `kani` is the cfg `cargo kani` sets; this stops rustc warning about it.
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(kani)'] }

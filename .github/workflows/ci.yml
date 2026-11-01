@@ -137,6 +137,53 @@ jobs:
           PROOB_REQUIRE_VERUS: "1"
         run: cargo xtask test -- -p proob --test run real_verus_records_under_a_team_approval_hold_and_a_failed_proof_is_broken
 
+  kani:
+    # Not required. The real Kani route: the Kani release pinned in
+    # tools/kani.toml, cached on that pin and installed with the steps
+    # `proob init --kani` writes for users (crates/proob/src/cli/init.rs,
+    # kani_steps), then the Kani-gated tests. Elsewhere they skip themselves
+    # when Kani does not resolve; PROOB_REQUIRE_KANI makes a skip here a failure.
+    name: real Kani route (pinned Kani)
+    runs-on: ubuntu-latest
+    env:
+      PROOB_REQUIRE_KANI: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install the toolchain pinned in rust-toolchain.toml
+        run: rustup toolchain install && rustup show active-toolchain
+      - uses: taiki-e/install-action@1168f6810a3cb30a3514bf5756a3b7f0422c6df8 # v2.87.28
+        with:
+          # cargo-mutants lists the mutants a Kani score runs the harness on.
+          tool: cargo-nextest@0.9.150,cargo-mutants@27.1.0
+      - name: Read the Kani pin from tools/kani.toml
+        run: |
+          v=$(sed -n 's/^version = "\(.*\)"$/\1/p' tools/kani.toml)
+          n=$(sed -n 's/^nightly = "\(.*\)"$/\1/p' tools/kani.toml)
+          [ -n "$v" ] && [ -n "$n" ] || { echo "no version or nightly in tools/kani.toml" >&2; exit 1; }
+          echo "PROOB_KANI_VERSION=$v" >> "$GITHUB_ENV"
+          echo "PROOB_KANI_NIGHTLY=$n" >> "$GITHUB_ENV"
+      - name: Cache the pinned Kani and its nightly
+        id: kani-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/bin/cargo-kani
+            ~/.cargo/bin/kani
+            ~/.kani
+            ~/.rustup/toolchains/${{ env.PROOB_KANI_NIGHTLY }}-*
+          key: kani-${{ runner.os }}-${{ runner.arch }}-${{ env.PROOB_KANI_VERSION }}
+      - name: Install the pinned Kani (the release the adapter drives; it refuses any other)
+        if: steps.kani-cache.outputs.cache-hit != 'true'
+        run: cargo install --locked kani-verifier --version "$PROOB_KANI_VERSION" && cargo kani setup
+      - name: Holds and Broken through the real Kani adapter
+        # Real verified, score, and proof_failed records on the Kani fixture
+        # render Holds and Broken (crates/proob/tests/run.rs).
+        run: cargo xtask test -- -p proob --test run real_kani_records_under_a_team_approval_hold_and_a_counterexample_is_broken
+      - name: The Kani adapter's real checks and scores
+        run: cargo xtask test -- -p proob-adapters --test kani
+      - name: The build probe of `proob init --kani`
+        run: cargo xtask test -- -p proob --test init the_build_probe_passes_on_the_kani_fixture_and_fails_on_a_crate_newer_than_kanis_nightly
+
   crate-graph:
     name: crate graph layering
     runs-on: ubuntu-latest

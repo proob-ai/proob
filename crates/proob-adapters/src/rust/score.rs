@@ -107,10 +107,13 @@ fn list(
     files: &[Checked],
     tool_env: &[(OsString, OsString)],
 ) -> Result<Vec<String>, String> {
-    let out = list_plan(cargo, root, r, features, files)
-        .envs(tool_env)
-        .run()
-        .map_err(|e| format!("cargo mutants --list did not run: {e}"))?;
+    parse_list(&listing(list_plan(cargo, root, r, features, files).envs(tool_env))?)
+        .map_err(|e| format!("cargo mutants --list --json could not be read: {e}"))
+}
+
+/// Runs a `cargo mutants --list` command: its stdout, or why it gave none.
+pub fn listing(command: Command) -> Result<String, String> {
+    let out = command.run().map_err(|e| format!("cargo mutants --list did not run: {e}"))?;
     if !out.success() {
         return Err(format!(
             "cargo mutants --list failed (exit {}); last output: {}",
@@ -118,8 +121,7 @@ fn list(
             cap(String::from_utf8_lossy(&out.stderr).trim(), 600)
         ));
     }
-    parse_list(&String::from_utf8_lossy(&out.stdout))
-        .map_err(|e| format!("cargo mutants --list --json could not be read: {e}"))
+    Ok(String::from_utf8_lossy(&out.stdout).into_owned())
 }
 
 /// One `--re` per sampled name; none when the sample is everything.
@@ -135,11 +137,17 @@ pub fn selectors(listed: &[String], max_mutants: u32, seed: Seed) -> Vec<Checked
 /// Scope files as root-relative checked paths; only Rust sources can be
 /// mutated, and a file outside the adapter root cannot be reached.
 pub fn mutable_files(adapter: &RustAdapter, scope_files: &[PathBuf]) -> Result<Vec<Checked>, Outside> {
+    rust_files_under(adapter.root(), scope_files)
+}
+
+/// `scope_files`' Rust sources made relative to `root` (repo-relative, empty
+/// for the repository root) and checked.
+pub fn rust_files_under(root: &Path, scope_files: &[PathBuf]) -> Result<Vec<Checked>, Outside> {
     scope_files
         .iter()
         .filter(|f| f.extension().is_some_and(|e| e == "rs"))
         .map(|f| {
-            let under_root = f.strip_prefix(adapter.root()).map_err(|_| Outside::Root(f.clone()))?;
+            let under_root = f.strip_prefix(root).map_err(|_| Outside::Root(f.clone()))?;
             Checked::path(under_root).map_err(|rule| Outside::Grammar(f.clone(), rule))
         })
         .collect()

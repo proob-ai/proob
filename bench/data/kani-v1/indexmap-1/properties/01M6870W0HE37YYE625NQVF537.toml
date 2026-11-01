@@ -1,0 +1,7 @@
+id = "01M6870W0HE37YYE625NQVF537"
+title = "Moving an entry shifts only the entries between"
+statement = "Moving an entry from one position to another puts it at the target, shifts only the entries in between by one place, and keeps every key found at its listed position."
+scope = ["src/inner.rs", "src/map.rs"]
+severity = "high"
+rationale = "src/map.rs:1558-1566 documents the move; src/inner.rs:649-676 and the two-strategy index patching in src/inner.rs:607-647 keep the table in step by hand. tests/quick.rs map_move_index."
+kind = "proof"

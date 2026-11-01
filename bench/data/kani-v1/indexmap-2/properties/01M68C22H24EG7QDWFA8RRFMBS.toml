@@ -1,0 +1,7 @@
+id = "01M68C22H24EG7QDWFA8RRFMBS"
+title = "Shift removal keeps order and lookups"
+statement = "Removing a key by shifting keeps every other entry in its original relative order, and each remaining key is still found at the position it now holds."
+scope = ["src/inner.rs", "src/map.rs"]
+severity = "high"
+rationale = "The docs promise shift removal preserves relative order (src/map.rs shift_remove docs); src/inner.rs rewrites every following position by hand in decrement_indices, and a drift returns another key's value. Existing quickcheck test tests/quick.rs shift_remove."
+kind = "proof"

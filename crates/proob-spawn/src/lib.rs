@@ -5,7 +5,11 @@
 //! a runner only as elements of that array (adapters place them after the
 //! end-of-options separator). The child gets no stdin (`/dev/null`), its
 //! stdout and stderr are captured in full, and it is killed when the timeout
-//! passes. Environment variables are inherited and `env` is added on top: a
+//! passes. On Unix the child leads its own process group, and the kill takes
+//! the whole group: a runner's own children (CBMC under `cargo kani`, a test
+//! binary under `cargo test`) would otherwise outlive it, keep its pipes open
+//! so the timeout never returns, and keep their memory. SIGINT, SIGTERM, or
+//! SIGHUP sent to proob kills every live group the same way before proob dies. Environment variables are inherited and `env` is added on top: a
 //! runner needs `PATH` and `HOME`, and the caller names what else it sets.
 //!
 //! Nothing here interprets output; callers parse it and fail closed when it is
@@ -72,6 +76,8 @@ pub fn run(
     let mut child = command(program, args, cwd, env)
         .spawn()
         .map_err(|e| SpawnError::Start { program: program.to_path_buf(), message: e.to_string() })?;
+    #[cfg(unix)]
+    let _live = group::Live::track(child.id());
     let stdout = drain_stdout(child.stdout.take());
     let stderr = drain_stderr(child.stderr.take());
     let status = child.wait_timeout(timeout).map_err(|e| io_error(program, &e.to_string()));
@@ -101,6 +107,8 @@ fn command(program: &Path, args: &[OsString], cwd: Option<&Path>, env: &[(OsStri
         command.current_dir(dir);
     }
     command.envs(env.iter().map(|(k, v)| (k.as_os_str(), v.as_os_str())));
+    #[cfg(unix)]
+    group::lead(&mut command);
     command
 }
 
@@ -137,6 +145,88 @@ fn io_error(program: &Path, message: &str) -> SpawnError {
 /// Kills and waits, so no zombie outlives the call. Errors here are moot: the
 /// caller already has the error it will report.
 fn reap(child: &mut Child) {
+    #[cfg(unix)]
+    group::kill(child.id());
     let _ = child.kill();
     let _ = child.wait();
+}
+
+#[cfg(unix)]
+mod group {
+    //! Each child leads a process group whose id is its pid. The live groups
+    //! sit in a fixed table of atomics, the only state a signal handler may
+    //! touch, so an interrupted proob can kill them before it dies.
+    use std::os::unix::process::CommandExt;
+    use std::process::Command;
+    use std::sync::Once;
+    use std::sync::atomic::{AtomicI32, Ordering};
+
+    /// A child beyond this many, or one spawned in the instant before it is
+    /// tracked, is killed at its timeout while proob lives, but outlives an
+    /// interrupted proob: it is outside the terminal's foreground group.
+    /// proob runs one child at a time today.
+    const SLOTS: usize = 64;
+    static LIVE: [AtomicI32; SLOTS] = [const { AtomicI32::new(0) }; SLOTS];
+    static HANDLERS: Once = Once::new();
+
+    pub fn lead(command: &mut Command) {
+        command.process_group(0);
+        HANDLERS.call_once(install);
+    }
+
+    /// Kills every process in the group `pid` leads.
+    pub fn kill(pid: u32) {
+        if let Ok(pgid) = i32::try_from(pid) {
+            // SAFETY: kill(2) with a negative pid signals that process group; no memory is touched.
+            unsafe { libc::kill(-pgid, libc::SIGKILL) };
+        }
+    }
+
+    /// A live group in the table, removed when dropped.
+    pub struct Live(Option<&'static AtomicI32>);
+
+    impl Live {
+        pub fn track(pid: u32) -> Live {
+            let pgid = i32::try_from(pid).unwrap_or(0);
+            Live(
+                LIVE.iter()
+                    .find(|s| pgid > 0 && s.compare_exchange(0, pgid, Ordering::SeqCst, Ordering::SeqCst).is_ok()),
+            )
+        }
+    }
+
+    impl Drop for Live {
+        fn drop(&mut self) {
+            if let Some(slot) = self.0 {
+                slot.store(0, Ordering::SeqCst);
+            }
+        }
+    }
+
+    fn install() {
+        for signal in [libc::SIGINT, libc::SIGTERM, libc::SIGHUP] {
+            // SAFETY: `on_signal` is async-signal-safe: atomic loads, kill(2), signal(2), raise(3).
+            let previous =
+                unsafe { libc::signal(signal, on_signal as extern "C" fn(libc::c_int) as libc::sighandler_t) };
+            if previous == libc::SIG_IGN {
+                // A signal the parent ignored (nohup) stays ignored.
+                unsafe { libc::signal(signal, libc::SIG_IGN) };
+            }
+        }
+    }
+
+    extern "C" fn on_signal(signal: libc::c_int) {
+        for slot in &LIVE {
+            let pgid = slot.load(Ordering::SeqCst);
+            if pgid > 0 {
+                // SAFETY: as in `kill`.
+                unsafe { libc::kill(-pgid, libc::SIGKILL) };
+            }
+        }
+        // SAFETY: restore the default action and re-raise, so proob dies of the signal as before.
+        unsafe {
+            libc::signal(signal, libc::SIG_DFL);
+            libc::raise(signal);
+        }
+    }
 }

@@ -19,7 +19,7 @@ members = [
   "sim",
 ]
 # Standalone fixture packages have their own lockfiles and target directories.
-exclude = ["tests/fixtures/rust-repo", "tests/fixtures/verus-crate"]
+exclude = ["tests/fixtures/rust-repo", "tests/fixtures/verus-crate", "tests/fixtures/kani-crate"]
 
 [workspace.package]
 version = "0.1.0"
@@ -46,6 +46,7 @@ toml = "1.1"
 proptest = "1.7"
 tempfile = "3"
 wait-timeout = "0.2"
+libc = "0.2"
 globset = { version = "0.4", default-features = false }
 # rustls only, with the ring provider: no OpenSSL anywhere in the binary.
 reqwest = { version = "0.13", default-features = false, features = ["blocking", "rustls-no-provider", "json", "query", "charset", "http2"] }

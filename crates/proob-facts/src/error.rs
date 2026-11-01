@@ -62,6 +62,8 @@ pub enum ConvertErrorKind {
         kind: &'static str,
         outcome: &'static str,
     },
+    /// A `verified` record carries neither or both of its measures.
+    ProofMeasure,
 }
 
 impl ConvertError {
@@ -105,6 +107,9 @@ impl fmt::Display for ConvertErrorKind {
             }
             ConvertErrorKind::Incoherent { kind, outcome } => {
                 write!(f, "outcome `{outcome}` is not one that `{kind}` evidence produces")
+            }
+            ConvertErrorKind::ProofMeasure => {
+                write!(f, "a `verified` outcome carries exactly one of `rlimit` (Verus) or `checks` (Kani)")
             }
         }
     }

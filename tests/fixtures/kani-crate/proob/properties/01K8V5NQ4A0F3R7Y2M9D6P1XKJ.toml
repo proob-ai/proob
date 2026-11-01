@@ -1,0 +1,7 @@
+id = "01K8V5NQ4A0F3R7Y2M9D6P1XKJ"
+title = "Clamping never lands below the lower bound"
+statement = "For ordered bounds, a clamped value is never below the lower bound."
+scope = ["src/lib.rs"]
+severity = "medium"
+rationale = "A Kani run case for the adapter's tests."
+kind = "proof"

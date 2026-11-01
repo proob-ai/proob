@@ -1,0 +1,7 @@
+id = "01M6870W31YZCHTXYBHVVEA1TG"
+title = "Map equality ignores order"
+statement = "Two maps are equal exactly when they hold the same key-value pairs, whatever their order."
+scope = ["src/map.rs"]
+severity = "medium"
+rationale = "PartialEq for maps (src/map.rs:1842-1857) compares lengths and then looks up each pair in the other map; callers rely on equality being order-blind and symmetric. tests/quick.rs equality."
+kind = "proof"

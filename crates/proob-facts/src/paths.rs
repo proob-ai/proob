@@ -13,6 +13,8 @@ pub const CACHE_DIR: &str = "proob/.cache";
 pub const RESULTS_DIR: &str = "proob/.cache/results";
 /// Where the evidence judge job writes `evidence.jsonl` for the template to upload.
 pub const EVIDENCE_DIR: &str = "proob/.cache/evidence";
+/// Where `init --kani` and `shadow open` record the Kani build probe's result.
+pub const KANI_PROBE: &str = "proob/.cache/kani-probe.toml";
 pub const GATE_WORKFLOW: &str = ".github/workflows/proob-gate.yml";
 pub const EVIDENCE_WORKFLOW: &str = ".github/workflows/proob-evidence.yml";
 /// Where GitHub looks for CODEOWNERS, in its own order of precedence.

@@ -1,10 +1,14 @@
 //! `proob init`: config with the detected adapters, both two-job workflows
 //! with matching setup steps, `fetch-depth: 0`, the action pin, the settings
 //! recommendation merged without clobbering, and an idempotent second run.
+//! `init --kani`: the Kani adapter, its pinned and cached install, the build
+//! probe, and what to add where proob's files already exist.
 mod common;
 
 use common::*;
+use proob_facts::config::Language;
 use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
 
 const FILES: [&str; 5] = [
     "proob/config.toml",
@@ -45,6 +49,8 @@ fn init_on_a_rust_repository_with_a_toolchain_file() {
     assert!(config.contains("runner = \"nextest\""));
     assert!(!config.contains("features"), "nothing about features without a sign of needing them");
     proob_facts::config::parse_config(&config).expect("the rendered config parses");
+    assert!(!config.contains("kani") && !out.stdout.contains("kani"), "Kani only with --kani");
+    assert!(!repo.root().join("proob/.cache/kani-probe.toml").exists(), "no probe without --kani");
 
     let gate = repo.read(".github/workflows/proob-gate.yml");
     let evidence = repo.read(".github/workflows/proob-evidence.yml");
@@ -58,6 +64,7 @@ fn init_on_a_rust_repository_with_a_toolchain_file() {
         assert!(wf.contains("rustup toolchain install"), "setup step for rust-toolchain.toml");
         assert!(wf.contains("cargo-nextest@"), "the adapter's tools are installed");
         assert!(!wf.contains("setup-python"), "no python setup for a rust repo");
+        assert!(!wf.contains("kani"), "no Kani install without --kani");
         assert!(wf.contains("  execute:\n    name: proob execute\n    runs-on: ubuntu-latest\n    # No token: this job runs repository code.\n    permissions: {}\n"));
         assert!(wf.contains("    needs: execute\n"));
         assert!(!wf.lines().any(|l| l.trim_end().ends_with(": write")), "no write permission anywhere:\n{wf}");
@@ -191,4 +198,201 @@ fn init_refuses_to_clobber_an_unreadable_settings_file() {
     assert_eq!(out.code, 2);
     assert!(out.stderr.contains(".claude/settings.json"), "{}", out.stderr);
     assert_eq!(repo.read(".claude/settings.json"), "{ not json");
+}
+
+// ---------------------------------------------------------------------------
+// --kani
+// ---------------------------------------------------------------------------
+
+const PROBE: &str = "proob/.cache/kani-probe.toml";
+
+fn rust_repo() -> TempRepo {
+    let repo = TempRepo::new();
+    repo.write("Cargo.toml", "[package]\nname = \"x\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[workspace]\n");
+    repo.write("src/lib.rs", "pub fn one() -> u8 {\n    1\n}\n");
+    repo.commit("start", NOW - DAY);
+    repo
+}
+
+/// The steps `init --kani` renders, as they appear in a workflow it writes.
+fn kani_steps(wf: &str) -> &str {
+    let start = wf.find("      - name: Cache Kani").expect("the Kani cache step");
+    let end = wf[start..].find("cargo kani setup\n").expect("the Kani install step") + "cargo kani setup\n".len();
+    &wf[start..start + end]
+}
+
+#[test]
+fn init_kani_writes_the_adapter_and_a_pinned_cached_install_in_both_workflows() {
+    let repo = rust_repo();
+    // The sandbox PATH holds only git: no Kani here, so the probe records why.
+    let out = run(repo.proob().args(["init", "--kani"]));
+    assert_eq!(out.code, 0, "{}", out.stderr);
+
+    let config = repo.read("proob/config.toml");
+    let parsed = proob_facts::config::parse_config(&config).expect("the rendered config parses");
+    let languages: Vec<Language> = parsed.adapters.iter().map(|a| a.language).collect();
+    assert_eq!(languages, vec![Language::Rust, Language::Kani], "{config}");
+    let kani = &parsed.adapters[1];
+    assert_eq!((kani.root.as_str(), kani.runner.as_str(), kani.mutation_tool.as_str()), (".", "kani", "cargo-mutants"));
+    assert_eq!(kani.max_mutants, None, "the adapter's default sample");
+
+    for wf in [repo.read(".github/workflows/proob-gate.yml"), repo.read(".github/workflows/proob-evidence.yml")] {
+        assert!(!wf.contains("@@"), "a placeholder survived:\n{wf}");
+        let steps = kani_steps(&wf);
+        assert!(wf.find("cargo-nextest@").expect("rust steps") < wf.find(steps).expect("kani steps"), "after cargo");
+        assert!(steps.contains("cargo install --locked kani-verifier --version 0.68.0 && cargo kani setup"), "{steps}");
+        assert!(steps.contains("key: kani-${{ runner.os }}-${{ runner.arch }}-0.68.0\n"), "{steps}");
+        assert!(steps.contains("            ~/.kani\n"), "{steps}");
+        assert!(steps.contains("            ~/.rustup/toolchains/nightly-2026-08-21-*\n"), "{steps}");
+        assert!(steps.contains("if: steps.kani-cache.outputs.cache-hit != 'true'"), "{steps}");
+        let cache = steps.lines().find(|l| l.contains("actions/cache@")).expect("the cache action");
+        let sha = cache.split('@').nth(1).and_then(|s| s.split_whitespace().next()).expect("sha");
+        assert_eq!(sha.len(), 40, "{cache}");
+        assert!(cache.contains("# v"), "version comment: {cache}");
+    }
+
+    let probe = repo.read(PROBE);
+    assert!(probe.starts_with("kani_probe = \"failed: the Kani toolchain was not found"), "{probe}");
+    assert!(
+        out.stdout.contains("kani probe (kept in proob/.cache/kani-probe.toml): failed: the Kani toolchain"),
+        "{}",
+        out.stdout
+    );
+    assert!(repo.read(".gitignore").contains("proob/.cache/"), "the probe is never committed");
+    assert!(!out.stdout.contains("exists and was kept"), "nothing to add by hand:\n{}", out.stdout);
+
+    let first = snapshot(&repo);
+    let again = run(repo.proob().args(["init", "--kani"]));
+    assert_eq!(again.code, 0, "{}", again.stderr);
+    assert_eq!(snapshot(&repo), first, "a second run changes no byte");
+    assert!(!again.stdout.contains("add this adapter block"), "the config has the adapter:\n{}", again.stdout);
+}
+
+#[test]
+fn init_kani_in_an_initialised_repository_keeps_the_files_and_prints_what_to_add() {
+    let repo = rust_repo();
+    assert_eq!(run(repo.proob().arg("init")).code, 0);
+    let before = snapshot(&repo);
+    let out = run(repo.proob().args(["init", "--kani"]));
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    assert_eq!(snapshot(&repo), before, "the team's files are kept");
+
+    // Exactly what a fresh `init --kani` writes.
+    let fresh = rust_repo();
+    assert_eq!(run(fresh.proob().args(["init", "--kani"])).code, 0);
+    let config = fresh.read("proob/config.toml");
+    let block = &config[config.find("[[adapters]]\n# Kani").expect("the Kani block")
+        ..config.find("\n# The gate policy").expect("policy")];
+    let steps = kani_steps(&fresh.read(".github/workflows/proob-gate.yml")).to_string();
+    assert_eq!(steps, kani_steps(&fresh.read(".github/workflows/proob-evidence.yml")));
+    assert!(
+        out.stdout
+            .contains(&format!("kani: proob/config.toml exists and was kept; add this adapter block:\n\n{block}")),
+        "{}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains(&format!(
+            "kani: .github/workflows/proob-gate.yml and .github/workflows/proob-evidence.yml exist and were kept; add these steps to each one's execute job, after the Rust setup steps:\n\n{steps}"
+        )),
+        "{}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains(&format!("must be {} or later", env!("CARGO_PKG_VERSION"))),
+        "the oldest proob that reads a Kani record:\n{}",
+        out.stdout
+    );
+    assert!(repo.read(PROBE).starts_with("kani_probe = "), "the probe ran here too");
+
+    let json = run(repo.proob().args(["init", "--kani", "--json"])).json();
+    assert_eq!(json["kani"]["to_add"].as_array().map(Vec::len), Some(3), "{json}");
+    assert_eq!(json["kani"]["min_proob_version"], env!("CARGO_PKG_VERSION"));
+}
+
+#[test]
+fn init_kani_needs_a_rust_crate() {
+    let repo = TempRepo::new();
+    repo.write("pyproject.toml", "[project]\nname = \"svc\"\n");
+    let out = run(repo.proob().args(["init", "--kani"]));
+    assert_eq!(out.code, 2);
+    assert!(out.stderr.contains("--kani needs a Rust crate"), "{}", out.stderr);
+    assert!(!repo.root().join("proob/config.toml").exists(), "nothing written");
+}
+
+// ---------------------------------------------------------------------------
+// The build probe, with the real Kani (skipped without it)
+// ---------------------------------------------------------------------------
+
+fn kani_fixture() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/kani-crate").canonicalize().expect("fixture")
+}
+
+fn copy_tree(from: &Path, to: &Path) {
+    for entry in std::fs::read_dir(from).expect("read_dir").filter_map(Result::ok) {
+        let name = entry.file_name();
+        if name == "target" || name == "proob" {
+            continue;
+        }
+        let (src, dst) = (entry.path(), to.join(&name));
+        if src.is_dir() {
+            std::fs::create_dir_all(&dst).expect("mkdir");
+            copy_tree(&src, &dst);
+        } else {
+            std::fs::copy(&src, &dst).expect("copy");
+        }
+    }
+}
+
+/// Whether the pinned toolchain resolves here; a note when it does not.
+/// `PROOB_REQUIRE_KANI` (CI's kani job) turns that skip into a failure.
+fn kani_present() -> bool {
+    use proob_adapters::kani::tools::{Resolution, resolve};
+    match resolve(&[]) {
+        Resolution::Ready(_) => true,
+        Resolution::Missing { reason, .. } => {
+            assert!(std::env::var_os("PROOB_REQUIRE_KANI").is_none(), "PROOB_REQUIRE_KANI is set but {reason}");
+            eprintln!("skipped: {reason}");
+            false
+        }
+    }
+}
+
+/// `init --kani` with the real PATH, building in the Kani fixture's target
+/// directory so dependencies build under Kani once per machine.
+fn probed(repo: &TempRepo) -> String {
+    let mut cmd = repo.proob();
+    cmd.env("PATH", std::env::var_os("PATH").expect("PATH")).env("CARGO_TARGET_DIR", kani_fixture().join("target"));
+    let out = run(cmd.args(["init", "--kani"]));
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    repo.read(PROBE)
+}
+
+#[test]
+fn the_build_probe_passes_on_the_kani_fixture_and_fails_on_a_crate_newer_than_kanis_nightly() {
+    if !kani_present() {
+        return;
+    }
+    let repo = TempRepo::new();
+    copy_tree(&kani_fixture(), repo.root());
+    repo.commit("the kani fixture", NOW - DAY);
+    let lib = repo.read("src/lib.rs");
+    assert_eq!(probed(&repo), "kani_probe = \"passed\"\n");
+    assert_eq!(repo.read("src/lib.rs"), lib, "the probe's harness goes in a copy, never the tree");
+    assert_eq!(
+        repo.git(&["status", "--porcelain", "--", "src", "Cargo.toml", "Cargo.lock"]),
+        "",
+        "the tree is untouched"
+    );
+
+    // A crate that asks for a compiler newer than Kani's nightly.
+    let newer = rust_repo();
+    newer.write(
+        "Cargo.toml",
+        &newer.read("Cargo.toml").replace("edition = \"2024\"\n", "edition = \"2024\"\nrust-version = \"1.999\"\n"),
+    );
+    newer.commit("needs rustc 1.999", NOW - DAY);
+    let probe = probed(&newer);
+    assert!(probe.starts_with("kani_probe = \"failed: the crate did not compile under Kani"), "{probe}");
+    assert!(probe.contains("is not supported by the following package"), "{probe}");
 }

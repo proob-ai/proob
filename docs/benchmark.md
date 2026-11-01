@@ -33,6 +33,8 @@ On well-known codebases ([target benchmark](../bench/results/targets-v1.md)): `/
 
 The Rust targets are incomplete in this version: mutation scoring ran every mutant one at a time, 35 to 40 minutes per indexmap property. Making it faster is the next iteration, after which they are rerun in full.
 
+The Kani route on indexmap ([Kani results](../bench/results/kani-v1.md)) is not yet practical on a laptop. Over two trials, 1 of 10 proposed proofs verified, within a bound of 3 entries. With a bound of 4, every harness ran past 30 minutes, and one CBMC process used up to 13 GB of memory. Both trials were stopped for memory. No run that did not finish was reported as passing.
+
 Every change to proob is measured against the previous version on the bug set's development half, and released only without a significant regression; the held-out half is reported at each release. Each catch also becomes a regression test that CI replays on every change, with no model involved ([method](../bench/README.md)).
 
 | Iteration | Change | Development half (6 bugs) | Held-out half (5 bugs) |

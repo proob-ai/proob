@@ -4,7 +4,7 @@ use proob_facts::config::{Adapter, Config, Language, OutcomeName, PolicyTable, W
 use proob_facts::convert::{self, GlobRule};
 use proob_facts::date::Date;
 use proob_facts::error::{ConvertError, ConvertErrorKind, ParseError};
-use proob_facts::evidence::{EvidenceKind, parse_evidence};
+use proob_facts::evidence::{EvidenceKind, OutcomeRecord, parse_evidence};
 use proob_facts::property::{PropertyFile, content_hash_of, normalise, parse_property};
 use proob_facts::ulid;
 use std::fs;
@@ -374,6 +374,45 @@ fn evidence_with_a_status_key_is_not_the_schema() {
     let text = fixture("evidence.json").replace("\"at\":", "\"status\": \"holds\",\n  \"at\":");
     match parse_evidence(&text).expect_err("unknown key") {
         ParseError::Schema(m) => assert!(m.contains("unknown field `status`"), "{m}"),
+        other => panic!("expected a schema error, got {other:?}"),
+    }
+}
+
+fn evidence_with_outcome(outcome: &str) -> String {
+    fixture("evidence.json").replace(r#"{ "result": "verified", "rlimit": 10 }"#, outcome)
+}
+
+#[test]
+fn a_verus_outcome_serialises_byte_identically() {
+    let record = parse_evidence(&fixture("evidence.json")).expect("parses");
+    assert_eq!(record.outcome, OutcomeRecord::Verified { rlimit: Some(10), checks: None });
+    assert_eq!(serde_json::to_string(&record.outcome).expect("encodes"), r#"{"result":"verified","rlimit":10}"#);
+}
+
+#[test]
+fn a_kani_outcome_parses_and_converts_to_verified() {
+    let record = parse_evidence(&evidence_with_outcome(r#"{"result":"verified","checks":42}"#)).expect("parses");
+    assert_eq!(record.outcome, OutcomeRecord::Verified { rlimit: None, checks: Some(42) });
+    let e = convert::evidence(&record).expect("converts");
+    assert_eq!(e.measured, Measured::Primary(Kind::Proof, PrimaryOutcome::Verified));
+}
+
+#[test]
+fn a_verified_outcome_without_one_measure_is_refused_naming_both() {
+    for outcome in [r#"{"result":"verified"}"#, r#"{"result":"verified","rlimit":10,"checks":42}"#] {
+        let record = parse_evidence(&evidence_with_outcome(outcome)).expect("parses");
+        let err = convert::evidence(&record).expect_err("no single measure");
+        assert_eq!(err, ConvertError::at("outcome", ConvertErrorKind::ProofMeasure));
+        let m = err.to_string();
+        assert!(m.contains("`rlimit`") && m.contains("`checks`"), "{m}");
+    }
+}
+
+#[test]
+fn a_verified_outcome_with_an_unknown_field_is_refused() {
+    let text = evidence_with_outcome(r#"{"result":"verified","rlimit":10,"steps":3}"#);
+    match parse_evidence(&text).expect_err("unknown field") {
+        ParseError::Schema(m) => assert!(m.contains("unknown field `steps`"), "{m}"),
         other => panic!("expected a schema error, got {other:?}"),
     }
 }

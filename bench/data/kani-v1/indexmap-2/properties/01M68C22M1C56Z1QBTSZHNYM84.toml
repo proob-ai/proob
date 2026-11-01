@@ -1,0 +1,7 @@
+id = "01M68C22M1C56Z1QBTSZHNYM84"
+title = "Equality ignores insertion order"
+statement = "Two maps compare equal exactly when they hold the same keys with equal values, whatever order the keys were inserted in."
+scope = ["src/map.rs"]
+severity = "medium"
+rationale = "The PartialEq impl in src/map.rs compares by lookup, not by position; the README says order is independent of the hash. Equality is an interface law callers rely on. Existing test tests/quick.rs equality."
+kind = "proof"

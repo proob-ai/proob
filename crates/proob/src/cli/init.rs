@@ -7,10 +7,17 @@
 //! recommendation merged into whatever is there; and `proob/.cache/` in
 //! `.gitignore`. Idempotent: a file that exists is kept as it is, the
 //! settings merge adds nothing twice, so a second run changes no byte.
+//!
+//! With `--kani` (a Rust repository only): the Kani adapter block, a pinned,
+//! cached Kani install in both workflows' setup steps, and the build probe,
+//! whose result is kept in `proob/.cache/kani-probe.toml`. A config or
+//! workflow that already exists is still kept; the block and steps it lacks
+//! are printed instead, with the oldest proob that reads a Kani record.
 use crate::cli::error::CliError;
 use crate::cli::workspace::Workspace;
-use proob_facts::config::{self, PolicyTable, defaults};
-use proob_facts::paths::{CACHE_DIR, CONFIG, EVIDENCE_WORKFLOW, GATE_WORKFLOW};
+use proob_adapters::kani::{self, KaniAdapter};
+use proob_facts::config::{self, Language, PolicyTable, defaults};
+use proob_facts::paths::{CACHE_DIR, CONFIG, EVIDENCE_WORKFLOW, GATE_WORKFLOW, KANI_PROBE};
 use serde::Serialize;
 use serde_json::{Map, Value};
 use std::path::Path;
@@ -42,6 +49,23 @@ pub enum Detected {
     TypeScript,
 }
 
+/// What `init` sets up beyond what it detects.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Options {
+    /// `--kani`: the Kani adapter, its install in both workflows, and the probe.
+    pub kani: Option<KaniSetup>,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct KaniSetup {
+    /// The adapter's `max_mutants` when not its default (the shadow's sample).
+    pub max_mutants: Option<u32>,
+}
+
+/// The oldest proob that reads a Kani `verified` record (one with `checks`):
+/// an older one fails to read every evidence record of the repository.
+pub const KANI_READER_VERSION: &str = env!("CARGO_PKG_VERSION");
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Change {
@@ -57,6 +81,18 @@ pub struct Outcome {
     pub files: Vec<(String, Change)>,
     pub action_pin: String,
     pub action_pinned_by_sha: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub kani: Option<KaniOutcome>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct KaniOutcome {
+    /// `passed` or `failed: <reason>`, as kept in `proob/.cache/kani-probe.toml`.
+    pub probe: String,
+    /// Files that existed and were kept without Kani: each path and the text to add.
+    pub to_add: Vec<(String, String)>,
+    /// `KANI_READER_VERSION`: the gate, the evidence workflow, and the local shim need it or later.
+    pub min_proob_version: String,
 }
 
 /// Adapters by the files at the repository root (monorepo detection is deferred).
@@ -134,6 +170,21 @@ fn adapter_block(d: Detected) -> String {
     }
 }
 
+/// The Kani adapter block; `max_mutants` only when it is not the default.
+pub fn kani_block(k: KaniSetup) -> String {
+    let sample = k.max_mutants.map_or(String::new(), |n| {
+        format!(
+            "# A smaller mutant sample than the default ({}), for a first look.\nmax_mutants = {n}\n",
+            kani::DEFAULT_MAX_MUTANTS
+        )
+    });
+    format!(
+        "[[adapters]]\n# Kani harnesses (#[kani::proof]) as proofs, each verified within its bounds.\nroot = \".\"\nlanguage = \"kani\"\nrunner = \"{}\"\nmutation_tool = \"{}\"\n{sample}",
+        kani::RUNNER,
+        kani::MUTATION_TOOL
+    )
+}
+
 fn outcome_name(o: config::OutcomeName) -> &'static str {
     match o {
         config::OutcomeName::Pass => "pass",
@@ -162,9 +213,11 @@ fn policy_block(p: PolicyTable) -> String {
     )
 }
 
-/// The config text: the built-in defaults, commented, with the detected adapters.
-pub fn config_text(detected: &[Detected]) -> String {
-    let adapters: String = detected.iter().map(|d| format!("\n{}", adapter_block(*d))).collect();
+/// The config text: the built-in defaults, commented, with the detected
+/// adapters and, when asked, Kani's.
+pub fn config_text(detected: &[Detected], opts: Options) -> String {
+    let adapters: String =
+        detected.iter().map(|d| adapter_block(*d)).chain(opts.kani.map(kani_block)).map(|b| format!("\n{b}")).collect();
     let adapters = if detected.is_empty() {
         "\n# No adapter detected (Cargo.toml, pyproject.toml, setup.py, requirements.txt).\n# Properties render Not checked (no adapter) until one is listed here.\n".to_string()
     } else {
@@ -233,6 +286,7 @@ pub fn config_text(detected: &[Detected]) -> String {
 const TAIKI_INSTALL_ACTION: &str = "taiki-e/install-action@1168f6810a3cb30a3514bf5756a3b7f0422c6df8 # v2.87.28";
 const RUST_TOOLCHAIN_ACTION: &str = "dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1";
 const SETUP_PYTHON_ACTION: &str = "actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0";
+const CACHE_ACTION: &str = "actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0";
 
 /// The Python adapter's tools as pip requirement arguments, from its one pin file.
 fn python_pins() -> String {
@@ -282,19 +336,40 @@ fn setup_steps(d: Detected) -> Vec<String> {
     }
 }
 
-fn all_setup_steps(detected: &[Detected]) -> String {
+/// Kani's install, at the version the adapter drives, cached on that pin with
+/// its bundle and nightly; after the Rust steps, which bring cargo.
+pub fn kani_steps() -> Vec<String> {
+    let pin = &*kani::tools::PIN;
+    vec![
+        format!("      - name: Cache Kani {} and its nightly", pin.version),
+        "        id: kani-cache".into(),
+        format!("        uses: {CACHE_ACTION}"),
+        "        with:".into(),
+        "          path: |".into(),
+        "            ~/.cargo/bin/cargo-kani".into(),
+        "            ~/.cargo/bin/kani".into(),
+        format!("            ~/{}", kani::tools::DEFAULT_HOME),
+        format!("            ~/.rustup/toolchains/{}-*", pin.nightly),
+        format!("          key: kani-${{{{ runner.os }}}}-${{{{ runner.arch }}}}-{}", pin.version),
+        format!("      - name: Install Kani {} (the release this proob drives; it refuses any other)", pin.version),
+        "        if: steps.kani-cache.outputs.cache-hit != 'true'".into(),
+        format!("        run: cargo install --locked kani-verifier --version {} && cargo kani setup", pin.version),
+    ]
+}
+
+fn all_setup_steps(detected: &[Detected], opts: Options) -> String {
     let lines: Vec<String> = if detected.is_empty() {
         vec!["      # No adapter detected: nothing to set up until proob/config.toml lists one.".into()]
     } else {
-        detected.iter().flat_map(|d| setup_steps(*d)).collect()
+        detected.iter().flat_map(|d| setup_steps(*d)).chain(opts.kani.into_iter().flat_map(|_| kani_steps())).collect()
     };
     lines.join("\n")
 }
 
 /// A template with its placeholders filled; no placeholder survives.
-pub fn render_workflow(template: &str, default_branch: &str, detected: &[Detected]) -> String {
+pub fn render_workflow(template: &str, default_branch: &str, detected: &[Detected], opts: Options) -> String {
     template
-        .replace("@@SETUP_STEPS@@", &all_setup_steps(detected))
+        .replace("@@SETUP_STEPS@@", &all_setup_steps(detected, opts))
         .replace("@@ACTION_PIN@@", ACTION_PIN)
         .replace("@@ACTION_PIN_COMMENT@@", ACTION_PIN_COMMENT)
         .replace("@@DEFAULT_BRANCH@@", default_branch)
@@ -394,31 +469,69 @@ fn gitignore(ws: &Workspace) -> Result<Change, CliError> {
     }
 }
 
-pub fn run(ws: &Workspace, default_branch: &str) -> Result<Outcome, CliError> {
+pub fn run(ws: &Workspace, default_branch: &str, opts: Options) -> Result<Outcome, CliError> {
     let detected = detect(&ws.root);
-    let config = config_text(&detected);
+    if opts.kani.is_some() && !detected.iter().any(|d| matches!(d, Detected::Rust { .. })) {
+        return Err(CliError::Usage("--kani needs a Rust crate: there is no Cargo.toml at the repository root".into()));
+    }
+    let config = config_text(&detected, opts);
     config::parse_config(&config)
         .map_err(|e| CliError::failed(format!("the rendered config does not parse: {e} (report this)")))?;
     let (settings, settings_change) = merged_settings(ws.read_optional(SETTINGS)?.as_deref())?;
+    // Read before writing: what a kept file lacks is printed, not written.
+    let to_add = match opts.kani {
+        Some(k) => kani_to_add(ws, k)?,
+        None => Vec::new(),
+    };
     let files = vec![
         (CONFIG.to_string(), write_new(ws, CONFIG, &config)?),
         (
             GATE_WORKFLOW.to_string(),
-            write_new(ws, GATE_WORKFLOW, &render_workflow(GATE_TEMPLATE, default_branch, &detected))?,
+            write_new(ws, GATE_WORKFLOW, &render_workflow(GATE_TEMPLATE, default_branch, &detected, opts))?,
         ),
         (
             EVIDENCE_WORKFLOW.to_string(),
-            write_new(ws, EVIDENCE_WORKFLOW, &render_workflow(EVIDENCE_TEMPLATE, default_branch, &detected))?,
+            write_new(ws, EVIDENCE_WORKFLOW, &render_workflow(EVIDENCE_TEMPLATE, default_branch, &detected, opts))?,
         ),
         (SETTINGS.to_string(), write_settings(ws, &settings, settings_change)?),
         (GITIGNORE.to_string(), gitignore(ws)?),
     ];
+    let kani = match opts.kani {
+        Some(_) => Some(KaniOutcome { probe: probe(ws)?, to_add, min_proob_version: KANI_READER_VERSION.to_string() }),
+        None => None,
+    };
     Ok(Outcome {
         detected,
         files,
         action_pin: format!("{ACTION_PIN} {ACTION_PIN_COMMENT}"),
         action_pinned_by_sha: ACTION_PIN_COMMENT.starts_with("# v"),
+        kani,
     })
+}
+
+/// The existing files that lack Kani, each with the exact text to add: the
+/// adapter block to a config without a kani adapter, the steps to a
+/// workflow without Kani's install.
+fn kani_to_add(ws: &Workspace, k: KaniSetup) -> Result<Vec<(String, String)>, CliError> {
+    let has_kani =
+        |text: &str| config::parse_config(text).is_ok_and(|c| c.adapters.iter().any(|a| a.language == Language::Kani));
+    let config_lacks = ws.read_optional(CONFIG)?.is_some_and(|text| !has_kani(&text));
+    let steps = kani_steps().join("\n") + "\n";
+    let mut out: Vec<(String, String)> =
+        config_lacks.then(|| (CONFIG.to_string(), kani_block(k))).into_iter().collect();
+    for wf in [GATE_WORKFLOW, EVIDENCE_WORKFLOW] {
+        if ws.read_optional(wf)?.is_some_and(|text| !text.contains("kani-verifier")) {
+            out.push((wf.to_string(), steps.clone()));
+        }
+    }
+    Ok(out)
+}
+
+/// Runs the build probe and keeps its line in `proob/.cache/kani-probe.toml`.
+fn probe(ws: &Workspace) -> Result<String, CliError> {
+    let result = kani::probe::run(&KaniAdapter::at("."), &ws.root);
+    write(ws, KANI_PROBE, &result.record())?;
+    Ok(result.line())
 }
 
 fn write_settings(ws: &Workspace, text: &str, change: Change) -> Result<Change, CliError> {
@@ -456,10 +569,36 @@ pub fn text(o: &Outcome) -> String {
     if !o.action_pinned_by_sha {
         out.push_str("note: this proob was built without a release commit; the workflows pin a version tag. Replace it with the release's commit SHA before relying on the gate.\n");
     }
+    if let Some(k) = &o.kani {
+        out.push_str(&kani_text(k));
+    }
     out.push_str(
         "next: review proob/config.toml, commit, and open the pull request; the gate takes effect after it merges.\n",
     );
     out
+}
+
+fn kani_text(k: &KaniOutcome) -> String {
+    let (config, workflows): (Vec<_>, Vec<_>) = k.to_add.iter().partition(|(path, _)| path == CONFIG);
+    let config = config
+        .iter()
+        .map(|(path, text)| format!("kani: {path} exists and was kept; add this adapter block:\n\n{text}\n"));
+    // Both workflows take the same steps: one listing names them together.
+    let paths: Vec<&str> = workflows.iter().map(|(path, _)| path.as_str()).collect();
+    let steps = workflows.first().map(|(_, text)| {
+        let (them, each) =
+            if paths.len() == 1 { ("exists and was kept", "its") } else { ("exist and were kept", "each one's") };
+        format!(
+            "kani: {} {them}; add these steps to {each} execute job, after the Rust setup steps:\n\n{text}\n",
+            paths.join(" and ")
+        )
+    });
+    let adds: String = config.chain(steps).collect();
+    format!(
+        "kani probe (kept in {KANI_PROBE}): {}\n{adds}kani: an older proob cannot read a Kani proof record and fails to read every record; the gate's and the evidence workflow's proob action and the local proob (the plugin's shim) must be {v} or later\n",
+        k.probe,
+        v = k.min_proob_version
+    )
 }
 
 #[cfg(test)]
@@ -480,5 +619,14 @@ mod tests {
             "only test targets"
         );
         assert!(!tests_require_features("[features]\ndefault = [\"std\"]\n"));
+    }
+
+    #[test]
+    fn the_shadows_kani_block_samples_fewer_mutants() {
+        let rust = Detected::Rust { toolchain_file: false, needs_features: false };
+        let opts = Options { kani: Some(KaniSetup { max_mutants: Some(10) }) };
+        let parsed = config::parse_config(&config_text(&[rust], opts)).expect("parses");
+        let kani = parsed.adapters.iter().find(|a| a.language == Language::Kani).expect("a kani adapter");
+        assert_eq!(kani.max_mutants, Some(10));
     }
 }

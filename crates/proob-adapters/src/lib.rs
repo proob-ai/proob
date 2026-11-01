@@ -17,12 +17,13 @@
 //! wrote, adapter-owned paths, or `argv::Checked` values that passed a
 //! closed grammar first (`argv.rs` is the one place both are built).
 //!
-//! The Rust adapter (`rust`), the Verus adapter (`verus`), and the Python
-//! adapter (`python`) are here; the TLA+ adapter (U12) takes the same trait,
+//! The Rust adapter (`rust`), the Verus adapter (`verus`), the Kani adapter
+//! (`kani`), and the Python adapter (`python`) are here; the TLA+ adapter (U12) takes the same trait,
 //! and until it exists `adapters_for` leaves its language out, so every
 //! property in such a repository renders `Not checked (no adapter)` rather
 //! than failing or faking.
 pub mod argv;
+pub mod kani;
 pub mod mutation;
 pub mod python;
 pub mod rust;
@@ -164,10 +165,10 @@ pub enum CheckOutcome {
         witness: Witness,
         replay: Seed,
     },
-    /// A proof: the verifier accepted the crate and the bound item under the
-    /// recorded SMT resource limit.
+    /// A proof: the verifier accepted the bound item; the measure says what
+    /// the acceptance was bounded by.
     Verified {
-        rlimit: u32,
+        measure: ProofMeasure,
     },
     /// A proof: the verifier rejected the crate; the diagnostics say where.
     ProofFailed {
@@ -176,6 +177,16 @@ pub enum CheckOutcome {
     Errored {
         reason: String,
     },
+}
+
+/// What bounds a proof, by verifier: closed, so a proof without one cannot be
+/// built.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProofMeasure {
+    /// Verus: the SMT resource limit the crate verified under.
+    Verus { rlimit: u32 },
+    /// Kani: the checks the harness passed, within its bounds.
+    Kani { checks: u32 },
 }
 
 /// Tool name and version, as the adapter probed them.
@@ -397,7 +408,7 @@ pub enum Availability {
 
 pub fn availability(language: Language) -> Availability {
     match language {
-        Language::Rust | Language::Verus | Language::Python => Availability::Available,
+        Language::Rust | Language::Verus | Language::Python | Language::Kani => Availability::Available,
         Language::Tla => Availability::Planned("U12"),
     }
 }
@@ -408,6 +419,7 @@ pub fn language_name(l: Language) -> &'static str {
         Language::Verus => "verus",
         Language::Python => "python",
         Language::Tla => "tla",
+        Language::Kani => "kani",
     }
 }
 
@@ -485,6 +497,7 @@ fn adapter_for(a: &AdapterConfig, witness: WitnessPolicy) -> Result<Option<Box<d
         Language::Python => {
             python::PythonAdapter::configured(a, root, witness).map(|p| Some(Box::new(p) as Box<dyn Adapter>))
         }
+        Language::Kani => kani::KaniAdapter::configured(a, root).map(|k| Some(Box::new(k) as Box<dyn Adapter>)),
         Language::Tla => Ok(None),
     }
 }

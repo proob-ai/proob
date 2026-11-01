@@ -1,6 +1,6 @@
 ---
 name: falsify
-description: Bind an approved property to one property-based test (proptest for Rust, Hypothesis for Python) in the team's own test layout, run it through proob with the adapter's seed and budget, and open a PR whose merge approves the check. Use when a property reads "Not checked (no check bound)", when the user asks to write, bind, or falsify a property test, or after /proob:declare has merged.
+description: Bind an approved property to one property-based test (proptest for Rust, Hypothesis for Python) in the team's own test layout, or a kind = "proof" Rust property to one Kani harness with its bounds traced to the statement, run it through proob, and open a PR whose merge approves the check. When Kani cannot take a property for a reason it names, land on a test and show the reviewer why. Use when a property reads "Not checked (no check bound)", when the user asks to write, bind, or falsify a property test, or after /proob:declare has merged.
 argument-hint: "[id ...|all]"
 allowed-tools: Read Grep Glob
 ---
@@ -10,7 +10,8 @@ allowed-tools: Read Grep Glob
 Arguments: `$ARGUMENTS` (one or more property ids, or `all`; nothing means every property no check binds).
 
 You write the check; the binary runs it; the team approves it. You never approve anything, never
-flip a status, and never make a test pass by weakening it or by editing the property it binds.
+flip a status, and never make a check pass by weakening it or by editing the property it binds.
+The one edit you may make to a property file is a Kani fallback's `kind` (step 5K).
 
 The binary is `"${CLAUDE_PLUGIN_ROOT}/scripts/proob"` (a shim that honours `PROOB_BIN`). Call it
 that way in every command below; if it prints a line starting `proob:` and exits 1, stop and show
@@ -33,8 +34,11 @@ the human that line. Every result from this session is a local run: proob's own 
   bindings. So decide bindings with `hash <id> --json`: `binding_hash: null` and an empty
   `binding_files` mean no check binds the property.
 - With no argument or `all`, take every property with `binding_hash: null` whose `kind` is absent
-  or `"test"`. A `kind = "proof"` property is `/proob:verify`'s proof route; a `kind = "model"`
-  property has no adapter in this release: name both and move on.
+  or `"test"`, and every `kind = "proof"` property whose scope is ordinary Rust when
+  `proob/config.toml` has an adapter with `language = "kani"`: that one gets a Kani harness
+  (step 3K). A `kind = "proof"` property on a crate under Verus, or with no kani adapter, is
+  `/proob:verify`'s proof route; a `kind = "model"` property has no adapter in this release: name
+  them and move on. Kani is Rust only: never write a harness, or claim a proof, for Python.
 - An explicit id that is already bound gets no second test: skip to step 4 and run its check.
 - If `proob/config.toml` lists no adapter for the repo's language, every property renders
   `Not checked (no adapter)`; say so and stop. Do not fake a check in another language.
@@ -71,6 +75,26 @@ vacuous example per language. The rules that hold in every language:
 - Assertion messages name the inputs and the observed value, so the shrunk witness reads on its
   own.
 
+## 3K. Or write one Kani harness
+
+For a `kind = "proof"` Rust property, read the Kani section of `conventions.md` first. The
+harness is a proof over every input it admits, and only those, so its bounds are what the team
+approves:
+
+- One `#[kani::proof]` fn in a `#[cfg(kani)]` module of the library or binary crate (under
+  `src/`, not `tests/`), with `// proob:<ULID>` directly above it.
+- Inputs from `kani::any()`. Every `kani::assume` is a precondition the statement states, and
+  you can quote the words it comes from. An assume the statement does not state narrows the
+  proof: avoid it, and when you cannot, say so in the PR's "Proved for" block.
+- A size bound (a slice length, a collection size) is a named constant with a comment saying why
+  that size; it narrows the proof too, and the "Proved for" block says so.
+- A `kani::cover!` for each boundary case the statement names (equal bounds, an empty input, the
+  value at a limit), so a harness that cannot reach the case fails as `vacuous` instead of
+  verifying nothing.
+- Assertions encode the statement, as a test's would. `#[kani::unwind(N)]` only when a loop needs
+  it, with N derived from the size bound. No stubs, no contracts (`proof_for_contract`), no
+  `#[kani::should_panic]`.
+
 ## 4. Run it
 
 ```
@@ -83,7 +107,8 @@ property`, `is already bound at`); fix the token, not the property. `run check` 
 the one bound test through the language runner with the adapter's seed and budget, prints one JSON
 line, and with `--record` appends the same line to `proob/.cache/results/results.jsonl` (an
 untracked file). Keep the line verbatim; quote from it rather than retyping numbers. Exit codes:
-0 passed, 1 counterexample, 2 errored or usage.
+0 passed or verified, 1 counterexample or proof failed, 2 errored or usage. A Kani run compiles
+the crate under Kani's own nightly and can take minutes.
 
 ## 5. Report the outcome, in proob's words
 
@@ -107,17 +132,64 @@ Quote the JSON `outcome` and `replay` fields. The wording per `outcome.result`:
 - `errored`: quote `outcome.reason`. A missing tool, a wrong toolchain, or a test that did not
   compile is an environment or syntax problem you may fix; the test's strength is not.
 
+For a Kani harness:
+
+- `verified` (with `checks`): "verified locally within the harness's bounds (`outcome.checks`
+  checks): unverified until the default-branch run". Never "proved", "proven", or "holds": the
+  property reaches `Holds` only after review approves the harness and its bounds and the
+  default-branch run records `verified` and a score at the floor.
+- `proof_failed`: Kani found an input that breaks the statement. It is a bug, reported exactly
+  as a counterexample above: quote `outcome.diagnostics` verbatim (the failed check and its
+  location), give the two exits, and stop; until an exit is taken the gate shows the property as
+  `Broken (proof failed on this PR)`. Never fall back to a test from it, even though a test
+  might pass and turn the PR green: a sampled test that misses the input hides a known failure.
+- `errored`: quote `outcome.reason`, then read its first words:
+
+| `outcome.reason` begins | What you do |
+|---|---|
+| "Kani cannot verify a construct this code reaches: …" | fall back (5K) |
+| "the harness's unwind bound is too small for a loop: …" | retry once with a larger `#[kani::unwind(N)]`; fall back (5K) if the retry's reason begins the same |
+| "Kani timed out …" | fall back (5K) |
+| "Kani ran out of memory" | fall back (5K) |
+| "vacuous: the harness cannot reach a case it covers: …" | fix the harness: an assume or a bound excludes a case the statement names. Never delete the cover |
+| "nothing was checked: …" | fix the harness: assert what the statement says |
+| "the crate did not compile under Kani: …" | fix the harness if your code is wrong; otherwise stop and quote it |
+| "harness not found: …" | fix the token's placement or the harness path |
+| "the Kani toolchain was not found …" | stop and quote it: the install is the human's |
+| anything else ("Kani could not decide …", "unrecognised Kani output: …") | stop and quote it |
+
+Never shrink a size bound or add an assume to get past an unwind failure, a timeout, or out of
+memory: that changes what is proved. One more fallback needs no run: a harness that cannot be
+written without a feature Kani does not support (name it, citing
+https://model-checking.github.io/kani/rust-feature-support.html).
+
+## 5K. Fall back to a test
+
+Only for the reasons above. In this order:
+
+1. Keep the harness's text and the `outcome.reason` line (and the retry's, for unwinding) for
+   the PR.
+2. Remove the harness and its token.
+3. In the property file change `kind = "proof"` to `kind = "test"`, and nothing else. This
+   re-opens the statement's approval: the reviewer approves the change of kind with the PR.
+4. Write a property-based test for the statement (step 3), run `validate` and `run check` (step
+   4), and report it (step 5).
+5. Fill the PR's "Fell back to a test" block (`pr-template.md`).
+
+After merge the property reads `Checked (tested)` at best.
+
 ## 6. Open the pull request
 
 In shadow (the file `.proob-shadow` exists at the root): skip branch, commit, push, and PR; print
 nothing about reviewers; the files stay in shadow.
 
-Branch `proob/falsify-<YYYY-MM-DD>`; commit only the test files (never anything under
-`proob/properties/`, never `proob/.cache/`). Use `gh pr create` with the body in `pr-template.md`
-in this directory: one row per binding with the statement, the check reference from the run's text
-output, the local result labelled unverified, and the binding set, plus the reviewer note that
-merging approves the check and its binding set. If the human asked for no PR, print the body
-instead.
+Branch `proob/falsify-<YYYY-MM-DD>`; commit only the test and harness files, plus a fallback's
+property file (never any other file under `proob/properties/`, never `proob/.cache/`). Use
+`gh pr create` with the body in `pr-template.md` in this directory: one row per binding with the
+statement, the check reference from the run's text output, the local result labelled unverified,
+and the binding set, plus the reviewer note that merging approves the check and its binding set;
+a "Proved for" block per Kani harness and a "Fell back to a test" block per fallback. If the
+human asked for no PR, print the body instead.
 
 ## The binding set, explained to the reviewer
 
@@ -130,6 +202,10 @@ and the property renders `Re-approve (check amended)` until a reviewer approves 
 the statement's own approval is untouched. Say this in the PR so nobody edits a strategy helper
 expecting nothing to move.
 
+For a Kani harness the binding set is the harness's file and the files its `#[cfg(kani)]` `mod`
+declarations reach, the package `Cargo.toml`, the workspace root `Cargo.toml`, and `Cargo.lock`;
+the code under proof is the property's scope, hashed with the statement.
+
 ## Words
 
 Verdicts are only: Holds, Checked, Not checked, Re-approve, Broken, Proposed, Waived until d, with
@@ -138,12 +214,18 @@ property you bound today is `Not checked` until the PR merges with an eligible r
 default-branch run produces evidence, then `Checked (tested, strength pending)` until a score run
 shows the test can fail, then `Checked (tested)`. That is as far as a test goes: it samples inputs
 and cannot prove, so `tested` is not a defect. `Holds` is the proof route's word, earned by a proof
-or a model on the default branch (`/proob:verify`), never yours for a local run.
+or a model on the default branch, never yours for a local run. A Kani-bound property is
+`Not checked` until the PR merges and the default-branch run records `verified`, then
+`Checked (strength pending)` until a score run at the floor, then `Holds` if the team approved
+it: `Holds` within the harness's bounds, the ones the "Proved for" block lists.
 
 ## Never
 
-- Edit a file under `proob/properties/`, or write a waiver.
+- Edit a file under `proob/properties/`, except a fallback's `kind` (step 5K), or write a waiver.
+- Fall back to a test from `proof_failed`, a missing toolchain, an ordinary compile error, or a
+  vacuous cover.
 - Weaken a test, narrow a generator, or skip a case to turn a counterexample into a pass.
 - Hard-code a seed, a case count, or a settings profile in a bound test.
 - Bind one property to two tests, or two properties to one test.
-- Say a property holds, is verified, or is approved because of anything that ran here.
+- Say a property holds, is proved, is verified, or is approved because of anything that ran
+  here; a Kani result is "verified locally within the harness's bounds", and nothing more.

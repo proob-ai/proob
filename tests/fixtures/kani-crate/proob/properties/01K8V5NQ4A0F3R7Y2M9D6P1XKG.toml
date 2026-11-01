@@ -1,0 +1,7 @@
+id = "01K8V5NQ4A0F3R7Y2M9D6P1XKG"
+title = "Clamping a value read through inline assembly stays in bounds"
+statement = "A clamped value read through assembly lies between the bounds."
+scope = ["src/lib.rs"]
+severity = "medium"
+rationale = "A Kani run case for the adapter's tests."
+kind = "proof"

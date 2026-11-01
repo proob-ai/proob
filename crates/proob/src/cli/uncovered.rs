@@ -48,7 +48,7 @@ pub struct Coverage<'a> {
 /// The file extensions an adapter's language is written in.
 fn extensions_of(language: Language) -> &'static [&'static str] {
     match language {
-        Language::Rust | Language::Verus => &["rs"],
+        Language::Rust | Language::Verus | Language::Kani => &["rs"],
         Language::Python => &["py"],
         Language::Tla => &[],
     }

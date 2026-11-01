@@ -1,0 +1,7 @@
+id = "01K8V5NQ4A0F3R7Y2M9D6P1XKE"
+title = "Clamping meets its contract"
+statement = "The function satisfies its contract."
+scope = ["src/lib.rs"]
+severity = "medium"
+rationale = "Callers rely on the clamped value to index a bounded table."
+kind = "proof"

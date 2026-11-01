@@ -22,6 +22,7 @@ use crate::cli::{Common, Exit, init};
 use clap::Subcommand;
 use git::{Step, line};
 use place::{MARKER, Place};
+use proob_adapters::kani::tools::Resolution;
 use proob_effects::git::{Git, Repo};
 use proob_facts::paths::RESULTS_DIR;
 use proob_facts::results::RESULTS_FILE;
@@ -199,7 +200,18 @@ fn prepare(place: &Place, fresh: &Path, user: &UserRepo) -> Result<(), CliError>
     place::write(&exclude, format!("{existing}{EXCLUDE}").as_bytes())?;
     place::write(&fresh.join(MARKER), place::marker_text(&place.repo).as_bytes())?;
     carry_over(place, fresh)?;
-    init::run(&Workspace::open(Some(fresh))?, &user.default_branch).map(drop)
+    init::run(&Workspace::open(Some(fresh))?, &user.default_branch, init_options(fresh)).map(drop)
+}
+
+/// Mutants a Kani score samples in the shadow: each is a full Kani run.
+pub const KANI_MAX_MUTANTS: u32 = 10;
+
+/// Kani, and its build probe, when the repository is a Rust one and the
+/// pinned `cargo kani` resolves here; never installed for a try.
+fn init_options(fresh: &Path) -> init::Options {
+    let rust = init::detect(fresh).iter().any(|d| matches!(d, init::Detected::Rust { .. }));
+    let kani = rust && matches!(proob_adapters::kani::tools::resolve(&[]), Resolution::Ready(_));
+    init::Options { kani: kani.then_some(init::KaniSetup { max_mutants: Some(KANI_MAX_MUTANTS) }) }
 }
 
 /// The overlay applied to the new clone, and the local results kept.

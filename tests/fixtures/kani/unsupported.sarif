@@ -1,0 +1,79 @@
+{
+  "version": "2.1.0",
+  "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "Kani",
+          "version": "0.68.0",
+          "informationUri": "https://github.com/model-checking/kani",
+          "rules": [
+            {
+              "id": "kani.cbmc.assertion",
+              "shortDescription": {
+                "text": "CBMC property `assertion`"
+              }
+            },
+            {
+              "id": "kani.cbmc.unsupported_construct",
+              "shortDescription": {
+                "text": "CBMC property `unsupported_construct`"
+              }
+            }
+          ]
+        }
+      },
+      "results": [
+        {
+          "ruleId": "kani.cbmc.unsupported_construct",
+          "level": "error",
+          "message": {
+            "text": "[verification::unsupported] TerminatorKind::InlineAsm is not currently supported by Kani. Please post your example at https://github.com/model-checking/kani/issues/2"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "src/lib.rs"
+                },
+                "region": {
+                  "startLine": 20,
+                  "startColumn": 71
+                }
+              }
+            }
+          ],
+          "properties": {
+            "harness": "verification::unsupported",
+            "propertyName": "verification::unsupported.unsupported_construct.1"
+          }
+        },
+        {
+          "ruleId": "kani.cbmc.assertion",
+          "level": "warning",
+          "message": {
+            "text": "[verification::unsupported] assertion failed: y == x"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "src/lib.rs"
+                },
+                "region": {
+                  "startLine": 20,
+                  "startColumn": 130
+                }
+              }
+            }
+          ],
+          "properties": {
+            "harness": "verification::unsupported",
+            "propertyName": "verification::unsupported.assertion.1"
+          }
+        }
+      ]
+    }
+  ]
+}

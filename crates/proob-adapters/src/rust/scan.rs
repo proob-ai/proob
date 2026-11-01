@@ -10,6 +10,10 @@
 //! `mod` frames, and reads token lines from the original text. A token is a
 //! comment-only line `// proob:<text>`; it binds the first `fn` that follows
 //! with only blank lines, comments, and attributes between.
+//!
+//! A `fn` marked `#[kani::proof]` or `#[kani::proof_for_contract(…)]`, bare
+//! or under `#[cfg_attr(kani, …)]`, is a Kani harness, even when it also
+//! carries `#[test]`: its token is Kani's, never the Rust adapter's.
 use crate::TokenProblem;
 use proob_facts::ulid;
 
@@ -17,6 +21,9 @@ use proob_facts::ulid;
 pub struct Scan {
     pub tokens: Vec<Token>,
     pub mods: Vec<ModDecl>,
+    /// The first and last lines of each outermost inline module under
+    /// `#[cfg(kani)]`: code only Kani compiles.
+    pub kani_spans: Vec<(usize, usize)>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -29,7 +36,26 @@ pub struct Token {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Bound {
     Test { id: u128, function: String, module_path: Vec<String> },
+    Kani { id: u128, harness: Kani, function: String, module_path: Vec<String> },
     Problem(TokenProblem),
+}
+
+/// The two Kani harness markers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Kani {
+    /// `kani::proof`.
+    Proof,
+    /// `kani::proof_for_contract(…)`.
+    Contract,
+}
+
+/// What a fn's attributes make it; a later variant wins over an earlier one.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord)]
+enum Marker {
+    #[default]
+    None,
+    Test,
+    Kani(Kani),
 }
 
 /// `mod name;` with the attributes and the inline modules around it.
@@ -38,6 +64,8 @@ pub struct ModDecl {
     pub name: String,
     pub path_attr: Option<String>,
     pub cfg_test: bool,
+    /// Under `#[cfg(kani)]`, on the declaration or an enclosing inline module.
+    pub cfg_kani: bool,
     pub module_path: Vec<String>,
     pub line: usize,
 }
@@ -237,15 +265,19 @@ fn blank_char_literal(chars: &[char], from: usize, out: &mut String) -> usize {
 #[derive(Debug, Default)]
 struct Frame {
     depth_at_open: usize,
+    /// The line of the `mod` item.
+    line: usize,
     name: String,
     cfg_test: bool,
+    cfg_kani: bool,
 }
 
 #[derive(Debug, Default)]
 struct Pending {
     token: Option<(usize, String)>,
-    has_test_attr: bool,
+    marker: Marker,
     cfg_test: bool,
+    cfg_kani: bool,
     path_attr: Option<String>,
 }
 
@@ -256,6 +288,7 @@ struct State {
     pending: Pending,
     tokens: Vec<Token>,
     mods: Vec<ModDecl>,
+    kani_spans: Vec<(usize, usize)>,
 }
 
 const TOKEN_PREFIX: &str = "proob:";
@@ -267,6 +300,10 @@ impl State {
 
     fn in_cfg_test(&self) -> bool {
         self.stack.iter().any(|f| f.cfg_test)
+    }
+
+    fn in_cfg_kani(&self) -> bool {
+        self.stack.iter().any(|f| f.cfg_kani)
     }
 
     fn line(&mut self, n: usize, orig: &str, masked: &str) {
@@ -304,12 +341,18 @@ impl State {
         let inner = masked.trim_start_matches("#[").trim_end_matches(']').trim();
         let name = inner.split(|c: char| c == '(' || c == '=' || c.is_whitespace()).next().unwrap_or("").trim();
         let last = name.rsplit("::").next().unwrap_or(name);
-        if name == "cfg" && cfg_names_test(inner) {
+        if name == "cfg" && cfg_names(inner, "test") {
             self.pending.cfg_test = true;
         }
-        if matches!(last, "test" | "proptest") {
-            self.pending.has_test_attr = true;
+        if name == "cfg" && cfg_names(inner, "kani") {
+            self.pending.cfg_kani = true;
         }
+        let marker = match kani_marker(name, inner) {
+            Some(kani) => Marker::Kani(kani),
+            None if matches!(last, "test" | "proptest") => Marker::Test,
+            None => Marker::None,
+        };
+        self.pending.marker = self.pending.marker.max(marker);
         if name == "path" {
             self.pending.path_attr = quoted(orig);
         }
@@ -322,6 +365,7 @@ impl State {
                 name: name.clone(),
                 path_attr: self.pending.path_attr.clone(),
                 cfg_test: self.pending.cfg_test || self.in_cfg_test(),
+                cfg_kani: self.pending.cfg_kani || self.in_cfg_kani(),
                 module_path: self.module_path(),
                 line: n,
             });
@@ -329,28 +373,37 @@ impl State {
         let function = fn_name(masked);
         self.flush_token(function.as_deref());
         let inline = match decl {
-            Some((name, ModShape::Inline)) => {
-                Some(Frame { depth_at_open: 0, name, cfg_test: self.pending.cfg_test || self.in_cfg_test() })
-            }
+            Some((name, ModShape::Inline)) => Some(Frame {
+                depth_at_open: 0,
+                line: n,
+                name,
+                cfg_test: self.pending.cfg_test || self.in_cfg_test(),
+                cfg_kani: self.pending.cfg_kani || self.in_cfg_kani(),
+            }),
             _ => None,
         };
         self.pending = Pending::default();
-        self.braces(masked, inline);
+        self.braces(n, masked, inline);
     }
 
     /// Resolves the pending token against the item that follows it.
     fn flush_token(&mut self, function: Option<&str>) {
         let Some((line, text)) = self.pending.token.take() else { return };
-        let bound = match (ulid::decode(&text), function, self.pending.has_test_attr) {
+        let bound = match (ulid::decode(&text), function, self.pending.marker) {
             (Err(error), _, _) => Bound::Problem(TokenProblem::NotUlid { text, error }),
             (Ok(_), None, _) => Bound::Problem(TokenProblem::NoFunction),
-            (Ok(_), Some(f), false) => Bound::Problem(TokenProblem::NotATest { function: f.to_string() }),
-            (Ok(id), Some(f), true) => Bound::Test { id, function: f.to_string(), module_path: self.module_path() },
+            (Ok(_), Some(f), Marker::None) => Bound::Problem(TokenProblem::NotATest { function: f.to_string() }),
+            (Ok(id), Some(f), Marker::Test) => {
+                Bound::Test { id, function: f.to_string(), module_path: self.module_path() }
+            }
+            (Ok(id), Some(f), Marker::Kani(harness)) => {
+                Bound::Kani { id, harness, function: f.to_string(), module_path: self.module_path() }
+            }
         };
         self.tokens.push(Token { line, bound });
     }
 
-    fn braces(&mut self, masked: &str, mut inline: Option<Frame>) {
+    fn braces(&mut self, n: usize, masked: &str, mut inline: Option<Frame>) {
         for c in masked.chars() {
             match c {
                 '{' => {
@@ -360,8 +413,12 @@ impl State {
                     }
                 }
                 '}' => {
-                    if self.stack.last().is_some_and(|f| f.depth_at_open == self.depth) {
-                        self.stack.pop();
+                    if self.stack.last().is_some_and(|f| f.depth_at_open == self.depth)
+                        && let Some(frame) = self.stack.pop()
+                        && frame.cfg_kani
+                        && !self.in_cfg_kani()
+                    {
+                        self.kani_spans.push((frame.line, n));
                     }
                     self.depth = self.depth.saturating_sub(1);
                 }
@@ -372,13 +429,45 @@ impl State {
 
     fn finish(mut self) -> Scan {
         self.flush_token(None);
-        Scan { tokens: self.tokens, mods: self.mods }
+        Scan { tokens: self.tokens, mods: self.mods, kani_spans: self.kani_spans }
     }
 }
 
 /// `test` as a whole word inside `cfg(...)`: `cfg(test)`, `cfg(all(test, unix))`.
-fn cfg_names_test(inner: &str) -> bool {
-    inner.split(|c: char| !(c.is_alphanumeric() || c == '_')).any(|w| w == "test")
+fn cfg_names(inner: &str, word: &str) -> bool {
+    inner.split(|c: char| !(c.is_alphanumeric() || c == '_')).any(|w| w == word)
+}
+
+/// The Kani harness marker an attribute carries: `kani::proof` or
+/// `kani::proof_for_contract(…)`, bare or among a `cfg_attr`'s attributes.
+fn kani_marker(name: &str, inner: &str) -> Option<Kani> {
+    let attrs = match name {
+        "cfg_attr" => top_level_items(inner.split_once('(')?.1.strip_suffix(')')?).into_iter().skip(1).collect(),
+        _ => vec![inner],
+    };
+    attrs.into_iter().find_map(|a| match a.split('(').next().unwrap_or("").trim() {
+        "kani::proof" => Some(Kani::Proof),
+        "kani::proof_for_contract" => Some(Kani::Contract),
+        _ => None,
+    })
+}
+
+/// `text` split at the commas outside any parentheses.
+fn top_level_items(text: &str) -> Vec<&str> {
+    let (mut items, mut depth, mut start) = (Vec::new(), 0usize, 0);
+    for (i, c) in text.char_indices() {
+        match c {
+            '(' => depth += 1,
+            ')' => depth = depth.saturating_sub(1),
+            ',' if depth == 0 => {
+                items.push(&text[start..i]);
+                start = i + 1;
+            }
+            _ => {}
+        }
+    }
+    items.push(&text[start..]);
+    items
 }
 
 fn quoted(orig: &str) -> Option<String> {
@@ -502,6 +591,64 @@ fn versioned() {}
         assert_eq!(names[2], ("renamed", false, Some("x/y.rs"), vec![]));
         assert_eq!(names[3], ("deeper", true, None, vec!["inner".to_string()]));
         assert_eq!(s.mods.len(), 4);
+    }
+
+    #[test]
+    fn cfg_kani_marks_a_mod_declaration_and_those_inside_an_inline_module() {
+        let s = scan("#[cfg(kani)]\nmod a;\n#[cfg(kani)]\nmod v {\n    mod b;\n}\nmod c;\n");
+        let kani: Vec<(&str, bool)> = s.mods.iter().map(|m| (m.name.as_str(), m.cfg_kani)).collect();
+        assert_eq!(kani, vec![("a", true), ("b", true), ("c", false)]);
+    }
+
+    #[test]
+    fn the_lines_of_each_outermost_cfg_kani_inline_module_are_kept() {
+        let s = scan(
+            "fn a() {}\n#[cfg(kani)]\nmod v {\n    mod w {\n        fn b() {}\n    }\n}\nmod c { fn d() {} }\n#[cfg(kani)]\nmod e { }\n",
+        );
+        assert_eq!(s.kani_spans, vec![(3, 7), (10, 10)]);
+    }
+
+    #[test]
+    fn kani_harnesses_are_recognised_anywhere_and_win_over_test() {
+        let text = r#"
+// proob:01K8V5NQ4A0F3R7Y2M9D6P1XHA
+#[kani::proof]
+#[kani::unwind(4)]
+fn bare() {}
+
+mod checks {
+    // proob:01K8V5NQ4A0F3R7Y2M9D6P1XHB
+    #[cfg_attr(kani, kani::proof, kani::unwind(4))]
+    fn gated() {}
+
+    // proob:01K8V5NQ4A0F3R7Y2M9D6P1XHC
+    #[test]
+    #[cfg_attr(kani, kani::proof)]
+    fn both() {}
+}
+
+// proob:01K8V5NQ4A0F3R7Y2M9D6P1XHD
+#[cfg_attr(kani, kani::proof_for_contract(crate::f))]
+fn contract() {}
+
+// proob:01K8V5NQ4A0F3R7Y2M9D6P1XHE
+#[cfg_attr(kani, kani::unwind(4))]
+fn unwound_only() {}
+"#;
+        let bound: Vec<Bound> = scan(text).tokens.into_iter().map(|t| t.bound).collect();
+        let kani = |b: &Bound| match b {
+            Bound::Kani { harness, function, module_path, .. } => {
+                Some((*harness, function.clone(), module_path.clone()))
+            }
+            _ => None,
+        };
+        assert_eq!(kani(&bound[0]), Some((Kani::Proof, "bare".into(), vec![])));
+        assert_eq!(kani(&bound[1]), Some((Kani::Proof, "gated".into(), vec!["checks".into()])));
+        assert_eq!(kani(&bound[2]), Some((Kani::Proof, "both".into(), vec!["checks".into()])));
+        assert_eq!(kani(&bound[3]), Some((Kani::Contract, "contract".into(), vec![])));
+        // Another Kani attribute alone does not make a harness.
+        assert!(matches!(&bound[4], Bound::Problem(TokenProblem::NotATest { function }) if function == "unwound_only"));
+        assert_eq!(bound.len(), 5);
     }
 
     #[test]

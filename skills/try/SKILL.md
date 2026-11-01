@@ -42,6 +42,10 @@ stop: the line names the fix. From here on, every command runs with `$work` as i
 directory (`cd "$work"` first, every time), and every file path you read or write is under
 `$work`.
 
+In a Rust repository `shadow open` sets Kani up only when the pinned `cargo kani` is already
+installed (it never installs it), and then runs Kani's build probe; its result is the
+`kani_probe` line in `$work/proob/.cache/kani-probe.toml`, which declare reads.
+
 ## 2. Sense, declare, falsify, in the shadow
 
 Read each skill's SKILL.md and follow it in `$work`, under the shadow rules above. They are
@@ -55,12 +59,16 @@ directory (and `verify` in step 4). Read the files rather than invoking the skil
    step 2) whatever its step 0 would pick: in a shadow there is no feature branch to review
    with, and `$ARGUMENTS` is a focus, not a requirement. Skip its step 6 (commit, PR).
    If `gh` cannot read past pull requests, skip the rejected-statements check without comment.
-   Run `"$proob" validate` in `$work` until it prints `proob validate: ok`.
+   Run `"$proob" validate` in `$work` until it prints `proob validate: ok`. With a Kani adapter
+   and a passed probe, declare marks Rust proposals `kind = "proof"`.
 3. **falsify**: one property-based test per proposal, in the team's own test layout under
    `$work`, each with its `proob:<ULID>` token. Run each with
    `"$proob" --shadow run check <id> --json`. A counterexample is a finding. Keep it, and never
    weaken the test or edit the property to make it pass. Skip its step 6 (pull request).
-   Run every property's check before any score.
+   A `kind = "proof"` proposal gets one Kani harness instead, under falsify's harness rules; a
+   Kani failure is a finding like a counterexample. When Kani cannot take a proposal for one of
+   falsify's fallback reasons, follow its fallback (the one property edit it allows) and keep the
+   reason line for the report. Run every property's check before any score.
 
 ## 3. Show the checks, before any score
 
@@ -76,9 +84,11 @@ The user sees what passed and what failed now, before the slower scores start.
 
 **verify**: for each property whose check passed, run `"$proob" --shadow run score <id> --json`
 once, so the report can say whether the test can fail. A score runs at most `max_mutants`
-mutants of the scope (default 30 for rust and python), a sample fixed by the property id; when it
-sampled, its JSON has `unsampled` > 0 and the report says how many were not run. Never call a
-sampled score exhaustive.
+mutants of the scope (default 30 for rust and python, 10 for a Kani harness in the shadow, since
+each mutant is a full Kani run), a sample fixed by the property id; when it sampled, its JSON has
+`unsampled` > 0 and the report says how many were not run. Never call a sampled score exhaustive.
+A Kani harness covers only the inputs its bounds admit: when you describe one in your own words,
+say "checks locally within the harness's bounds" and name the bounds.
 
 ## 5. Report
 
@@ -89,7 +99,7 @@ cd "$work" && "$proob" shadow report
 Show its terminal output verbatim, in a code block, and add nothing to it. Then say in one
 sentence what the next step to make it real is: step 0 when the report has one (fix the code or
 drop the failing property), otherwise `proob shadow adopt`, which puts everything on a new branch
-of their repository without switching their checkout. Before that sentence, if any property fails, list the failures that use realistic inputs first and those that fail only on an extreme input (see falsify's step 5) after them, each in one line; never drop either kind.
+of their repository without switching their checkout. Before that sentence, if any property fails, list the failures that use realistic inputs first and those that fail only on an extreme input (see falsify's step 5) after them, each in one line; never drop either kind. If any proposal fell back from Kani to a test, say which, quoting its reason line.
 
 For a summary in your own words, read `"$proob" shadow report --json` (also saved as
 `report.json` beside `$work`), schema_version 1:

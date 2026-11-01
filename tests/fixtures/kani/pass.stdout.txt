@@ -1,0 +1,83 @@
+Kani Rust Verifier 0.68.0 (cargo plugin)
+CBMC 6.11.0
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | #![feature(register_tool)]
+  |            ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+Checking harness verification::pass...
+CBMC 6.11.0 (cbmc-6.11.0)
+CBMC version 6.11.0 (cbmc-6.11.0) 64-bit arm64 macos
+Reading GOTO program from file <crate>/target/kani/aarch64-apple-darwin/debug/build/kani-capture/cad848e1a092af66/out/kani_capture-cad848e1a092af66__RNvNtCs21h8GYWxv5p_12kani_capture12verification4pass.out
+Generating GOTO Program
+Adding CPROVER library (arm64)
+Removal of function pointers and virtual functions
+Generic Property Instrumentation
+Running with 16 object bits, 48 offset bits (user-specified)
+Starting Bounded Model Checking
+Runtime Symex: 0.00273383s
+size of program expression: 264 steps
+slicing removed 122 assignments
+Generated 6 VCC(s), 6 remaining after simplification
+Runtime Postprocess Equation: 3.6666e-05s
+Passing problem to propositional reduction
+converting SSA
+Runtime Convert SSA: 0.000429417s
+Running propositional reduction
+Post-processing
+Runtime Post-process: 1.7917e-05s
+Solving with CaDiCaL 3.0.0
+340 variables, 686 clauses
+SAT checker: instance is SATISFIABLE
+Runtime Solver: 0.000102708s
+Runtime decision procedure: 0.000568042s
+Running propositional reduction
+Solving with CaDiCaL 3.0.0
+341 variables, 687 clauses
+SAT checker: instance is SATISFIABLE
+Runtime Solver: 3.7959e-05s
+Runtime decision procedure: 5.3708e-05s
+Running propositional reduction
+Solving with CaDiCaL 3.0.0
+342 variables, 688 clauses
+SAT checker: instance is SATISFIABLE
+Runtime Solver: 3.8959e-05s
+Runtime decision procedure: 5.2584e-05s
+Running propositional reduction
+Solving with CaDiCaL 3.0.0
+343 variables, 689 clauses
+SAT checker: instance is UNSATISFIABLE
+Runtime Solver: 0.000229625s
+Runtime decision procedure: 0.000241166s
+
+RESULTS:
+Check 1: verification::pass.assertion.1
+	 - Status: SUCCESS
+	 - Description: "assertion failed: r >= -10 && r <= 10"
+	 - Location: src/lib.rs:9:70 in function verification::pass
+
+Check 2: verification::pass.cover.1
+	 - Status: SATISFIED
+	 - Description: "cover condition: x < -10"
+	 - Location: src/lib.rs:9:100 in function verification::pass
+
+Check 3: verification::pass.cover.2
+	 - Status: SATISFIED
+	 - Description: "cover condition: x > 10"
+	 - Location: src/lib.rs:9:123 in function verification::pass
+
+
+SUMMARY:
+ ** 0 of 1 failed
+
+ ** 2 of 2 cover properties satisfied
+
+
+VERIFICATION:- SUCCESSFUL
+Verification Time: 0.01959996s
+
+Manual Harness Summary:
+Complete - 1 successfully verified harnesses, 0 failures, 1 total.

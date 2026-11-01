@@ -28,7 +28,7 @@
 use crate::argv::{Checked, Command};
 use crate::verus::tools::{Resolution, Toolchain, resolve};
 use crate::verus::{CheckRef, VerusAdapter, parse_check_ref};
-use crate::{AdapterError, Binding, Check, CheckOutcome, ToolVersions, WITNESS_CAP, cap, exit_text};
+use crate::{AdapterError, Binding, Check, CheckOutcome, ProofMeasure, ToolVersions, WITNESS_CAP, cap, exit_text};
 use proob_facts::parsers::verus::{Results, diagnostics, parse_output, summarise};
 use proob_spawn::Output;
 use std::ffi::OsString;
@@ -44,9 +44,14 @@ pub const PARTIAL_SUBDIR: &str = "verus-partial";
 pub const LOCK_FILE: &str = ".proob-adapter.lock";
 const NOT_FOUND_MARK: &str = "specified by --verify-function";
 
-/// `<target>/proob-verus`, absolute: `CARGO_TARGET_DIR` (the override's,
-/// else the process's) when set, else `<root>/target`.
+/// `<target>/proob-verus`, absolute.
 pub fn target_dir(root: &Path, tool_env: &[(OsString, OsString)]) -> Result<PathBuf, AdapterError> {
+    Ok(target_base(root, tool_env)?.join(TARGET_SUBDIR))
+}
+
+/// `<target>`, absolute: `CARGO_TARGET_DIR` (the override's, else the
+/// process's) when set, else `<root>/target`.
+pub fn target_base(root: &Path, tool_env: &[(OsString, OsString)]) -> Result<PathBuf, AdapterError> {
     let root =
         root.canonicalize().map_err(|e| AdapterError::Io { path: root.to_path_buf(), message: e.to_string() })?;
     let configured = tool_env
@@ -59,7 +64,7 @@ pub fn target_dir(root: &Path, tool_env: &[(OsString, OsString)]) -> Result<Path
         Some(t) => root.join(t),
         None => root.join("target"),
     };
-    Ok(base.join(TARGET_SUBDIR))
+    Ok(base)
 }
 
 /// The verus arguments every run forwards after `--`.
@@ -127,7 +132,7 @@ pub fn plan_clean(cargo: &Path, root: &Path, dir: &Path, r: &CheckRef) -> Comman
 /// build there, so the tag is written here too; its signature is the one
 /// cargo checks (https://bford.info/cachedir/).
 pub const CACHEDIR_TAG: &str = "CACHEDIR.TAG";
-const CACHEDIR_TAG_TEXT: &str = "Signature: 8a477f597d28d172789f06886806bc55\n# This file is a cache directory tag created by proob's Verus adapter.\n# For information about cache directory tags see https://bford.info/cachedir/\n";
+const CACHEDIR_TAG_TEXT: &str = "Signature: 8a477f597d28d172789f06886806bc55\n# This file is a cache directory tag created by proob's adapters.\n# For information about cache directory tags see https://bford.info/cachedir/\n";
 
 /// An exclusive lock on the build directory, held while a clean and the run
 /// that follows it happen; released when dropped. Creating the directory
@@ -242,7 +247,7 @@ fn attribute(
     clean(root, &partial_dir(target), r, env);
     match plan_item(tc, root, target, r, adapter.rlimit(), ITEM_TIMEOUT).envs(env).run() {
         Ok(out) => match judge(&out) {
-            Judged::Verified => CheckOutcome::Verified { rlimit: adapter.rlimit() },
+            Judged::Verified => CheckOutcome::Verified { measure: ProofMeasure::Verus { rlimit: adapter.rlimit() } },
             Judged::Rejected(diagnostics) | Judged::VirError(diagnostics) => CheckOutcome::ProofFailed { diagnostics },
             Judged::Aborted(text) => CheckOutcome::Errored {
                 reason: format!("cargo verus focus stopped before `{item}` was judged: {text}"),

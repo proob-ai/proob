@@ -1,0 +1,7 @@
+id = "01K8V5NQ4A0F3R7Y2M9D6P1XKM"
+title = "Clamping into 0..=10 indexes an eleven-entry table"
+statement = "A value clamped into 0..=10 lies between 0 and 10."
+scope = ["src/lib.rs"]
+severity = "medium"
+rationale = "A Kani score case for the adapter's tests: only Rust's bounds check looks at the result."
+kind = "proof"

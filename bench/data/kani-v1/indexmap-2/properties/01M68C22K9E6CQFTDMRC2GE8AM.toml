@@ -1,0 +1,7 @@
+id = "01M68C22K9E6CQFTDMRC2GE8AM"
+title = "Reverse keeps lookups consistent"
+statement = "Reversing a map reverses its iteration order, and every key is still found at its new position."
+scope = ["src/inner.rs", "src/map.rs"]
+severity = "medium"
+rationale = "src/inner.rs reverse recomputes every stored position arithmetically instead of rebuilding the table; an off-by-one there makes every lookup wrong. Existing test tests/quick.rs reverse."
+kind = "proof"

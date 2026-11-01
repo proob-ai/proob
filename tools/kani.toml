@@ -1,0 +1,7 @@
+# The Kani release the kani adapter drives, and the nightly it compiles with.
+# `crates/proob-adapters/src/kani/tools.rs` embeds this file: a different
+# `cargo kani --version` is refused, because the output the parser in
+# `crates/proob-facts/src/parsers/kani.rs` reads is this release's. Bump both
+# together, in their own reviewed PR, and recapture tests/fixtures/kani/.
+version = "0.68.0"
+nightly = "nightly-2026-08-21"

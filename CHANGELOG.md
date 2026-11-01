@@ -10,6 +10,12 @@ version as a comment.
 
 ### Fixed
 
+- A runner that timed out is killed with everything it started. Before,
+  only the direct child was killed: a grandchild that held its output open
+  (CBMC under `cargo kani`, a test binary under `cargo test`) kept running,
+  so the timeout never returned and the grandchild kept its memory. On Unix
+  each runner now leads its own process group, and a timeout, or SIGINT,
+  SIGTERM, or SIGHUP sent to proob, kills the whole group.
 - The shadow report no longer shows a property as passing when a later run
   with another seed passed after a counterexample on the same code and
   test; the counterexample is reported.
@@ -35,9 +41,28 @@ version as a comment.
   quick start; the full usage guide and benchmark tables moved to
   `docs/guide.md` and `docs/benchmark.md`. The README's GIF is recorded by
   `tools/demo/record.sh`.
+- **Breaking for older readers:** a proof's evidence record (`verified`)
+  gains an optional `checks` field for Kani, beside Verus's `rlimit`; a
+  record carries exactly one of them, and a Verus record is unchanged on the
+  wire. A proob older than this release cannot read a Kani `verified` record
+  and fails the whole retrieval, so once a repository uses Kani the gate, the
+  evidence workflow, and the local shim must run this release or newer.
 
 ### Added
 
+- Proofs on ordinary Rust with Kani 0.68.0: a `kani` adapter binds a
+  `#[kani::proof]` harness as a `proof`, so a property on plain Rust code
+  can reach `Holds` with no proof language. A run that verifies is reported
+  within the harness's bounds; a counterexample is `Broken`; anything Kani
+  cannot complete is errored with its reason, never positive, and so is a
+  harness whose own assertions are unreachable or absent. Strength is
+  measured by mutation under Kani, where only a failed assertion of the
+  harness's own is a kill. `proob init --kani` opts a repository in (the
+  adapter, a pinned and cached Kani install in both workflows, and a build
+  probe); `/proob:declare` proposes proofs when the probe passed, and
+  `/proob:falsify` writes the harness, lists its bounds in the pull request,
+  and falls back to a property-based test, quoting Kani's reason, only when
+  Kani cannot take the property. CI runs the real Kani route in its own job.
 - Contributor standards: `CONTRIBUTING.md` (one `master` branch with
   releases as tags, Conventional Commits, the core and detection rules, adapters,
   releases), `CODE_OF_CONDUCT.md` (Contributor Covenant 2.1), `SECURITY.md`,

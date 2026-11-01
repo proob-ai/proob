@@ -1,0 +1,7 @@
+id = "01K8V5NQ4A0F3R7Y2M9D6P1XKF"
+title = "Clamping is the identity (planted failure)"
+statement = "Every value is left unchanged by clamping."
+scope = ["src/lib.rs"]
+severity = "medium"
+rationale = "A Kani run case for the adapter's tests."
+kind = "proof"

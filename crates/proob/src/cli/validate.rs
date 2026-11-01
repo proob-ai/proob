@@ -163,7 +163,15 @@ fn check_bindings(
                             ));
                         }
                         Some(d) if b.kind == Kind::Proof && d.kind.map(convert::kind) != Some(Kind::Proof) => {
-                            problems.push(Problem::at(&d.path, None, format!("bound to a verus! item at {}, so its primary evidence is a proof: add `kind = \"proof\"`", b.token)));
+                            problems.push(Problem::at(
+                                &d.path,
+                                None,
+                                format!(
+                                    "bound to {} at {}, so its primary evidence is a proof: add `kind = \"proof\"`",
+                                    proof_item(adapter.language()),
+                                    b.token
+                                ),
+                            ));
                         }
                         Some(_) => {}
                     }
@@ -193,12 +201,21 @@ fn check_bindings(
         .filter_map(|a| {
             let root = a.root.trim_start_matches("./").trim_end_matches('/').to_string();
             match a.language {
-                Language::Rust | Language::Verus => Some((".rs", root)),
+                Language::Rust | Language::Verus | Language::Kani => Some((".rs", root)),
                 Language::Python => Some((".py", root)),
                 Language::Tla => None,
             }
         })
         .collect()
+}
+
+/// What a proof is bound to, by the language of the adapter that bound it.
+pub fn proof_item(l: Language) -> &'static str {
+    match l {
+        Language::Kani => "a Kani harness",
+        Language::Verus => "a verus! item",
+        Language::Rust | Language::Python | Language::Tla => "a proof",
+    }
 }
 
 const TOKEN_PREFIX: &str = "proob:";
