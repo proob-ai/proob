@@ -1,0 +1,27 @@
+TLC2 Version 2.19 of 08 August 2024 (rev: 5a47802)
+Running breadth-first search Model-Checking with fp 0 and seed 0 with 1 worker on 12 cores with 7282MB heap and 64MB offheap memory [pid: 1] (Mac OS X 26.5.2 aarch64, Homebrew 25 x86_64, MSBDiskFPSet, DiskStateQueue).
+Parsing file /tmp/proob-tlc/Mutex.tla
+Parsing file /tmp/java/Naturals.tla
+Parsing file /tmp/proob-tlc/Bounds.tla
+Semantic processing of module Naturals
+Semantic processing of module Bounds
+Semantic processing of module Mutex
+Starting... (2026-11-02 00:24:44)
+Implied-temporal checking--satisfiability problem has 1 branches.
+Computing initial states...
+Finished computing initial states: 1 distinct state generated at 2026-11-02 00:24:44.
+Progress(7) at 2026-11-02 00:24:44: 15 states generated, 10 distinct states found, 0 states left on queue.
+Checking temporal properties for the complete state space with 10 total distinct states at (2026-11-02 00:24:44)
+Error: Temporal properties were violated.
+
+Error: The following behavior constitutes a counter-example:
+
+State 1: <Initial predicate>
+/\ lock = FALSE
+/\ pc = (p1 :> "idle" @@ p2 :> "idle")
+/\ count = 0
+
+State 2: Stuttering
+Finished checking temporal properties in 00s at 2026-11-02 00:24:44
+15 states generated, 10 distinct states found, 0 states left on queue.
+Finished in 00s at (2026-11-02 00:24:44)

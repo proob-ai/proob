@@ -88,19 +88,25 @@ fn read(path: &Path) -> Result<String, AdapterError> {
 
 /// Every `.py` file under `root`, root-relative, sorted by path.
 pub fn python_files(root: &Path) -> Result<Vec<PathBuf>, AdapterError> {
+    files_with(root, "py")
+}
+
+/// Every file with `extension` under `root` outside the skipped
+/// directories, root-relative, sorted by path.
+pub fn files_with(root: &Path, extension: &str) -> Result<Vec<PathBuf>, AdapterError> {
     let mut out = Vec::new();
-    walk(root, root, &mut out)?;
+    walk(root, root, extension, &mut out)?;
     out.sort();
     Ok(out)
 }
 
-fn walk(root: &Path, dir: &Path, out: &mut Vec<PathBuf>) -> Result<(), AdapterError> {
+fn walk(root: &Path, dir: &Path, extension: &str, out: &mut Vec<PathBuf>) -> Result<(), AdapterError> {
     for path in entries(dir)? {
         if path.is_dir() {
             if !skip_dir(&path) {
-                walk(root, &path, out)?;
+                walk(root, &path, extension, out)?;
             }
-        } else if path.extension().is_some_and(|e| e == "py") {
+        } else if path.extension().is_some_and(|e| e == extension) {
             out.push(path.strip_prefix(root).map(Path::to_path_buf).unwrap_or(path));
         }
     }

@@ -50,7 +50,7 @@ fn extensions_of(language: Language) -> &'static [&'static str] {
     match language {
         Language::Rust | Language::Verus | Language::Kani => &["rs"],
         Language::Python => &["py"],
-        Language::Tla => &[],
+        Language::Tla => &["tla"],
     }
 }
 
@@ -192,7 +192,7 @@ mod tests {
             bindings: BTreeSet::new(),
             ignore: &i,
         };
-        assert!(uncovered(&changes, &tla).is_empty(), "no adapter, no language, nothing to list");
+        assert!(uncovered(&changes, &tla).is_empty(), "a TLA+ adapter lists only .tla files");
     }
 
     #[test]

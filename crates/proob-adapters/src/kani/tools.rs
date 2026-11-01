@@ -106,7 +106,7 @@ pub fn bundle_dir(tool_env: &[(OsString, OsString)]) -> Option<PathBuf> {
 }
 
 /// The override's value, else the process's.
-fn var(tool_env: &[(OsString, OsString)], key: &str) -> Option<OsString> {
+pub(crate) fn var(tool_env: &[(OsString, OsString)], key: &str) -> Option<OsString> {
     tool_env.iter().find(|(k, _)| k == key).map(|(_, v)| v.clone()).or_else(|| std::env::var_os(key))
 }
 

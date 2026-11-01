@@ -547,3 +547,74 @@ fn real_kani_records_under_a_team_approval_hold_and_a_counterexample_is_broken()
     assert_eq!(rows[KB]["word"], "Holds", "{}", rows[KB]);
     assert_eq!(rows[KF]["word"], "Broken", "{}", rows[KF]);
 }
+
+// ---------------------------------------------------------------------------
+// TLA+ models: the TLA+ fixture through the CLI
+// ---------------------------------------------------------------------------
+
+/// `MutualExclusion`: holds.
+const TA: &str = "01K8V5NQ4A0F3R7Y2M9D6P1XTA";
+
+/// The Mutex spec with a `tla` adapter and its three properties as models
+/// over a stand-in source file, committed; discovery needs no TLC.
+fn tla_repo() -> TempRepo {
+    let repo = TempRepo::new();
+    copy_tree(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/tla-spec"), repo.root());
+    repo.write("src/lock.rs", "pub fn acquire() {}\n");
+    repo.write(
+        "proob/config.toml",
+        "schema_version = 1\nallow_self_signed = true\n\n[[adapters]]\nroot = \".\"\nlanguage = \"tla\"\nrunner = \"tlc\"\nmutation_tool = \"spec-mutants\"\n\n[policy]\nholds = \"pass\"\nchecked = \"pass\"\nproposed = \"pass\"\nwaived = \"pass\"\nnot_checked_within_grace = \"pass\"\nnot_checked_after_grace = \"warn\"\nre_approve = \"warn\"\nbroken_affected = \"block\"\nbroken_unaffected = \"pass\"\n",
+    );
+    let models = [
+        (TA, "One process holds the lock"),
+        ("01K8V5NQ4A0F3R7Y2M9D6P1XTB", "The counter stays below two"),
+        ("01K8V5NQ4A0F3R7Y2M9D6P1XTC", "Someone enters"),
+    ];
+    for (id, title) in models {
+        repo.write(
+            &property_path(id),
+            &format!(
+                "id = \"{id}\"\ntitle = \"{title}\"\nstatement = \"{title}.\"\nscope = [\"src/lock.rs\"]\nseverity = \"medium\"\nrationale = \"The lock's design.\"\nkind = \"model\"\n"
+            ),
+        );
+    }
+    repo.commit("the tla fixture", NOW - 10 * DAY);
+    repo
+}
+
+#[test]
+fn validate_and_run_want_kind_model_on_a_tla_binding() {
+    let repo = tla_repo();
+    let out = run(repo.proob().arg("validate"));
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+
+    repo.write(&property_path(TA), &repo.read(&property_path(TA)).replace("kind = \"model\"", "kind = \"test\""));
+    let out = run(repo.proob().arg("validate"));
+    assert_eq!(out.code, 1, "{}", out.stdout);
+    assert!(
+        out.stdout.contains(&format!("{}: bound to a TLA+ definition at Mutex.tla:30", property_path(TA)))
+            && out.stdout.contains("set `kind = \"model\"`"),
+        "{}",
+        out.stdout
+    );
+    let out = run(repo.proob().args(["run", "check", TA]));
+    assert_eq!(out.code, 2);
+    assert!(out.stderr.contains("kind = test but the bound check at Mutex.tla:30 is a model"), "{}", out.stderr);
+}
+
+/// With TLC here (`PROOB_TLA2TOOLS`), the holding invariant runs to `no_violation`.
+#[test]
+fn run_check_on_a_holding_model_records_no_violation() {
+    let Some(jar) = std::env::var_os("PROOB_TLA2TOOLS") else {
+        eprintln!("skipped: PROOB_TLA2TOOLS is not set");
+        return;
+    };
+    let repo = tla_repo();
+    let mut cmd = repo.proob();
+    cmd.env("PATH", std::env::var_os("PATH").expect("PATH")).env("PROOB_TLA2TOOLS", jar);
+    let out = run(cmd.args(["run", "check", TA, "--json"]));
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    let record = out.json();
+    assert_eq!(record["kind"], "model", "{record}");
+    assert_eq!(record["outcome"]["result"], "no_violation", "{record}");
+}

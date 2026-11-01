@@ -110,6 +110,32 @@ Kani runs on Linux and macOS, not Windows. It downloads CBMC, whose BSD-style li
 
 Kani is heavy. On indexmap, one CBMC process used 6 to 13 GB of memory per harness, and a harness over maps of 4 entries ran past the adapter's 30-minute limit ([Kani results](../bench/results/kani-v1.md)). proob does not yet check free memory before a run or cap CBMC's memory, so run one Kani job at a time on a machine with memory to spare, and keep harness bounds small.
 
+### Models of a design (TLA+)
+
+For a protocol, a retry loop, or a state machine, a property can be a model: an invariant or temporal property of a TLA+ spec, checked by TLC. Opt in once:
+
+```sh
+proob init --tla
+```
+
+It adds the TLA+ adapter to `proob/config.toml` (`language = "tla"`, `runner = "tlc"`, `mutation_tool = "spec-mutants"`). TLC runs on Java 11 or later, from the `tla2tools.jar` that `PROOB_TLA2TOOLS` names. proob never looks for the jar anywhere else: with the variable unset, or naming no file, or with no `java` on `PATH`, a check is errored and says how to set it. The workflows `proob init` writes do not install TLC yet; add a step to each execute job that provides Java and the jar and sets `PROOB_TLA2TOOLS`.
+
+A model property declares `kind = "model"` and binds one definition. Write `\* proob:<ULID>` on the line directly above the invariant or property it checks, a definition without parameters at the start of a line (`MutualExclusion == …`), in a `.tla` module whose `.cfg` sits beside it with the same base name. The binding set is the module, its `.cfg`, and every module beside it that it reaches through `EXTENDS` or `INSTANCE`; standard modules such as `Naturals` live in the jar, whose TLC release each result records. `proob validate` rejects a TLA+ token on a property of another kind.
+
+`proob run check` copies those modules into a temporary directory and runs TLC there with one worker, a fixed fingerprint and seed, and a cfg that keeps the original's specification, constants, symmetry, constraints, and `CHECK_DEADLOCK`, but checks only the bound name: as a `PROPERTY` when the cfg lists it under `PROPERTY`, else as an `INVARIANT`. Nothing is written into the repository. TLC's output decides, not its exit code: no violation needs TLC's "No error has been found" after exploring every reachable state; a violation reports the error trace's first and last states; a deadlock (unless the cfg says `CHECK_DEADLOCK FALSE`), a parse or semantic error, a timeout (30 minutes), running out of memory, and anything proob does not recognise are errored, never a pass.
+
+`Holds` on a model means: the approved spec, model-checked by TLC over the approved constants, satisfies the approved property, and mutating the spec shows the property can fail. It is a claim about the design, not about the code. The constants in the `.cfg` are the bounds of that claim, so approving the pull request approves them, as approving a Kani harness approves its bounds.
+
+Strength is measured on the spec, not the code (`tla-spec-mutants-v1`). proob changes the definitions the cfg's `NEXT` or `SPECIFICATION` reaches, never the bound property, the initial predicate, or the cfg: `=` and `#` swapped where nothing is assigned, `<` and `<=`, `>` and `>=`, `+ 1` and `- 1`, one conjunct of a `/\` list dropped, `TRUE` and `FALSE`. A mutant that violates the bound property is killed; one TLC passes survived; one that runs out of time or memory is a timeout; one that does not parse, or deadlocks, says nothing about the property and is excluded. The unmutated spec must pass first, or nothing is scored.
+
+Code that moves away from its spec flags the spec for re-approval: an approved model property whose scope has commits since approval reads `Re-approve (spec drifted: n commits to the modelled scope)`. Drift is file-granular and over-approximate. It cannot miss a change to the scope, and it cannot tell a refactor from a change of behaviour. No method checks that arbitrary code conforms to a TLA+ spec, so proob does not claim one.
+
+What a model does not cover:
+
+- the code: TLC checks the spec, and whether the code follows it is the reviewer's judgement, renewed on every drift;
+- states beyond the constants in the `.cfg`;
+- definitions written other than at the start of a line, such as infix operators: they are never mutated.
+
 ### CLI
 
 The skills drive the `proob` binary, which you can also run directly:
@@ -184,5 +210,5 @@ For a proof, strength is measured by mutation under proof: proob changes the cod
 - GitHub disables scheduled workflows on a public repository after 60 days without activity. When the nightly run stops, scores go stale: `Holds` drops to `Checked (strength pending)`, and `Checked (tested)` to `Checked (tested, strength pending)`.
 - mutmut needs `os.fork`, so Python checks are scored on Linux and macOS only.
 - A Kani proof holds only within its harness's bounds, and Kani cannot run on Windows (see [Proofs on ordinary Rust](#proofs-on-ordinary-rust-kani)).
-- TLA+ is not supported yet.
-- Every runner proob starts (a test runner, Verus, Kani and CBMC) is held to a memory budget: once its process group's resident memory passes `PROOB_MEMORY_LIMIT_MB` megabytes, proob kills the group. The default is half the machine's physical memory; `0` turns the budget off. A run stopped for memory is reported as errored with the limit it passed, and a mutant stopped for memory counts as a timeout, never killed or survived. A score, or a Kani check, does not start when the volume it builds on has under 2 GB free.
+- A TLA+ model holds for its spec over the constants in its `.cfg`, not for the code; a change to the modelled code only flags the spec for re-approval (see [Models of a design](#models-of-a-design-tla)). Alloy is not supported yet.
+- Every runner proob starts (a test runner, Verus, Kani and CBMC, TLC) is held to a memory budget: once its process group's resident memory passes `PROOB_MEMORY_LIMIT_MB` megabytes, proob kills the group. The default is half the machine's physical memory; `0` turns the budget off. A run stopped for memory is reported as errored with the limit it passed, and a mutant stopped for memory counts as a timeout, never killed or survived. A score, or a Kani check, does not start when the volume it builds on has under 2 GB free.

@@ -116,6 +116,9 @@ enum Command {
         /// Also set up Kani: its adapter, a pinned and cached install in both workflows, and the build probe.
         #[arg(long)]
         kani: bool,
+        /// Also set up the TLA+ adapter (TLC); TLC itself is not installed.
+        #[arg(long)]
+        tla: bool,
     },
     /// Try proob in a private copy of this repository; nothing in the repository changes until you adopt.
     Shadow {
@@ -212,7 +215,9 @@ fn dispatch(common: &Common, command: Command) -> Result<Exit, CliError> {
         Command::Run { what, id, budget, seed, record } => {
             cmd_run(common, what, &id, run::Options { budget, seed, record, json: common.json })
         }
-        Command::Init { kani } => cmd_init(common, init::Options { kani: kani.then_some(init::KaniSetup::default()) }),
+        Command::Init { kani, tla } => {
+            cmd_init(common, init::Options { kani: kani.then_some(init::KaniSetup::default()), tla })
+        }
         Command::Shadow { cmd } => shadow::run(common, cmd),
         Command::Hook { .. } => Ok(Exit::Pass),
         Command::Action { mode, job } => action::run(common, mode, job),
