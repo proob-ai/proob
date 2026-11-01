@@ -4,6 +4,7 @@
 pub mod action;
 pub mod adapters;
 pub mod backend;
+pub mod doctor;
 pub mod error;
 pub mod hash;
 pub mod init;
@@ -120,6 +121,8 @@ enum Command {
         #[arg(long)]
         tla: bool,
     },
+    /// Whether this machine has the tools each configured adapter runs, and the room to run them; installs nothing.
+    Doctor,
     /// Try proob in a private copy of this repository; nothing in the repository changes until you adopt.
     Shadow {
         #[command(subcommand)]
@@ -218,6 +221,7 @@ fn dispatch(common: &Common, command: Command) -> Result<Exit, CliError> {
         Command::Init { kani, tla } => {
             cmd_init(common, init::Options { kani: kani.then_some(init::KaniSetup::default()), tla })
         }
+        Command::Doctor => cmd_doctor(common),
         Command::Shadow { cmd } => shadow::run(common, cmd),
         Command::Hook { .. } => Ok(Exit::Pass),
         Command::Action { mode, job } => action::run(common, mode, job),
@@ -366,6 +370,17 @@ fn cmd_validate(common: &Common) -> Result<Exit, CliError> {
         println!("proob validate: {} problem{}", problems.len(), vocab::plural(problems.len() as u64));
     }
     Ok(if ok { Exit::Pass } else { Exit::Block })
+}
+
+fn cmd_doctor(common: &Common) -> Result<Exit, CliError> {
+    let ws = Workspace::open(common.repo.as_deref())?;
+    let report = doctor::run(&ws.root, &ws.load_config()?.candidate())?;
+    if common.json {
+        println!("{}", serde_json::to_string_pretty(&report).unwrap_or_default());
+    } else {
+        print!("{}", doctor::text(&report));
+    }
+    Ok(if report.ok { Exit::Pass } else { Exit::Block })
 }
 
 fn cmd_hash(common: &Common, id: &str) -> Result<Exit, CliError> {

@@ -10,9 +10,26 @@ use crate::kani::tools::var;
 use crate::rust::tools::find_on_path;
 use std::ffi::OsString;
 use std::path::PathBuf;
+use std::sync::LazyLock;
 use std::time::Duration;
 
 pub const JAR_ENV: &str = "PROOB_TLA2TOOLS";
+/// `tools/tla.toml`: the one place the TLA+ release, its URL, and its SHA-256 are written.
+pub const PIN_TEXT: &str = include_str!("../../../../tools/tla.toml");
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Pin {
+    pub version: String,
+    pub url: String,
+    pub sha256: String,
+}
+
+/// The embedded pin; `tools/tla.toml` is checked by this module's tests.
+pub static PIN: LazyLock<Pin> = LazyLock::new(|| {
+    let table: toml::Table = PIN_TEXT.parse().expect("tools/tla.toml is TOML");
+    let field = |key: &str| table.get(key).and_then(toml::Value::as_str).expect("tools/tla.toml names it").to_string();
+    Pin { version: field("version"), url: field("url"), sha256: field("sha256") }
+});
 const PROBE_TIMEOUT: Duration = Duration::from_secs(60);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -36,7 +53,10 @@ pub enum Resolution {
 /// phrase "TLC was not found".
 pub fn hint(detail: &str) -> String {
     format!(
-        "TLC was not found ({detail}): download tla2tools.jar from a TLA+ release (https://github.com/tlaplus/tlaplus/releases) and set {JAR_ENV} to its path; proob never guesses where it is"
+        "TLC was not found ({detail}): download tla2tools.jar of TLA+ {v} ({url}, sha256 {sha}) and set {JAR_ENV} to its path; proob never guesses where it is",
+        v = PIN.version,
+        url = PIN.url,
+        sha = PIN.sha256
     )
 }
 
@@ -81,6 +101,13 @@ pub fn version_of(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_pin_names_a_release_a_url_and_a_digest() {
+        assert!(PIN.url.ends_with(&format!("/v{}/tla2tools.jar", PIN.version)), "{:?}", *PIN);
+        assert!(PIN.sha256.len() == 64 && PIN.sha256.bytes().all(|b| b.is_ascii_hexdigit()), "{:?}", *PIN);
+        assert!(hint("x").contains(&PIN.sha256));
+    }
 
     #[test]
     fn java_version_lines() {

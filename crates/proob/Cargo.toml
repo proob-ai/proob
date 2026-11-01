@@ -20,6 +20,7 @@ proob-core.workspace = true
 proob-facts.workspace = true
 proob-effects.workspace = true
 proob-adapters.workspace = true
+proob-spawn.workspace = true
 clap.workspace = true
 serde.workspace = true
 serde_json.workspace = true

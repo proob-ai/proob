@@ -74,7 +74,8 @@ pub mod tools;
 use crate::argv::{Checked, Command};
 use crate::mutation::{self, Limits};
 use crate::{
-    Adapter, AdapterError, Binding, Budget, Check, Language, RegistryError, Score, Seed, Uncovered, WitnessPolicy,
+    Adapter, AdapterError, Binding, Budget, Check, Language, Readiness, RegistryError, Score, Seed, Uncovered,
+    WitnessPolicy,
 };
 use proob_facts::config::Adapter as AdapterConfig;
 use std::ffi::OsString;
@@ -236,6 +237,13 @@ pub fn parse_check_ref(text: &str) -> Result<CheckRef, AdapterError> {
 impl Adapter for RustAdapter {
     fn language(&self) -> Language {
         Language::Rust
+    }
+
+    fn readiness(&self, repo: &Path) -> Readiness {
+        match tools::resolve(&self.root_in(repo), &[tools::Need::Nextest, tools::Need::Mutants], self.tool_env()) {
+            tools::Resolution::Ready(t) => Readiness::Ready(t.versions),
+            tools::Resolution::Missing { reason, versions } => Readiness::Missing { reason, versions },
+        }
     }
 
     fn discover(&self, repo: &Path) -> Result<Vec<Binding>, AdapterError> {

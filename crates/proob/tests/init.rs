@@ -205,7 +205,7 @@ fn init_refuses_to_clobber_an_unreadable_settings_file() {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn init_tla_writes_the_adapter_and_says_how_to_provide_tlc() {
+fn init_tla_writes_the_adapter_and_installs_the_pinned_tlc_in_both_workflows() {
     let repo = TempRepo::new();
     repo.write("specs/Mutex.tla", "---- MODULE Mutex ----\n====\n");
     repo.commit("start", NOW - DAY);
@@ -215,7 +215,15 @@ fn init_tla_writes_the_adapter_and_says_how_to_provide_tlc() {
     let languages: Vec<Language> = parsed.adapters.iter().map(|a| a.language).collect();
     assert_eq!(languages, vec![Language::Tla]);
     assert!(out.stdout.contains("PROOB_TLA2TOOLS"), "{}", out.stdout);
-    assert!(repo.read(".github/workflows/proob-evidence.yml").contains("PROOB_TLA2TOOLS"));
+    let pin = &*proob_adapters::tla::tools::PIN;
+    for wf in [".github/workflows/proob-gate.yml", ".github/workflows/proob-evidence.yml"] {
+        let text = repo.read(wf);
+        assert!(
+            text.contains(&pin.url) && text.contains(&format!("echo \"{}  $jar\" | sha256sum -c -", pin.sha256)),
+            "{text}"
+        );
+        assert!(text.contains("echo \"PROOB_TLA2TOOLS=$jar\" >> \"$GITHUB_ENV\""), "{text}");
+    }
 
     // A config that exists is kept; the block it lacks is printed.
     let repo = TempRepo::new();
@@ -229,6 +237,50 @@ fn init_tla_writes_the_adapter_and_says_how_to_provide_tlc() {
         out.stdout
     );
     assert!(!repo.read("proob/config.toml").contains("language = \"tla\""));
+    // So are the workflows; the steps they lack are printed.
+    assert!(
+        out.stdout
+            .contains("tla: .github/workflows/proob-gate.yml exists and was kept; add these steps to its execute job:"),
+        "{}",
+        out.stdout
+    );
+    assert!(!repo.read(".github/workflows/proob-gate.yml").contains("PROOB_TLA2TOOLS"));
+}
+
+#[test]
+fn doctor_after_init_tla_names_the_pinned_tlc_and_finds_it_once_set() {
+    let repo = TempRepo::new();
+    repo.write("specs/Mutex.tla", "---- MODULE Mutex ----\n====\n");
+    repo.commit("start", NOW - DAY);
+    assert_eq!(run(repo.proob().args(["init", "--tla"])).code, 0);
+    let out = run(repo.proob().args(["doctor", "--json"]).env_remove("PROOB_TLA2TOOLS"));
+    assert_eq!(out.code, 1, "{}", out.stderr);
+    let v: serde_json::Value = serde_json::from_str(&out.stdout).expect("json");
+    assert_eq!(v["ok"], false);
+    assert_eq!(
+        (v["adapters"][0]["language"].as_str(), v["adapters"][0]["ready"].as_bool()),
+        (Some("tla"), Some(false))
+    );
+    let reason = v["adapters"][0]["reason"].as_str().expect("a reason");
+    assert!(
+        reason.starts_with("TLC was not found") && reason.contains(&proob_adapters::tla::tools::PIN.sha256),
+        "{reason}"
+    );
+
+    // With the pinned jar set (the ci workflow's tlc job; skipped where TLC does not resolve).
+    use proob_adapters::tla::tools::{Resolution, resolve};
+    match resolve(&[]) {
+        Resolution::Ready(_) => {
+            // The harness narrows PATH; TLC needs the java this test found.
+            let out = run(repo.proob().arg("doctor").env("PATH", std::env::var_os("PATH").unwrap_or_default()));
+            assert_eq!(out.code, 0, "{}", out.stdout);
+            assert!(out.stdout.starts_with("tla at .: ready (java "), "{}", out.stdout);
+        }
+        Resolution::Missing { reason, .. } if std::env::var("PROOB_REQUIRE_TLC").as_deref() == Ok("1") => {
+            panic!("PROOB_REQUIRE_TLC=1 but TLC does not resolve: {reason}")
+        }
+        Resolution::Missing { reason, .. } => eprintln!("skipped: {reason}"),
+    }
 }
 
 // ---------------------------------------------------------------------------

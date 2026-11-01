@@ -186,8 +186,9 @@ fn group_kib(ps: &str, pgid: u32) -> u64 {
     ps.lines().filter_map(row).filter(|(g, _)| *g == u64::from(pgid)).map(|(_, kib)| kib).sum()
 }
 
-/// The budget in bytes: the variable when set, else half the physical memory.
-fn memory_budget() -> Option<u64> {
+/// The budget in bytes: the variable when set, else half the physical memory;
+/// `None` when there is none (`0`, or no physical-memory probe here).
+pub fn memory_budget() -> Option<u64> {
     static PHYSICAL: OnceLock<Option<u64>> = OnceLock::new();
     budget(std::env::var(MEMORY_LIMIT_VAR).ok().as_deref(), *PHYSICAL.get_or_init(physical_memory))
 }

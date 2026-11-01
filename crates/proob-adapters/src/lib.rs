@@ -200,6 +200,15 @@ pub enum ProofMeasure {
 /// Tool name and version, as the adapter probed them.
 pub type ToolVersions = Vec<(String, String)>;
 
+/// Whether an adapter's check and score can start on this machine (`proob doctor`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Readiness {
+    /// Every tool found, at a version the adapter accepts.
+    Ready(ToolVersions),
+    /// The first tool missing or refused, with how to install it, and what was learnt before it.
+    Missing { reason: String, versions: ToolVersions },
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Check {
     pub outcome: CheckOutcome,
@@ -411,6 +420,8 @@ pub trait Adapter {
     fn uncovered(&self, _repo: &Path) -> Result<Vec<Uncovered>, AdapterError> {
         Ok(Vec::new())
     }
+    /// The tools `check` and `score` need, located and version-probed; nothing is installed.
+    fn readiness(&self, repo: &Path) -> Readiness;
 }
 
 // ---------------------------------------------------------------------------
@@ -497,7 +508,8 @@ pub fn adapters_for(config: &Config) -> Result<Vec<Box<dyn Adapter>>, RegistryEr
     config.adapters.iter().filter_map(|a| adapter_for(a, config.witness.into()).transpose()).collect()
 }
 
-fn adapter_for(a: &AdapterConfig, witness: WitnessPolicy) -> Result<Option<Box<dyn Adapter>>, RegistryError> {
+/// One `[[adapters]]` entry's adapter; `None` when this proob has none for its language.
+pub fn adapter_for(a: &AdapterConfig, witness: WitnessPolicy) -> Result<Option<Box<dyn Adapter>>, RegistryError> {
     let root = argv::Checked::path(Path::new(&a.root))
         .map_err(|rule| RegistryError::UnsafeRoot { root: a.root.clone(), rule })?;
     if a.language != Language::Rust && a.sets_cargo_features() {

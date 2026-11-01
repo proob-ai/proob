@@ -75,7 +75,9 @@ pub mod tools;
 
 use crate::argv::Checked;
 use crate::mutation::{self, Limits};
-use crate::{Adapter, AdapterError, Binding, Budget, Check, Language, RegistryError, Score, Seed, WitnessPolicy};
+use crate::{
+    Adapter, AdapterError, Binding, Budget, Check, Language, Readiness, RegistryError, Score, Seed, WitnessPolicy,
+};
 use proob_facts::config::Adapter as AdapterConfig;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -212,6 +214,13 @@ pub fn last(text: &str, max: usize) -> String {
 impl Adapter for PythonAdapter {
     fn language(&self) -> Language {
         Language::Python
+    }
+
+    fn readiness(&self, repo: &Path) -> Readiness {
+        match tools::resolve(&self.root_in(repo), &[tools::Need::Pytest, tools::Need::Mutmut], self.tool_env()) {
+            tools::Resolution::Ready(t) => Readiness::Ready(t.versions),
+            tools::Resolution::Missing { reason, versions } => Readiness::Missing { reason, versions },
+        }
     }
 
     fn discover(&self, repo: &Path) -> Result<Vec<Binding>, AdapterError> {

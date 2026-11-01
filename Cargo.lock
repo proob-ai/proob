@@ -958,6 +958,7 @@ dependencies = [
  "proob-core",
  "proob-effects",
  "proob-facts",
+ "proob-spawn",
  "serde",
  "serde_json",
  "sha2",

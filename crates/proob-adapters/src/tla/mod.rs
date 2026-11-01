@@ -46,7 +46,7 @@ pub mod score;
 pub mod tools;
 
 use crate::argv::Checked;
-use crate::{Adapter, AdapterError, Binding, Budget, Check, Language, RegistryError, Score, Seed};
+use crate::{Adapter, AdapterError, Binding, Budget, Check, Language, Readiness, RegistryError, Score, Seed};
 use proob_facts::config::Adapter as AdapterConfig;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -158,6 +158,13 @@ pub fn parse_check_ref(text: &str) -> Result<CheckRef, AdapterError> {
 impl Adapter for TlaAdapter {
     fn language(&self) -> Language {
         Language::Tla
+    }
+
+    fn readiness(&self, _repo: &Path) -> Readiness {
+        match tools::resolve(self.tool_env()) {
+            tools::Resolution::Ready(t) => Readiness::Ready(t.versions),
+            tools::Resolution::Missing { reason, versions } => Readiness::Missing { reason, versions },
+        }
     }
 
     fn discover(&self, repo: &Path) -> Result<Vec<Binding>, AdapterError> {
