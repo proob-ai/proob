@@ -174,6 +174,96 @@ verification::clamp_stays_within_bounds`; `run check` prints it in its text outp
 Binding set: the harness's file and the files its `#[cfg(kani)]` `mod` declarations reach, the
 package `Cargo.toml`, the workspace root `Cargo.toml` when there is a workspace, and `Cargo.lock`.
 
+## TLA+: a model, for a `kind = "model"` property
+
+A line `\* proob:<ULID>` holding only the token, directly above the definition it binds: an
+invariant or temporal property with no parameters, written at the start of a line
+(`MutualExclusion == …`), in a `.tla` module under `proob/specs/` with a `.cfg` of the same
+base name beside it. A token above an operator with parameters, a `VARIABLE` line, or nothing
+is a token problem `validate` names. The property must say `kind = "model"`, and
+`proob/config.toml` must carry an adapter with `language = "tla"` (`proob init --tla`).
+
+Correct (after `tests/fixtures/tla-spec/Mutex.tla`, statement "Two clients are never inside
+their critical sections at the same time", scope the lock server and its client):
+
+```tla
+---- MODULE LockService ----
+\* The lock protocol of lockd/: one server grants a single lock; clients ask, retry, and release.
+\* Left out: the network (a request is delivered once, whole, in order) and client crashes.
+EXTENDS Naturals
+
+CONSTANT Clients
+
+VARIABLES pc, holder
+
+vars == <<pc, holder>>
+
+Init == /\ pc = [c \in Clients |-> "idle"]
+        /\ holder = "none"
+
+\* models lockd/server.py:12-17, handle ACQUIRE: grant only when no one holds the lock;
+\* a denied client stays waiting and asks again (lockd/client.py:9-11).
+Acquire(c) == /\ pc[c] = "idle"
+              /\ holder = "none"
+              /\ holder' = c
+              /\ pc' = [pc EXCEPT ![c] = "crit"]
+
+\* models lockd/server.py:19-22, handle RELEASE from the holder (lockd/client.py:14).
+Release(c) == /\ pc[c] = "crit"
+              /\ holder = c
+              /\ holder' = "none"
+              /\ pc' = [pc EXCEPT ![c] = "idle"]
+
+Next == \E c \in Clients : Acquire(c) \/ Release(c)
+
+Spec == Init /\ [][Next]_vars
+
+\* proob:01K8V5NQ4A0F3R7Y2M9D6P1XTA
+MutualExclusion == \A c, d \in Clients : (pc[c] = "crit" /\ pc[d] = "crit") => c = d
+====
+```
+
+```
+\* LockService.cfg
+SPECIFICATION Spec
+\* Three clients: two are the least that can collide; a third waits while the lock changes hands.
+CONSTANT Clients = {c1, c2, c3}
+INVARIANT MutualExclusion
+```
+
+Every action cites the code it models, the module says what it leaves out, and each constant
+says why its value. `run check` keeps the cfg's specification, constants, symmetry, constraints,
+and `CHECK_DEADLOCK`, and checks only the bound name: as a `PROPERTY` when the cfg lists it under
+`PROPERTY`, else as an `INVARIANT`.
+
+Narrowed: passes, and checks nothing the statement is about. With one client no two can collide,
+so every spec mutant survives and the score reads `killed 0`:
+
+```
+CONSTANT Clients = {c1}    \* no: mutual exclusion needs at least two clients
+```
+
+Vacuous: passes over any constants, because it is true of the types and says nothing about who
+is in the critical section:
+
+```tla
+\* proob:01K8V5NQ4A0F3R7Y2M9D6P1XTA
+TypeOK == holder \in Clients \cup {"none"}
+```
+
+Forbidden in a bound spec: an invariant the statement does not say, or a weaker one; a constant
+below the case the statement is about; a `CONSTRAINT` or `ACTION_CONSTRAINT` that prunes the
+states the statement is about (one that only bounds an unbounded counter is fine, with a comment
+and a line in "Model-checked for"); `CHECK_DEADLOCK FALSE` without a comment saying why the code
+may stop there; an action that cites no code.
+
+Check reference: `<module path> <Name>`, e.g. `proob/specs/LockService.tla MutualExclusion`;
+`run check` prints it in its text output.
+
+Binding set: the module, its `.cfg`, and every module beside it that it reaches through `EXTENDS`
+or `INSTANCE` (standard modules such as `Naturals` live in the jar). The scoped code is not in
+it; drift watches that (see "The binding set, explained to the reviewer" in `SKILL.md`).
+
 ## Python: Hypothesis through pytest (adapter arriving in U6)
 
 A comment line holding only the token, directly above the test function, above its decorators:

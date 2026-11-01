@@ -11,7 +11,7 @@ use proob_effects::evidence::EvidenceSet;
 use proob_effects::facts::GovernedSet;
 use proob_effects::fixture::{FixtureApi, FixtureRepo, Scenario};
 use proob_effects::gather::{
-    BindingSet, PropertyRequest, evidence_expectation, gather, governance_facts, issue_number,
+    BindingSet, PropertyRequest, evidence_expectation, gather, governance_facts, issue_number, latest_drift,
 };
 use proob_effects::github::CallBudget;
 use proob_facts::config::Config;
@@ -213,4 +213,29 @@ fn duplicate_resolved_paths_are_an_error_not_a_panic() {
     let binding = BindingSet { files: vec!["tests/lib_test.rs".to_string(), "tests/lib_test.rs".to_string()] };
     let err = gather(&ctx, &request(&file, Some(&binding)), &EvidenceSet::default(), sha('a')).unwrap_err();
     assert!(matches!(err, proob_effects::error::GatherError::DuplicatePath { .. }), "{err:?}");
+}
+
+#[test]
+fn a_model_drifts_from_the_later_of_its_statement_and_spec_approvals() {
+    let d = |commits, days| Drift { commits, days };
+    assert_eq!(latest_drift(Some(d(3, 9)), Some(d(0, 0))), d(0, 0), "a spec re-approved since the drift clears it");
+    assert_eq!(latest_drift(Some(d(1, 2)), Some(d(4, 5))), d(1, 2), "a statement re-approved later clears it");
+    assert_eq!(latest_drift(Some(d(2, 1)), None), d(2, 1), "no approved spec: the statement's drift");
+    assert_eq!(latest_drift(None, None), d(0, 0));
+}
+
+#[test]
+fn a_test_bound_property_keeps_the_statement_drift() {
+    // The composite's binding is approved by the same merge, and kind = "test":
+    // only the statement's approval counts, as before.
+    let scenario = composite();
+    let budget = CallBudget::new(1_000);
+    let api = FixtureApi::new(&scenario, &budget);
+    let repo = FixtureRepo::new(&scenario);
+    let governed = GovernedSet::new(["tests/lib_test.rs".to_string()]);
+    let ctx = ctx(&api, &repo, &governed, true);
+    let file = parse_property(PROPERTY_TOML).expect("property");
+    let binding = BindingSet { files: vec!["tests/lib_test.rs".to_string()] };
+    let input = gather(&ctx, &request(&file, Some(&binding)), &EvidenceSet::default(), sha('a')).expect("gather");
+    assert_eq!(input.drift, Drift { commits: 1, days: 3 });
 }

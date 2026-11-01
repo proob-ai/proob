@@ -233,8 +233,24 @@ rationale = "<why it matters, citing the evidence: files, tests, notes, the requ
   report and in the PR body, quoting that `kani_probe` line or saying the file
   is missing (`proob init --kani` writes it). Kani is Rust only: a Python
   property never gets `kind = "proof"` from this rule. Without a kani adapter,
-  `kind = "proof"` or `kind = "model"` only when the user asked for the proof
-  or model route; otherwise omit the key and the bound check's adapter decides.
+  `kind = "proof"` only when the user asked for the proof route; otherwise
+  omit the key and the bound check's adapter decides.
+- `kind = "model"`: only when `proob/config.toml` has an adapter with
+  `language = "tla"`, and only for a protocol-shaped scope: concurrency,
+  retries, idempotency, leader election, a state machine, distributed
+  coordination; behaviour that lives in how steps interleave, repeat, or fail
+  rather than in one function's inputs. This rule comes before the kani rule
+  for such a scope. `/proob:falsify` then writes a TLA+ spec of the design
+  the scoped code implements and binds the statement to its invariant. The
+  statement is a design invariant in plain words ("A payment is charged at
+  most once, however many times the client resends it"), and the scope is
+  the code files that implement the protocol: those are what a later commit
+  must touch to flag the spec for re-approval, so leave out files the design
+  does not describe. Say in the report and the PR body that a model checks
+  the design over small constants, not the code. Without a tla adapter, never
+  write `kind = "model"`: when a scope is protocol-shaped, say in one line
+  that a model would fit and that `proob init --tla` opts in, and give the
+  property the kind the rules above give it.
 - No `"` or `\` inside a value; rephrase instead.
 
 ## 5. Validate
@@ -299,12 +315,13 @@ In this order: the mode line (step 0); the `proob validate` line; the
 `headline` from `proob status --json` with its verification state ("local,
 unverified" when it is not `verified`); each proposal as `<ULID> —
 <statement> — <severity> — <scope>`, with its `kind` when it has one (and,
-with a kani adapter, the `kani_probe` line behind it), and for a superseding
+with a kani adapter, the `kani_probe` line behind it; for a model, what makes
+the scope protocol-shaped), and for a superseding
 one `(supersedes <old ULID>: delete the old file when approving)`; in branch mode, each
 `Broken` property you judged a code bug, and the uncovered paths still
 without a property, with why; the PR URL, or the body and the commands, or
 on the current branch the commit and the PR-body section; the statements left
 out as duplicates and why; the init files, when init ran. End with: these
 are proposals; each renders `Proposed` until a reviewer merges the pull
-request, and none is checked until `/proob:falsify` binds a test or a Kani
-harness to it.
+request, and none is checked until `/proob:falsify` binds a test, a Kani
+harness, or a TLA+ spec to it.

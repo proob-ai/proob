@@ -17,6 +17,8 @@ merge.
 | `<id>` <title> | <statement, verbatim> | `<check reference>` in `<test file>` | counterexample: `<outcome.witness>`; replay `proob run check <id> --seed <replay.seed>` |
 | `<id>` <title> | <statement, verbatim> | Kani `<check reference>` in `<harness file>` | verified locally within the harness's bounds (<outcome.checks> checks) |
 | `<id>` <title> | <statement, verbatim> | Kani `<check reference>` in `<harness file>` | proof failed: `<the failed check and location from outcome.diagnostics>` |
+| `<id>` <title> | <statement, verbatim> | TLC `<check reference>` | model-checked locally over the constants in the cfg (<the constants>) |
+| `<id>` <title> | <statement, verbatim> | TLC `<check reference>` | violation: `<the first line of outcome.trace>` (trace below) |
 
 ### What each check asserts
 
@@ -34,6 +36,34 @@ will mean for that property.
   - `<CONST> = <n>` (size bound): <why n>. **narrows**: <what it leaves out, e.g. lists longer than n>
   - `#[kani::unwind(<n>)]`: <the loop, and why n covers the size bound>
   - covers: `<case>` from "<the statement's words>", …
+
+### Model-checked for
+
+TLC checks the spec, not the code: it explores every state the spec reaches over the constants
+below, and no other. Whether the code follows the spec is your judgement as reviewer, and proob
+asks for it again whenever the code changes. A constant marked **narrows** leaves out a case the
+statement covers; approving it makes it part of what `Holds` will mean for that property.
+
+- `<module path>` (<one module per protocol | one per property>: <why>), checking `<id>`
+  `<Name>`, …
+  - `<CONSTANT> = <value>`: <why this value: the least that reaches the case the statement is
+    about, or the code's own limit (cite it)>. **narrows**: <what it leaves out> (or: no narrowing)
+  - `<Action>` models `<file>:<lines>` (<what the code does there, in a few words>), …
+  - leaves out: <what the spec abstracts away or assumes: the network, crashes, a library call, a
+    second server, …>
+  - `CHECK_DEADLOCK FALSE`: <why the code may stop there> (omit when the cfg does not set it)
+- Drift: once approved, any commit to `<scope files>` reads `Re-approve (spec drifted: n commits
+  to the modelled scope)` until the spec or the statement is re-approved, so a reviewer re-reads
+  this spec against the changed code. It flags every change to those files, a refactor included; it cannot
+  tell whether the code still follows the spec.
+
+<details><summary>Violation trace (only when TLC found one)</summary>
+
+```
+<outcome.trace, verbatim>
+```
+
+</details>
 
 ### Fell back to a test
 
@@ -85,8 +115,13 @@ Approval attaches to these files' content. Editing any of them after merge rende
   floor and the team has approved it: `Holds` within the bounds under "Proved for".
 - A Kani row is checked for every input its harness admits; review "Proved for" as you would the
   statement. A "proof failed" row is a bug, like a counterexample.
+- A TLC row checks a model of the design, not the code; review "Model-checked for" as you would the
+  statement: do the actions match the cited code, and do the constants reach the case that
+  matters? A TLC model reads `Checked (strength pending)` after the default-branch run, then
+  `Holds` for the design over those constants once its spec-mutant score is at the floor. A
+  "violation" row is a design bug, or a wrong statement, like a counterexample.
 
-Opened by /proob:falsify. The agent wrote the tests and ran them locally; it did not approve
+Opened by /proob:falsify. The agent wrote the checks and ran them locally; it did not approve
 anything and cannot.
 ~~~
 
@@ -95,6 +130,9 @@ Omit "Config change" unless this PR sets `features`.
 "Proved for" is required for every Kani-bound property and lists every `kani::assume`, size
 bound, and unwind bound in its harness; omit it when no property is bound to Kani. Include "Fell
 back to a test" once per fallback, with the reason line verbatim, and omit it when none fell
-back; drop the lines that do not apply (the retry, or the not-run line). Never write "proved",
-"proven", or "holds" about a local result.
+back; drop the lines that do not apply (the retry, or the not-run line). "Model-checked for" is
+required once per TLA+ module and lists every constant, every action with its code citation,
+what the spec leaves out, and the drift line; omit it when nothing is bound to a model. Never
+write "proved", "proven", or "holds" about a local result, and never write that the code
+conforms to, implements, or is verified by a spec.
 Quote statements verbatim, however long; never paraphrase one to fit the table.

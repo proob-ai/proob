@@ -1,8 +1,8 @@
 # The re-affirmation PR
 
 A re-affirmation asks a human to re-read a statement against code that moved
-under it (drift above `drift_threshold`) or to replace an approval whose
-reviewer lost write access. It changes one thing per property file: the
+under it (drift above `drift_threshold`, or any drift under a model's spec)
+or to replace an approval whose reviewer lost write access. It changes one thing per property file: the
 `reviewed` date. The new content needs an eligible review to be approved
 again; that review is the re-affirmation, and it resets drift to the new
 approving merge.
@@ -31,8 +31,9 @@ file changes.
    files; `git diff` shows one changed or added `reviewed` line per file and
    nothing else. If anything else moved, restore the file and redo the edit.
 4. Commit: `proob: re-affirm <n> property(ies)` with a body listing each id,
-   title, and reason (`<n> scope commits since approval, threshold <t>`, or
-   `approver lost write access`).
+   title, and reason (`<n> scope commits since approval, threshold <t>`,
+   `approver lost write access`, or `spec drifted: <n> commits to the
+   modelled scope`).
 5. Push and open the PR (`gh pr create`) with this body:
 
    ```text
@@ -48,7 +49,11 @@ file changes.
    property keeps its current verdict. Please re-read each statement against
    the current code before approving; if a statement is no longer what the
    team means, request changes instead and amend it in a separate PR.
+   For a spec-drifted model, also re-read its spec (<module path>) against
+   the changed code: approving says the spec still describes it.
    ```
+
+   Drop the spec-drifted sentence when no candidate is a model.
 
 6. Report the PR URL and the one person who needs to act (a reviewer with
    write access who is not the author). Stop there: do not approve, merge,

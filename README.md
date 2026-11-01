@@ -85,14 +85,14 @@ No.
   - [x] as property-based tests, for Python and Rust
   - [x] as proofs, for Rust written in Verus
   - [x] as proofs on ordinary Rust, with no proofs to write (Kani)
-  - [ ] as a formal spec of your design, chosen by the agent to fit your codebase (TLA+ for a protocol, Alloy for a data model)
-  - [ ] verification first, with a safe landing: where no verifier can take a rule (an unsupported feature, an unbounded loop, a timeout), the agent binds a property-based test instead, and says so
+  - [x] as a formal spec of your design, model-checked with TLC (TLA+); Alloy for a data model is next
+  - [x] verification first, with a safe landing: where no verifier can take a rule (an unsupported feature, an unbounded loop, a timeout), the agent binds a property-based test instead, and says so
   - [x] with the verdict telling tested from proved: `Holds` means proved, a test reads `Checked (tested)`
 - [x] **Watch every pull request.** Nothing that breaks an approved rule gets merged
 - **Watch for drift between the rules and the code.** A rule never silently stays approved for code it no longer describes
   - [x] a rule or its check that changes must be approved again
   - [x] new code no rule covers is pointed out in the pull request
-  - [ ] code that moves away from its design spec flags the rule for update and re-approval
+  - [x] code that moves away from its design spec flags the rule for update and re-approval
 
 **After**
 
@@ -110,11 +110,13 @@ No.
 |---|---|---|
 | Rust | ☑ Verus, for Verus code · ☑ Kani, for any Rust | ☑ proptest |
 | Python | | ☑ Hypothesis |
-| Design level, any language | ☐ TLA+ with TLC, Alloy | |
+| Design level, any language | ☑ TLA+ with TLC · ☐ Alloy | |
 | TypeScript | | ☐ fast-check |
 | Go, Java | | ☐ |
 
 Python has no proof route: a Python property is checked with Hypothesis and reads `Checked (tested)` at best.
+
+A TLA+ model holds for the design over its constants, not for the code; any change to the modelled code flags it for re-approval.
 
 In any other language, sense and declare still work, and every property reads `Not checked (no adapter)`. Known limits are in the [guide](docs/guide.md#limits).
 

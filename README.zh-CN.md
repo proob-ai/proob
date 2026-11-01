@@ -1,4 +1,4 @@
-<!-- translated from README.md sha256:2d172395ea7dde46abb1eb6ef0ddf9887fcbce33b5657e9956076991bb514a08 -->
+<!-- translated from README.md sha256:f6d452f6efeb6d027d07a6795c9e8589ab88526191181b670872f490fd392584 -->
 # proob
 
 [![ci](https://github.com/proob-ai/proob/actions/workflows/ci.yml/badge.svg)](https://github.com/proob-ai/proob/actions/workflows/ci.yml)
@@ -86,14 +86,14 @@ proob 在你已有的流程上只增加一个必需检查和一个审查习惯�
   - [x] 作为基于性质的测试，支持 Python 和 Rust
   - [x] 作为证明，针对用 Verus 编写的 Rust
   - [x] 作为普通 Rust 上的证明，无需编写证明（Kani）
-  - [ ] 作为你的设计的形式化规约，由智能体根据你的代码库选择合适的语言（协议用 TLA+，数据模型用 Alloy）
-  - [ ] 验证优先，并有安全着陆：当没有验证器能处理某条规则时（不支持的特性、无界循环、超时），智能体改为绑定一个基于性质的测试，并如实说明
+  - [x] 作为你的设计的形式化规约，用 TLC 做模型检查（TLA+）；面向数据模型的 Alloy 是下一步
+  - [x] 验证优先，并有安全着陆：当没有验证器能处理某条规则时（不支持的特性、无界循环、超时），智能体改为绑定一个基于性质的测试，并如实说明
   - [x] 结论区分测试过与证明过：`Holds` 意味着已证明，测试显示为 `Checked (tested)`
 - [x] **守护每个拉取请求。** 打破已批准规则的变更无法合并
 - **守护规则与代码之间的漂移。** 规则绝不会悄悄地对它不再描述的代码保持已批准
   - [x] 规则或其检查发生变化，必须重新批准
   - [x] 没有规则覆盖的新代码会在拉取请求中被指出
-  - [ ] 偏离其设计规约的代码会把规则标记为待更新并重新批准
+  - [x] 偏离其设计规约的代码会把规则标记为待更新并重新批准
 
 **之后**
 
@@ -111,11 +111,13 @@ proob 在你已有的流程上只增加一个必需检查和一个审查习惯�
 |---|---|---|
 | Rust | ☑ Verus，针对 Verus 代码 · ☑ Kani，针对任何 Rust | ☑ proptest |
 | Python | | ☑ Hypothesis |
-| 设计层面，任何语言 | ☐ TLA+ 与 TLC、Alloy | |
+| 设计层面，任何语言 | ☑ TLA+ 与 TLC · ☐ Alloy | |
 | TypeScript | | ☐ fast-check |
 | Go、Java | | ☐ |
 
 Python 没有证明路径：Python 的性质由 Hypothesis 检查，最高显示为 `Checked (tested)`。
+
+TLA+ 模型成立的对象是常量范围内的设计，而不是代码；被建模的代码一有改动，就会被标记为需要重新批准。
 
 在其他任何语言中，sense 和 declare 仍可使用，每条性质显示为 `Not checked (no adapter)`。已知局限见[指南](docs/guide.md#limits)。
 
