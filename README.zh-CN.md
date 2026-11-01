@@ -1,4 +1,4 @@
-<!-- translated from README.md sha256:c8d03c3cc3cab1a0262cb7223eb247a69e7ec1c864cb376f98e1f436617712a7 -->
+<!-- translated from README.md sha256:2d172395ea7dde46abb1eb6ef0ddf9887fcbce33b5657e9956076991bb514a08 -->
 # proob
 
 [![ci](https://github.com/proob-ai/proob/actions/workflows/ci.yml/badge.svg)](https://github.com/proob-ai/proob/actions/workflows/ci.yml)
@@ -86,7 +86,6 @@ proob 在你已有的流程上只增加一个必需检查和一个审查习惯�
   - [x] 作为基于性质的测试，支持 Python 和 Rust
   - [x] 作为证明，针对用 Verus 编写的 Rust
   - [x] 作为普通 Rust 上的证明，无需编写证明（Kani）
-  - [ ] 作为普通 Python 上的证明，无需编写证明（CrossHair）
   - [ ] 作为你的设计的形式化规约，由智能体根据你的代码库选择合适的语言（协议用 TLA+，数据模型用 Alloy）
   - [ ] 验证优先，并有安全着陆：当没有验证器能处理某条规则时（不支持的特性、无界循环、超时），智能体改为绑定一个基于性质的测试，并如实说明
   - [x] 结论区分测试过与证明过：`Holds` 意味着已证明，测试显示为 `Checked (tested)`
@@ -111,10 +110,12 @@ proob 在你已有的流程上只增加一个必需检查和一个审查习惯�
 | 语言 | 形式化验证 | 基于性质的测试 |
 |---|---|---|
 | Rust | ☑ Verus，针对 Verus 代码 · ☑ Kani，针对任何 Rust | ☑ proptest |
-| Python | ☐ CrossHair | ☑ Hypothesis |
+| Python | | ☑ Hypothesis |
 | 设计层面，任何语言 | ☐ TLA+ 与 TLC、Alloy | |
 | TypeScript | | ☐ fast-check |
 | Go、Java | | ☐ |
+
+Python 没有证明路径：Python 的性质由 Hypothesis 检查，最高显示为 `Checked (tested)`。
 
 在其他任何语言中，sense 和 declare 仍可使用，每条性质显示为 `Not checked (no adapter)`。已知局限见[指南](docs/guide.md#limits)。
 

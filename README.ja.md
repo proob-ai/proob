@@ -1,4 +1,4 @@
-<!-- translated from README.md sha256:c8d03c3cc3cab1a0262cb7223eb247a69e7ec1c864cb376f98e1f436617712a7 -->
+<!-- translated from README.md sha256:2d172395ea7dde46abb1eb6ef0ddf9887fcbce33b5657e9956076991bb514a08 -->
 # proob
 
 [![ci](https://github.com/proob-ai/proob/actions/workflows/ci.yml/badge.svg)](https://github.com/proob-ai/proob/actions/workflows/ci.yml)
@@ -86,7 +86,6 @@ proob が今あるループに加えるのは、必須チェック一つとレ�
   - [x] プロパティベーステストとして、Python と Rust で
   - [x] 証明として、Verus で書かれた Rust で
   - [x] 普通の Rust でも証明として、証明を書かずに（Kani）
-  - [ ] 普通の Python でも証明として、証明を書かずに（CrossHair）
   - [ ] 設計の形式仕様として。エージェントがコードベースに合う言語を選ぶ（プロトコルには TLA+、データモデルには Alloy）
   - [ ] 検証を優先し、安全な着地も用意する。どの検証器もあるルールを扱えないとき（未対応の機能、無限ループ、タイムアウト）、エージェントは代わりにプロパティベーステストを紐付け、そう明示する
   - [x] 判定がテスト済みと証明済みを区別する。`Holds` は証明済みを意味し、テストは `Checked (tested)` と表示される
@@ -111,10 +110,12 @@ proob が今あるループに加えるのは、必須チェック一つとレ�
 | 言語 | 形式検証 | プロパティベーステスト |
 |---|---|---|
 | Rust | ☑ Verus、Verus コード向け · ☑ Kani、あらゆる Rust 向け | ☑ proptest |
-| Python | ☐ CrossHair | ☑ Hypothesis |
+| Python | | ☑ Hypothesis |
 | 設計レベル、任意の言語 | ☐ TLA+ と TLC、Alloy | |
 | TypeScript | | ☐ fast-check |
 | Go、Java | | ☐ |
+
+Python には証明の経路がありません。Python のプロパティは Hypothesis でチェックされ、最高でも `Checked (tested)` と表示されます。
 
 その他の言語でも sense と declare は使え、各プロパティは `Not checked (no adapter)` と表示されます。既知の制限は[ガイド](docs/guide.md#limits)にあります。
 
