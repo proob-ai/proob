@@ -86,7 +86,7 @@ No.
   - [x] as proofs, for Rust written in Verus
   - [x] as proofs on ordinary Rust, with no proofs to write (Kani)
   - [x] as a formal spec of your design, model-checked with TLC (TLA+); Alloy for a data model is next
-  - [ ] verification first, with a safe landing: where no verifier can take a rule (an unsupported feature, an unbounded loop, a timeout), the agent binds a property-based test instead, and says so
+  - [x] verification first, with a safe landing: where no verifier can take a rule (an unsupported feature, an unbounded loop, a timeout), the agent binds a property-based test instead, and says so
   - [x] with the verdict telling tested from proved: `Holds` means proved, a test reads `Checked (tested)`
 - [x] **Watch every pull request.** Nothing that breaks an approved rule gets merged
 - **Watch for drift between the rules and the code.** A rule never silently stays approved for code it no longer describes

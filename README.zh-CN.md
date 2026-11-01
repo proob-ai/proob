@@ -1,4 +1,4 @@
-<!-- translated from README.md sha256:31b98dedf7b85a28427f9071439255d12b2a2d7000b621c9a9dc7fef4d5bca1f -->
+<!-- translated from README.md sha256:f6d452f6efeb6d027d07a6795c9e8589ab88526191181b670872f490fd392584 -->
 # proob
 
 [![ci](https://github.com/proob-ai/proob/actions/workflows/ci.yml/badge.svg)](https://github.com/proob-ai/proob/actions/workflows/ci.yml)
@@ -87,7 +87,7 @@ proob 在你已有的流程上只增加一个必需检查和一个审查习惯�
   - [x] 作为证明，针对用 Verus 编写的 Rust
   - [x] 作为普通 Rust 上的证明，无需编写证明（Kani）
   - [x] 作为你的设计的形式化规约，用 TLC 做模型检查（TLA+）；面向数据模型的 Alloy 是下一步
-  - [ ] 验证优先，并有安全着陆：当没有验证器能处理某条规则时（不支持的特性、无界循环、超时），智能体改为绑定一个基于性质的测试，并如实说明
+  - [x] 验证优先，并有安全着陆：当没有验证器能处理某条规则时（不支持的特性、无界循环、超时），智能体改为绑定一个基于性质的测试，并如实说明
   - [x] 结论区分测试过与证明过：`Holds` 意味着已证明，测试显示为 `Checked (tested)`
 - [x] **守护每个拉取请求。** 打破已批准规则的变更无法合并
 - **守护规则与代码之间的漂移。** 规则绝不会悄悄地对它不再描述的代码保持已批准
