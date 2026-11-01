@@ -113,6 +113,7 @@ fn the_argv_runs_one_worker_with_a_fixed_fingerprint_and_seed_in_its_own_metadir
         Path::new("/lab/model/Mutex.tla"),
         Path::new("/lab/c.cfg"),
         Path::new("/lab/meta-1"),
+        Path::new("/lab"),
         Duration::ZERO,
     );
     let args: Vec<String> = c.args().iter().map(|a| a.to_string_lossy().into_owned()).collect();
@@ -120,6 +121,7 @@ fn the_argv_runs_one_worker_with_a_fixed_fingerprint_and_seed_in_its_own_metadir
         args,
         [
             "-XX:+UseParallelGC",
+            "-Djava.io.tmpdir=/lab",
             "-cp",
             "/t/tla2tools.jar",
             "tlc2.TLC",

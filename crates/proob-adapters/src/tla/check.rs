@@ -19,11 +19,15 @@ pub const TIMEOUT: Duration = Duration::from_secs(30 * 60);
 pub const CFG_NAME: &str = "proob-check.cfg";
 const REASON_CAP: usize = 600;
 
-/// `java -XX:+UseParallelGC -cp <jar> tlc2.TLC -config <cfg> -workers 1 -fp 0 -seed 0 -metadir <dir> <spec>`.
-pub fn plan(tools: &Tools, spec: &Path, cfg: &Path, metadir: &Path, timeout: Duration) -> Command {
+/// `java -XX:+UseParallelGC -Djava.io.tmpdir=<tmp> -cp <jar> tlc2.TLC -config <cfg> -workers 1 -fp 0 -seed 0 -metadir <dir> <spec>`.
+/// TLC extracts the standard modules it parses (`Naturals.tla`, …) into
+/// `java.io.tmpdir`; a shared one lets two runs read each other's half-written
+/// copies, so each lab gives TLC its own.
+pub fn plan(tools: &Tools, spec: &Path, cfg: &Path, metadir: &Path, tmp: &Path, timeout: Duration) -> Command {
     let dir = spec.parent().unwrap_or(Path::new("/"));
     Command::new(&tools.java, timeout)
         .arg("-XX:+UseParallelGC")
+        .own_joined("-Djava.io.tmpdir=", tmp)
         .own("-cp", &tools.jar)
         .arg("tlc2.TLC")
         .own("-config", cfg)
@@ -152,6 +156,9 @@ impl Lab {
         let n = self.runs.get() + 1;
         self.runs.set(n);
         let metadir = self.dir.path().join(format!("meta-{n}"));
-        plan(tools, &self.spec, &self.spec.with_file_name(CFG_NAME), &metadir, timeout).envs(adapter.tool_env()).run()
+        // The lab's runs are sequential, so its root serves as each one's java.io.tmpdir.
+        plan(tools, &self.spec, &self.spec.with_file_name(CFG_NAME), &metadir, self.dir.path(), timeout)
+            .envs(adapter.tool_env())
+            .run()
     }
 }

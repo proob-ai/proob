@@ -186,6 +186,15 @@ impl Command {
         self
     }
 
+    /// A path the adapter owns, joined to a literal prefix as one argument
+    /// (`-Dname=<path>` for a JVM).
+    pub fn own_joined(mut self, prefix: &'static str, path: &Path) -> Command {
+        let mut arg = OsString::from(prefix);
+        arg.push(path.as_os_str());
+        self.args.push(arg);
+        self
+    }
+
     /// A positional path the adapter owns, for a tool without a separator
     /// (TLC's spec file). Absolute, so never read as an option.
     pub fn own_path(mut self, path: &Path) -> Command {
