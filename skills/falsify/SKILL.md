@@ -110,6 +110,15 @@ untracked file). Keep the line verbatim; quote from it rather than retyping numb
 0 passed or verified, 1 counterexample or proof failed, 2 errored or usage. A Kani run compiles
 the crate under Kani's own nightly and can take minutes.
 
+The result that counts is the one `run check` gives from `proob/config.toml` as it will be
+committed: the gate and the evidence run replay that and nothing else. A Rust test that compiles
+only with a cargo feature (a `#![cfg(feature = "…")]` file, a `[[test]]` with
+`required-features`, an optional `proptest` dependency; `proob init` leaves a comment in the
+adapter block when it sees one) errors as "bound test not found" until the adapter turns that
+feature on. Then set it in the adapter block, `features = ["<name>"]` and no wider (not
+`all_features`), rerun `validate` and `run check`, and commit the change with the test (step 6).
+Never run the check in a scratch copy, or with flags of your own, and report that as its result.
+
 ## 5. Report the outcome, in proob's words
 
 Quote the JSON `outcome` and `replay` fields. The wording per `outcome.result`:
@@ -184,11 +193,13 @@ In shadow (the file `.proob-shadow` exists at the root): skip branch, commit, pu
 nothing about reviewers; the files stay in shadow.
 
 Branch `proob/falsify-<YYYY-MM-DD>`; commit only the test and harness files, plus a fallback's
-property file (never any other file under `proob/properties/`, never `proob/.cache/`). Use
+property file and a `features` line you added to `proob/config.toml` (step 4; nothing else in
+that file, never any other file under `proob/properties/`, never `proob/.cache/`). Use
 `gh pr create` with the body in `pr-template.md` in this directory: one row per binding with the
 statement, the check reference from the run's text output, the local result labelled unverified,
 and the binding set, plus the reviewer note that merging approves the check and its binding set;
-a "Proved for" block per Kani harness and a "Fell back to a test" block per fallback. If the
+a "Proved for" block per Kani harness, a "Fell back to a test" block per fallback, and a
+"Config change" block when you set `features`. If the
 human asked for no PR, print the body instead.
 
 ## The binding set, explained to the reviewer
@@ -227,5 +238,7 @@ it: `Holds` within the harness's bounds, the ones the "Proved for" block lists.
 - Weaken a test, narrow a generator, or skip a case to turn a counterexample into a pass.
 - Hard-code a seed, a case count, or a settings profile in a bound test.
 - Bind one property to two tests, or two properties to one test.
+- Report a check's result from a scratch copy or from cargo flags the committed config does not
+  set, or change anything in `proob/config.toml` but an adapter's `features`.
 - Say a property holds, is proved, is verified, or is approved because of anything that ran
   here; a Kani result is "verified locally within the harness's bounds", and nothing more.

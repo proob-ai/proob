@@ -55,6 +55,14 @@ statement's approval: approving this PR approves the change. After merge it read
 
 </details>
 
+### Config change
+
+The bound tests compile only with the cargo feature `<name>` (<why: the `cfg` line, the
+`required-features`, or the optional dependency>), so this PR adds `features = ["<name>"]` to
+the `<root>` adapter in `proob/config.toml`. Every proob run of this adapter, the gate's
+included, builds with it. `proob/config.toml` is governed: approving this PR approves the
+change, and until then every property reads `Re-approve (config amended)`.
+
 ### Binding sets
 
 Approval attaches to these files' content. Editing any of them after merge renders the property
@@ -83,6 +91,7 @@ anything and cannot.
 ~~~
 
 Omit the counterexample row and the counterexample reviewer bullet when every result passed.
+Omit "Config change" unless this PR sets `features`.
 "Proved for" is required for every Kani-bound property and lists every `kani::assume`, size
 bound, and unwind bound in its harness; omit it when no property is bound to Kani. Include "Fell
 back to a test" once per fallback, with the reason line verbatim, and omit it when none fell
