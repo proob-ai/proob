@@ -1,0 +1,21 @@
+TLC2 Version 2.19 of 08 August 2024 (rev: 5a47802)
+Running breadth-first search Model-Checking with fp 0 and seed 0 with 1 worker on 12 cores with 7282MB heap and 64MB offheap memory [pid: 1] (Mac OS X 26.5.2 aarch64, Homebrew 25 x86_64, MSBDiskFPSet, DiskStateQueue).
+Parsing file /tmp/proob-tlc/sem/Mutex.tla
+Parsing file /tmp/java/Naturals.tla
+Parsing file /tmp/proob-tlc/sem/Bounds.tla
+Semantic processing of module Naturals
+Semantic processing of module Bounds
+Semantic processing of module Mutex
+Semantic errors:
+
+*** Errors: 1
+
+line 34, col 18 to line 34, col 20 of module Mutex
+
+Unknown operator: `cnt'.
+
+
+
+Starting... (2026-11-02 00:24:45)
+Error: Parsing or semantic analysis failed.
+Finished in 00s at (2026-11-02 00:24:45)

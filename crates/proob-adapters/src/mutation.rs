@@ -132,6 +132,29 @@ pub fn local_jobs(dir: &Path, per_job: Option<u64>) -> Jobs {
     jobs(std::thread::available_parallelism().map_or(1, |n| n.get()), free_bytes(dir), per_job)
 }
 
+/// Free bytes a run that builds must find on the volume it builds into.
+pub const MIN_FREE_BYTES: u64 = 2_000_000_000;
+
+/// Refuses, with the reason, a run that builds under `dir` when its volume
+/// (that of its nearest existing ancestor) has under `MIN_FREE_BYTES` free;
+/// unknown free space does not refuse.
+pub fn room(dir: &Path) -> Result<(), String> {
+    room_for(dir.ancestors().find_map(free_bytes), dir)
+}
+
+/// Pure: `room` with `free` bytes measured.
+pub fn room_for(free: Option<u64>, dir: &Path) -> Result<(), String> {
+    match free {
+        Some(f) if f < MIN_FREE_BYTES => Err(format!(
+            "only {:.1} GB free on the volume holding {}; proob needs at least {} GB there to build, so the run did not start; free some space and run again",
+            f as f64 / 1e9,
+            dir.display(),
+            MIN_FREE_BYTES / 1_000_000_000
+        )),
+        _ => Ok(()),
+    }
+}
+
 #[cfg(unix)]
 fn free_bytes(dir: &Path) -> Option<u64> {
     rustix::fs::statvfs(dir).ok().map(|s| s.f_bavail.saturating_mul(s.f_frsize))
@@ -149,6 +172,15 @@ mod tests {
 
     fn names(n: usize) -> Vec<String> {
         (0..n).map(|i| format!("src/map.rs:{i}:5: replace f -> bool with true")).collect()
+    }
+
+    #[test]
+    fn a_volume_under_two_gigabytes_refuses_a_build() {
+        let dir = Path::new("/repo/target");
+        let refused = room_for(Some(1_500_000_000), dir).unwrap_err();
+        assert!(refused.starts_with("only 1.5 GB free on the volume holding /repo/target"), "{refused}");
+        assert!(room_for(Some(MIN_FREE_BYTES), dir).is_ok());
+        assert!(room_for(None, dir).is_ok(), "unknown free space does not refuse");
     }
 
     #[test]

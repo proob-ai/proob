@@ -42,11 +42,10 @@ pub fn pinned(tool: &str) -> Option<&'static str> {
     pins().into_iter().find(|(name, _)| *name == tool).map(|(_, version)| version)
 }
 
+/// Names the whole pinned set, so the command works from any repository.
 pub fn install_hint(tool: &str) -> String {
-    format!(
-        "{tool} is not installed for `python3`: `python3 -m pip install -r tools/python-tools.txt` (it pins {tool}=={})",
-        pinned(tool).unwrap_or("?")
-    )
+    let all: Vec<String> = pins().iter().map(|(name, v)| format!("{name}=={v}")).collect();
+    format!("{tool} is not installed for `python3`: `python3 -m pip install {}`", all.join(" "))
 }
 
 pub fn version_mismatch(tool: &str, expected: &str, found: &str) -> String {

@@ -76,7 +76,9 @@ pub mod score;
 pub mod tools;
 
 use crate::argv::Checked;
-use crate::{Adapter, AdapterError, Binding, Budget, Check, Language, RegistryError, Score, Seed, Uncovered};
+use crate::{
+    Adapter, AdapterError, Binding, Budget, Check, Language, Readiness, RegistryError, Score, Seed, Uncovered,
+};
 use proob_facts::config::Adapter as AdapterConfig;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -207,6 +209,13 @@ pub fn parse_check_ref(text: &str) -> Result<CheckRef, AdapterError> {
 impl Adapter for VerusAdapter {
     fn language(&self) -> Language {
         Language::Verus
+    }
+
+    fn readiness(&self, _repo: &Path) -> Readiness {
+        match tools::resolve(self.tool_env()) {
+            tools::Resolution::Ready(tc) => Readiness::Ready(tc.versions),
+            tools::Resolution::Missing { reason, versions } => Readiness::Missing { reason, versions },
+        }
     }
 
     fn discover(&self, repo: &Path) -> Result<Vec<Binding>, AdapterError> {

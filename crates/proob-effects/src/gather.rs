@@ -264,6 +264,13 @@ pub fn drift_since(ctx: &Context<'_>, since: &Oid, paths: &[&str]) -> Result<Dri
     Ok(Drift { commits, days })
 }
 
+/// Pure: drift since the later of two approvals. On the default branch's
+/// linear history the commits after the later merge are a subset of those
+/// after the earlier one, so the later approval is the one with fewer.
+pub fn latest_drift(statement: Option<Drift>, spec: Option<Drift>) -> Drift {
+    [statement, spec].into_iter().flatten().min_by_key(|d| d.commits).unwrap_or(Drift { commits: 0, days: 0 })
+}
+
 /// The issue number in `#123`, `123`, or an issue URL.
 pub fn issue_number(text: &str) -> Option<u64> {
     let tail = text.trim().rsplit(['/', '#']).next()?;
@@ -297,17 +304,26 @@ pub fn gather(
     let scope_paths: Vec<String> = scope.iter().map(|p| String::from_utf8_lossy(&p.path).into_owned()).collect();
     let scope_refs: Vec<&str> = scope_paths.iter().map(String::as_str).collect();
 
-    let drift = match statement.approval {
-        Approval::Approved { merge_sha, .. } if !scope_refs.is_empty() => drift_since(ctx, &merge_sha, &scope_refs)?,
-        _ => Drift { commits: 0, days: 0 },
-    };
-    let waiver_issue_open = match &req.file.waiver {
-        Some(w) => waiver_issue_open(ctx, req.path, &w.issue)?,
-        None => false,
-    };
     let binding = match (req.adapter_available, req.binding) {
         (true, Some(set)) => Some(binding_facts(ctx, set)?),
         _ => None,
+    };
+    let since = |approval: &Approval| match approval {
+        Approval::Approved { merge_sha, .. } if !scope_refs.is_empty() => {
+            drift_since(ctx, merge_sha, &scope_refs).map(Some)
+        }
+        _ => Ok(None),
+    };
+    let statement_drift = since(&statement.approval)?;
+    // A model's spec is the design: re-approving it re-affirms the design against the code.
+    let spec_drift = match (kind, &binding) {
+        (Kind::Model, Some(b)) => since(&b.approval)?,
+        _ => None,
+    };
+    let drift = latest_drift(statement_drift, spec_drift);
+    let waiver_issue_open = match &req.file.waiver {
+        Some(w) => waiver_issue_open(ctx, req.path, &w.issue)?,
+        None => false,
     };
     let records = evidence.records_for(property.id);
     Ok(DeriveInput {

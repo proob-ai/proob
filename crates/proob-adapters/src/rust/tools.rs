@@ -33,8 +33,8 @@ pub enum Resolution {
 
 pub const CARGO_HINT: &str =
     "cargo was not found on PATH: install Rust with rustup (https://rustup.rs) so `cargo` is available";
-pub const NEXTEST_HINT: &str = "cargo-nextest is not installed: `cargo install cargo-nextest --locked` (in CI: taiki-e/install-action with tool: cargo-nextest@0.9.150)";
-pub const MUTANTS_HINT: &str = "cargo-mutants is not installed: `cargo install cargo-mutants --locked` (in CI: taiki-e/install-action with tool: cargo-mutants@27.1.0)";
+pub const NEXTEST_HINT: &str = "cargo-nextest is not installed: `cargo install --locked cargo-nextest --version 0.9.150` (in CI: taiki-e/install-action with tool: cargo-nextest@0.9.150)";
+pub const MUTANTS_HINT: &str = "cargo-mutants is not installed: `cargo install --locked cargo-mutants --version 27.1.0` (in CI: taiki-e/install-action with tool: cargo-mutants@27.1.0)";
 
 /// `cargo` from `PATH` (the override's when `tool_env` sets one), then
 /// `cargo --version` and the subcommands in `needs`.

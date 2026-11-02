@@ -85,6 +85,17 @@ jobs:
       - name: Install the pinned Kani
         if: steps.kani-cache.outputs.cache-hit != 'true'
         run: cargo install --locked kani-verifier --version "$PROOB_KANI_VERSION" && cargo kani setup
+      # TLC, as the ci workflow's tlc job installs it: what falsify-tla-model drives.
+      - name: Install the TLC pinned in tools/tla.toml (checked against its SHA-256)
+        run: |
+          url=$(sed -n 's/^url = "\(.*\)"$/\1/p' tools/tla.toml)
+          sha=$(sed -n 's/^sha256 = "\(.*\)"$/\1/p' tools/tla.toml)
+          [ -n "$url" ] && [ -n "$sha" ] || { echo "no url or sha256 in tools/tla.toml" >&2; exit 1; }
+          jar="$RUNNER_TEMP/tla2tools.jar"
+          curl -fsSL --retry 3 -o "$jar" "$url"
+          echo "$sha  $jar" | sha256sum -c -
+          java -version
+          echo "PROOB_TLA2TOOLS=$jar" >> "$GITHUB_ENV"
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.13"

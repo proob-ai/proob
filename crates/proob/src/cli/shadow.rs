@@ -211,7 +211,7 @@ pub const KANI_MAX_MUTANTS: u32 = 10;
 fn init_options(fresh: &Path) -> init::Options {
     let rust = init::detect(fresh).iter().any(|d| matches!(d, init::Detected::Rust { .. }));
     let kani = rust && matches!(proob_adapters::kani::tools::resolve(&[]), Resolution::Ready(_));
-    init::Options { kani: kani.then_some(init::KaniSetup { max_mutants: Some(KANI_MAX_MUTANTS) }) }
+    init::Options { kani: kani.then_some(init::KaniSetup { max_mutants: Some(KANI_MAX_MUTANTS) }), tla: false }
 }
 
 /// The overlay applied to the new clone, and the local results kept.

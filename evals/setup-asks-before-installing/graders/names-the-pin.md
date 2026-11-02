@@ -1,0 +1,6 @@
+---
+type: regex
+target: last_message
+pattern: '936a262061c914694dfd669a543be24573c45d5aa0ff20a8b96b23d01e050e88'
+match: contains
+---

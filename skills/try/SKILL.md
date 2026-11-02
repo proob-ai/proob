@@ -68,7 +68,8 @@ directory (and `verify` in step 4). Read the files rather than invoking the skil
    A `kind = "proof"` proposal gets one Kani harness instead, under falsify's harness rules; a
    Kani failure is a finding like a counterexample. When Kani cannot take a proposal for one of
    falsify's fallback reasons, follow its fallback (the one property edit it allows) and keep the
-   reason line for the report. Run every property's check before any score.
+   reason line for the report. A `kind = "model"` proposal (only with a tla adapter) gets one
+   TLA+ spec under falsify's step 3M; a violation is a finding like a counterexample. Run every property's check before any score.
 
 ## 3. Show the checks, before any score
 
@@ -88,7 +89,8 @@ mutants of the scope (default 30 for rust and python, 10 for a Kani harness in t
 each mutant is a full Kani run), a sample fixed by the property id; when it sampled, its JSON has
 `unsampled` > 0 and the report says how many were not run. Never call a sampled score exhaustive.
 A Kani harness covers only the inputs its bounds admit: when you describe one in your own words,
-say "checks locally within the harness's bounds" and name the bounds.
+say "checks locally within the harness's bounds" and name the bounds. A TLA+ model checks the
+design, not the code: say "model-checked locally over the constants in the cfg" and name them.
 
 ## 5. Report
 

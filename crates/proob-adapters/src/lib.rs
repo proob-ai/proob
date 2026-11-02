@@ -18,15 +18,16 @@
 //! closed grammar first (`argv.rs` is the one place both are built).
 //!
 //! The Rust adapter (`rust`), the Verus adapter (`verus`), the Kani adapter
-//! (`kani`), and the Python adapter (`python`) are here; the TLA+ adapter (U12) takes the same trait,
-//! and until it exists `adapters_for` leaves its language out, so every
-//! property in such a repository renders `Not checked (no adapter)` rather
-//! than failing or faking.
+//! (`kani`), the Python adapter (`python`), and the TLA+ adapter (`tla`) are
+//! here. A language without an adapter yet would be left out by
+//! `adapters_for`, so every property in such a repository renders `Not
+//! checked (no adapter)` rather than failing or faking.
 pub mod argv;
 pub mod kani;
 pub mod mutation;
 pub mod python;
 pub mod rust;
+pub mod tla;
 pub mod verus;
 
 use proob_core::types::Kind;
@@ -174,6 +175,13 @@ pub enum CheckOutcome {
     ProofFailed {
         diagnostics: String,
     },
+    /// A model: the model checker explored every reachable state of the
+    /// spec under its constants and the bound property held in all of them.
+    NoViolation,
+    /// A model: the bound property fails; the trace's first and last states.
+    Violation {
+        trace: String,
+    },
     Errored {
         reason: String,
     },
@@ -191,6 +199,15 @@ pub enum ProofMeasure {
 
 /// Tool name and version, as the adapter probed them.
 pub type ToolVersions = Vec<(String, String)>;
+
+/// Whether an adapter's check and score can start on this machine (`proob doctor`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Readiness {
+    /// Every tool found, at a version the adapter accepts.
+    Ready(ToolVersions),
+    /// The first tool missing or refused, with how to install it, and what was learnt before it.
+    Missing { reason: String, versions: ToolVersions },
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Check {
@@ -252,6 +269,10 @@ pub enum TokenProblem {
     NonAsciiName { function: String },
     /// Python: the token is in a file pytest does not collect (`test_*.py`, `*_test.py`).
     NotATestFile,
+    /// TLA+: no definition without parameters (`Name == …`) follows the token.
+    NoTlaDefinition,
+    /// TLA+: the module has no `.cfg` of the same base name beside it.
+    NoTlaConfig { config: String },
 }
 
 impl fmt::Display for TokenProblem {
@@ -303,6 +324,13 @@ impl fmt::Display for TokenProblem {
                     f,
                     "binding token is in a file pytest does not collect; test files are named `test_*.py` or `*_test.py`"
                 )
+            }
+            TokenProblem::NoTlaDefinition => write!(
+                f,
+                "binding token binds nothing: write `\\* proob:<ULID>` on the line directly above the definition of the invariant or property it checks (`Name == …`, no parameters)"
+            ),
+            TokenProblem::NoTlaConfig { config } => {
+                write!(f, "binding token is in a module without its model: TLC needs `{config}` beside it")
             }
         }
     }
@@ -392,6 +420,8 @@ pub trait Adapter {
     fn uncovered(&self, _repo: &Path) -> Result<Vec<Uncovered>, AdapterError> {
         Ok(Vec::new())
     }
+    /// The tools `check` and `score` need, located and version-probed; nothing is installed.
+    fn readiness(&self, repo: &Path) -> Readiness;
 }
 
 // ---------------------------------------------------------------------------
@@ -408,8 +438,7 @@ pub enum Availability {
 
 pub fn availability(language: Language) -> Availability {
     match language {
-        Language::Rust | Language::Verus | Language::Python | Language::Kani => Availability::Available,
-        Language::Tla => Availability::Planned("U12"),
+        Language::Rust | Language::Verus | Language::Python | Language::Kani | Language::Tla => Availability::Available,
     }
 }
 
@@ -479,7 +508,8 @@ pub fn adapters_for(config: &Config) -> Result<Vec<Box<dyn Adapter>>, RegistryEr
     config.adapters.iter().filter_map(|a| adapter_for(a, config.witness.into()).transpose()).collect()
 }
 
-fn adapter_for(a: &AdapterConfig, witness: WitnessPolicy) -> Result<Option<Box<dyn Adapter>>, RegistryError> {
+/// One `[[adapters]]` entry's adapter; `None` when this proob has none for its language.
+pub fn adapter_for(a: &AdapterConfig, witness: WitnessPolicy) -> Result<Option<Box<dyn Adapter>>, RegistryError> {
     let root = argv::Checked::path(Path::new(&a.root))
         .map_err(|rule| RegistryError::UnsafeRoot { root: a.root.clone(), rule })?;
     if a.language != Language::Rust && a.sets_cargo_features() {
@@ -498,6 +528,6 @@ fn adapter_for(a: &AdapterConfig, witness: WitnessPolicy) -> Result<Option<Box<d
             python::PythonAdapter::configured(a, root, witness).map(|p| Some(Box::new(p) as Box<dyn Adapter>))
         }
         Language::Kani => kani::KaniAdapter::configured(a, root).map(|k| Some(Box::new(k) as Box<dyn Adapter>)),
-        Language::Tla => Ok(None),
+        Language::Tla => tla::TlaAdapter::configured(a, root).map(|t| Some(Box::new(t) as Box<dyn Adapter>)),
     }
 }

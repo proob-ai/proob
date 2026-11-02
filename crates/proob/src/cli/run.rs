@@ -98,11 +98,15 @@ pub fn perform(
             let (outcome, replay) = check_record(check.outcome);
             (outcome, replay, check.tool_versions, evidence_kind(binding.kind), None)
         }
-        What::Score => {
-            let scope: Vec<PathBuf> = h.scope_files.iter().map(PathBuf::from).collect();
-            let score = adapter.score(&ws.root, binding, &scope).map_err(crate::cli::adapters::adapter_error)?;
-            (score_record(score.outcome), None, score.tool_versions, EvidenceKind::Score, score.jobs.map(|j| j.line()))
-        }
+        What::Score => match proob_adapters::mutation::room(&ws.root) {
+            Err(reason) => (OutcomeRecord::Errored { reason }, None, Vec::new(), EvidenceKind::Score, None),
+            Ok(()) => {
+                let scope: Vec<PathBuf> = h.scope_files.iter().map(PathBuf::from).collect();
+                let score = adapter.score(&ws.root, binding, &scope).map_err(crate::cli::adapters::adapter_error)?;
+                let jobs = score.jobs.map(|j| j.line());
+                (score_record(score.outcome), None, score.tool_versions, EvidenceKind::Score, jobs)
+            }
+        },
     };
     let record = RunResultRecord {
         schema_version: 1,
@@ -160,6 +164,11 @@ fn unbound(p: &LoadedProperty, d: &Discovered) -> CliError {
         Some(u) => CliError::Usage(format!(
             "`proob:{}` at {} binds nothing: {}; the property is Not checked (no adapter)",
             p.file.id, u.token, u.reason
+        )),
+        None if p.file.kind.map(convert::kind) == Some(Kind::Model) => CliError::Usage(format!(
+            "no check carries `proob:{}`: the property is Not checked (no check); bind a model by writing `\\* proob:{}` on the line above \
+             the definition of the invariant or property it checks in a .tla module under the tla adapter's root, with the module's .cfg beside it",
+            p.file.id, p.file.id
         )),
         None if kani_proof => CliError::Usage(format!(
             "no check carries `proob:{}`: the property is Not checked (no check); bind a Kani harness by writing `// proob:{}` on the line above \
@@ -251,6 +260,8 @@ fn check_record(o: CheckOutcome) -> (OutcomeRecord, Option<Replay>) {
             (OutcomeRecord::Verified { rlimit: None, checks: Some(checks) }, None)
         }
         CheckOutcome::ProofFailed { diagnostics } => (OutcomeRecord::ProofFailed { diagnostics }, None),
+        CheckOutcome::NoViolation => (OutcomeRecord::NoViolation, None),
+        CheckOutcome::Violation { trace } => (OutcomeRecord::Violation { trace }, None),
         CheckOutcome::Errored { reason } => (OutcomeRecord::Errored { reason }, None),
     }
 }

@@ -184,6 +184,39 @@ jobs:
       - name: The build probe of `proob init --kani`
         run: cargo xtask test -- -p proob --test init the_build_probe_passes_on_the_kani_fixture_and_fails_on_a_crate_newer_than_kanis_nightly
 
+  tlc:
+    # Not required. The real TLA+ route: the TLC release pinned in
+    # tools/tla.toml, downloaded and checked as `proob init --tla` writes for
+    # users (crates/proob/src/cli/init.rs, tla_steps), on the runner's Java,
+    # then the TLC-gated tests. Elsewhere they skip themselves when TLC does
+    # not resolve; PROOB_REQUIRE_TLC makes a skip here a failure.
+    name: real TLC route (pinned TLA+)
+    runs-on: ubuntu-latest
+    env:
+      PROOB_REQUIRE_TLC: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install the toolchain pinned in rust-toolchain.toml
+        run: rustup toolchain install && rustup show active-toolchain
+      - uses: taiki-e/install-action@1168f6810a3cb30a3514bf5756a3b7f0422c6df8 # v2.87.28
+        with:
+          # cargo xtask test runs the tests through nextest.
+          tool: cargo-nextest@0.9.150
+      - name: Install the TLC pinned in tools/tla.toml (checked against its SHA-256)
+        run: |
+          url=$(sed -n 's/^url = "\(.*\)"$/\1/p' tools/tla.toml)
+          sha=$(sed -n 's/^sha256 = "\(.*\)"$/\1/p' tools/tla.toml)
+          [ -n "$url" ] && [ -n "$sha" ] || { echo "no url or sha256 in tools/tla.toml" >&2; exit 1; }
+          jar="$RUNNER_TEMP/tla2tools.jar"
+          curl -fsSL --retry 3 -o "$jar" "$url"
+          echo "$sha  $jar" | sha256sum -c -
+          java -version
+          echo "PROOB_TLA2TOOLS=$jar" >> "$GITHUB_ENV"
+      - name: The TLA+ adapter's real checks and scores
+        run: cargo xtask test -- -p proob-adapters --test tla
+      - name: proob doctor finds the pinned TLC
+        run: cargo xtask test -- -p proob --test init doctor_after_init_tla
+
   crate-graph:
     name: crate graph layering
     runs-on: ubuntu-latest

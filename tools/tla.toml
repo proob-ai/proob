@@ -1,0 +1,10 @@
+# The TLA+ release whose TLC the tla adapter is tested with (its banner reads
+# "TLC2 Version 2.19 of 08 August 2024"). `crates/proob-adapters/src/tla/tools.rs`
+# embeds this file; `proob doctor` compares the jar PROOB_TLA2TOOLS names with
+# sha256, and the workflows download `url` and check it against sha256. GitHub
+# publishes no digest for this release: sha256 was computed from the download
+# on 2026-11-02. Bump all three together, in their own reviewed PR, and
+# recapture tests/fixtures/tla/.
+version = "1.7.4"
+url = "https://github.com/tlaplus/tlaplus/releases/download/v1.7.4/tla2tools.jar"
+sha256 = "936a262061c914694dfd669a543be24573c45d5aa0ff20a8b96b23d01e050e88"

@@ -37,7 +37,10 @@ For each property read its file (`statement`, `scope`, `kind`) and `hash <id> --
 - `kind` absent or `"test"` and `binding_hash` present: the test route, steps 2 to 4.
 - `kind` absent or `"test"` and `binding_hash: null`: nothing to measure. Say
   `Not checked (no check bound)` and point to `/proob:falsify <id>`.
-- `kind = "model"`: no adapter in this release; say so.
+- `kind = "model"` and `binding_hash` present (a TLA+ spec, with a `language = "tla"` adapter):
+  the model route, in `proof-route.md`'s last section; `run score` mutates the spec, not the
+  code. With `binding_hash: null`, point to `/proob:falsify <id>`, or with no tla adapter, to
+  `proob init --tla`.
 
 Never propose the proof route for a test-kind property in a crate that is not under Verus; the
 human marks a core `kind = "proof"`, not you.
@@ -101,13 +104,14 @@ test clear the bar; that is a config amendment for the team, and the skill does 
 ## Words
 
 Verdicts are only: Holds, Checked, Not checked, Re-approve, Broken, Proposed, Waived until d, with
-modifiers in parentheses. Scores are "killed K of M"; proofs are `verified` or `proof failed`
-exactly as the JSON says; a local run is "local, unverified". Say "can fail" and "cannot fail",
+modifiers in parentheses. Scores are "killed K of M"; proofs are `verified` or `proof failed`,
+models `no violation` or `violation`, exactly as the JSON says; a local run is "local, unverified". Say "can fail" and "cannot fail",
 not "strong" and "weak" as verdicts.
 
 ## Never
 
 - Claim a proof ran, verified, or failed unless `run check` on that binding printed it.
+- Say a model's score, or its run, says anything about the code: it measures the spec.
 - Say a property holds, or will hold, because of a local score.
 - Lower `kill_floor`, raise `max_mutants` to hide unsampled mutants, or narrow a scope to shed
   mutants.

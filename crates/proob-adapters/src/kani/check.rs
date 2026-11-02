@@ -10,6 +10,7 @@
 use crate::argv::Command;
 use crate::kani::tools::{Resolution, Toolchain, resolve};
 use crate::kani::{CheckRef, KaniAdapter, parse_check_ref};
+use crate::mutation::room;
 use crate::verus::check::{lock, target_base};
 use crate::{AdapterError, Binding, Check, CheckOutcome, ProofMeasure, WITNESS_CAP, cap, exit_text};
 use proob_facts::parsers::kani::{Class, classify};
@@ -45,6 +46,9 @@ pub fn run(adapter: &KaniAdapter, repo: &Path, binding: &Binding) -> Result<Chec
         }
     };
     let target = target_base(&root, adapter.tool_env())?.join(TARGET_SUBDIR);
+    if let Err(reason) = room(&target) {
+        return Ok(Check { outcome: CheckOutcome::Errored { reason }, tool_versions: tc.versions });
+    }
     let _held = lock(&target)?;
     let temp = tempfile::tempdir().map_err(|e| AdapterError::Temp { message: e.to_string() })?;
     let sarif = temp.path().join("kani.sarif");
@@ -63,12 +67,30 @@ pub fn run(adapter: &KaniAdapter, repo: &Path, binding: &Binding) -> Result<Chec
     }
     let outcome = match ran {
         Ok(out) => judge(&out, std::fs::read_to_string(&sarif).ok().as_deref(), &r),
-        Err(SpawnError::TimedOut { after, .. }) => CheckOutcome::Errored {
-            reason: format!("Kani timed out after {} minutes, the adapter's limit on one run", after.as_secs() / 60),
-        },
-        Err(e) => CheckOutcome::Errored { reason: format!("cargo kani did not run: {e}") },
+        Err(e) => stopped(&e),
     };
     Ok(Check { outcome, tool_versions: tc.versions })
+}
+
+/// The outcome of a run that never finished: always errored.
+pub fn stopped(e: &SpawnError) -> CheckOutcome {
+    let reason = match e {
+        SpawnError::TimedOut { after, .. } => {
+            format!("Kani timed out after {} minutes, the adapter's limit on one run", after.as_secs() / 60)
+        }
+        SpawnError::OutOfMemory { limit_bytes, .. } => out_of_memory(*limit_bytes),
+        e => format!("cargo kani did not run: {e}"),
+    };
+    CheckOutcome::Errored { reason }
+}
+
+/// Why a run proob stopped for memory has no verdict.
+pub fn out_of_memory(limit_bytes: u64) -> String {
+    format!(
+        "Kani used more than {} MB and was stopped (out of memory); raise {} or shrink the harness's bounds",
+        limit_bytes >> 20,
+        proob_spawn::MEMORY_LIMIT_VAR
+    )
 }
 
 /// Puts `Cargo.lock` back as it was before the run: the same bytes, or absent.

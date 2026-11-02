@@ -13,9 +13,15 @@
 //! whose result is kept in `proob/.cache/kani-probe.toml`. A config or
 //! workflow that already exists is still kept; the block and steps it lacks
 //! are printed instead, with the oldest proob that reads a Kani record.
+//!
+//! With `--tla`: the TLA+ adapter block (TLC, spec mutants) and, in both
+//! workflows' setup steps, the pinned tla2tools.jar checked against its
+//! SHA-256 with `PROOB_TLA2TOOLS` set to it; a kept workflow without them is
+//! given the steps to add.
 use crate::cli::error::CliError;
 use crate::cli::workspace::Workspace;
 use proob_adapters::kani::{self, KaniAdapter};
+use proob_adapters::tla;
 use proob_facts::config::{self, Language, PolicyTable, defaults};
 use proob_facts::paths::{CACHE_DIR, CONFIG, EVIDENCE_WORKFLOW, GATE_WORKFLOW, KANI_PROBE};
 use serde::Serialize;
@@ -54,6 +60,8 @@ pub enum Detected {
 pub struct Options {
     /// `--kani`: the Kani adapter, its install in both workflows, and the probe.
     pub kani: Option<KaniSetup>,
+    /// `--tla`: the TLA+ adapter.
+    pub tla: bool,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -83,6 +91,14 @@ pub struct Outcome {
     pub action_pinned_by_sha: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub kani: Option<KaniOutcome>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tla: Option<TlaOutcome>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct TlaOutcome {
+    /// A config that existed and was kept without the TLA+ adapter: its path and the block to add.
+    pub to_add: Vec<(String, String)>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -185,6 +201,15 @@ pub fn kani_block(k: KaniSetup) -> String {
     )
 }
 
+/// The TLA+ adapter block.
+pub fn tla_block() -> String {
+    format!(
+        "[[adapters]]\n# TLA+ invariants and properties as models, each checked by TLC over the spec's .cfg constants.\n# TLC runs on Java with PROOB_TLA2TOOLS set to the path of a tla2tools.jar.\nroot = \".\"\nlanguage = \"tla\"\nrunner = \"{}\"\nmutation_tool = \"{}\"\n",
+        tla::RUNNER,
+        tla::MUTATION_TOOL
+    )
+}
+
 fn outcome_name(o: config::OutcomeName) -> &'static str {
     match o {
         config::OutcomeName::Pass => "pass",
@@ -216,9 +241,14 @@ fn policy_block(p: PolicyTable) -> String {
 /// The config text: the built-in defaults, commented, with the detected
 /// adapters and, when asked, Kani's.
 pub fn config_text(detected: &[Detected], opts: Options) -> String {
-    let adapters: String =
-        detected.iter().map(|d| adapter_block(*d)).chain(opts.kani.map(kani_block)).map(|b| format!("\n{b}")).collect();
-    let adapters = if detected.is_empty() {
+    let adapters: String = detected
+        .iter()
+        .map(|d| adapter_block(*d))
+        .chain(opts.kani.map(kani_block))
+        .chain(opts.tla.then(tla_block))
+        .map(|b| format!("\n{b}"))
+        .collect();
+    let adapters = if adapters.is_empty() {
         "\n# No adapter detected (Cargo.toml, pyproject.toml, setup.py, requirements.txt).\n# Properties render Not checked (no adapter) until one is listed here.\n".to_string()
     } else {
         adapters
@@ -357,11 +387,32 @@ pub fn kani_steps() -> Vec<String> {
     ]
 }
 
+/// TLC as the workflows install it: the pinned jar, refused unless its
+/// SHA-256 matches, on the runner's Java, named by `PROOB_TLA2TOOLS`.
+pub fn tla_steps() -> Vec<String> {
+    let pin = &*tla::tools::PIN;
+    vec![
+        format!("      - name: Install TLC (TLA+ {}, the release this proob is tested with)", pin.version),
+        "        run: |".into(),
+        "          jar=\"$RUNNER_TEMP/tla2tools.jar\"".into(),
+        format!("          curl -fsSL --retry 3 -o \"$jar\" {}", pin.url),
+        format!("          echo \"{}  $jar\" | sha256sum -c -", pin.sha256),
+        "          java -version".into(),
+        format!("          echo \"{}=$jar\" >> \"$GITHUB_ENV\"", tla::tools::JAR_ENV),
+    ]
+}
+
 fn all_setup_steps(detected: &[Detected], opts: Options) -> String {
-    let lines: Vec<String> = if detected.is_empty() {
+    let tla = opts.tla.then(tla_steps).into_iter().flatten();
+    let lines: Vec<String> = if detected.is_empty() && !opts.tla {
         vec!["      # No adapter detected: nothing to set up until proob/config.toml lists one.".into()]
     } else {
-        detected.iter().flat_map(|d| setup_steps(*d)).chain(opts.kani.into_iter().flat_map(|_| kani_steps())).collect()
+        detected
+            .iter()
+            .flat_map(|d| setup_steps(*d))
+            .chain(opts.kani.into_iter().flat_map(|_| kani_steps()))
+            .chain(tla)
+            .collect()
     };
     lines.join("\n")
 }
@@ -483,6 +534,7 @@ pub fn run(ws: &Workspace, default_branch: &str, opts: Options) -> Result<Outcom
         Some(k) => kani_to_add(ws, k)?,
         None => Vec::new(),
     };
+    let tla = if opts.tla { Some(TlaOutcome { to_add: tla_to_add(ws)? }) } else { None };
     let files = vec![
         (CONFIG.to_string(), write_new(ws, CONFIG, &config)?),
         (
@@ -506,7 +558,25 @@ pub fn run(ws: &Workspace, default_branch: &str, opts: Options) -> Result<Outcom
         action_pin: format!("{ACTION_PIN} {ACTION_PIN_COMMENT}"),
         action_pinned_by_sha: ACTION_PIN_COMMENT.starts_with("# v"),
         kani,
+        tla,
     })
+}
+
+/// The existing files that lack TLA+, each with the exact text to add: the
+/// adapter block to a config without a tla adapter, the steps to a workflow
+/// without TLC's install.
+fn tla_to_add(ws: &Workspace) -> Result<Vec<(String, String)>, CliError> {
+    let has_tla =
+        |text: &str| config::parse_config(text).is_ok_and(|c| c.adapters.iter().any(|a| a.language == Language::Tla));
+    let lacks = ws.read_optional(CONFIG)?.is_some_and(|text| !has_tla(&text));
+    let steps = tla_steps().join("\n") + "\n";
+    let mut out: Vec<(String, String)> = lacks.then(|| (CONFIG.to_string(), tla_block())).into_iter().collect();
+    for wf in [GATE_WORKFLOW, EVIDENCE_WORKFLOW] {
+        if ws.read_optional(wf)?.is_some_and(|text| !text.contains(tla::tools::JAR_ENV)) {
+            out.push((wf.to_string(), steps.clone()));
+        }
+    }
+    Ok(out)
 }
 
 /// The existing files that lack Kani, each with the exact text to add: the
@@ -572,6 +642,17 @@ pub fn text(o: &Outcome) -> String {
     if let Some(k) = &o.kani {
         out.push_str(&kani_text(k));
     }
+    if let Some(t) = &o.tla {
+        for (path, text) in &t.to_add {
+            let what = if path == CONFIG { "this adapter block" } else { "these steps to its execute job" };
+            out.push_str(&format!("tla: {path} exists and was kept; add {what}:\n\n{text}\n"));
+        }
+        out.push_str(&format!(
+            "tla: the workflows install TLC (TLA+ {}); here, TLC runs on Java with {} set to the path of that tla2tools.jar: `proob doctor` says what is missing, /proob:setup installs it\n",
+            tla::tools::PIN.version,
+            tla::tools::JAR_ENV
+        ));
+    }
     out.push_str(
         "next: review proob/config.toml, commit, and open the pull request; the gate takes effect after it merges.\n",
     );
@@ -624,9 +705,17 @@ mod tests {
     #[test]
     fn the_shadows_kani_block_samples_fewer_mutants() {
         let rust = Detected::Rust { toolchain_file: false, needs_features: false };
-        let opts = Options { kani: Some(KaniSetup { max_mutants: Some(10) }) };
+        let opts = Options { kani: Some(KaniSetup { max_mutants: Some(10) }), tla: false };
         let parsed = config::parse_config(&config_text(&[rust], opts)).expect("parses");
         let kani = parsed.adapters.iter().find(|a| a.language == Language::Kani).expect("a kani adapter");
         assert_eq!(kani.max_mutants, Some(10));
+    }
+
+    #[test]
+    fn tla_adds_its_adapter_even_without_a_detected_language() {
+        let parsed = config::parse_config(&config_text(&[], Options { kani: None, tla: true })).expect("parses");
+        let tla = parsed.adapters.iter().find(|a| a.language == Language::Tla).expect("a tla adapter");
+        assert_eq!((tla.runner.as_str(), tla.mutation_tool.as_str()), ("tlc", "spec-mutants"));
+        assert!(all_setup_steps(&[], Options { kani: None, tla: true }).contains("PROOB_TLA2TOOLS"));
     }
 }

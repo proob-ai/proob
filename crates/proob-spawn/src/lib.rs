@@ -9,8 +9,15 @@
 //! the whole group: a runner's own children (CBMC under `cargo kani`, a test
 //! binary under `cargo test`) would otherwise outlive it, keep its pipes open
 //! so the timeout never returns, and keep their memory. SIGINT, SIGTERM, or
-//! SIGHUP sent to proob kills every live group the same way before proob dies. Environment variables are inherited and `env` is added on top: a
-//! runner needs `PATH` and `HOME`, and the caller names what else it sets.
+//! SIGHUP sent to proob kills every live group the same way before proob dies.
+//! Environment variables are inherited and `env` is added on top: a runner
+//! needs `PATH` and `HOME`, and the caller names what else it sets.
+//!
+//! A verifier can take the machine down with it (CBMC under Kani took 6 to
+//! 13 GB per harness), so while it waits `run` reads the resident memory of
+//! the child's group from `ps` every `POLL`, and kills the group once it
+//! passes the budget: `PROOB_MEMORY_LIMIT_MB` (`0` turns the watch off), else
+//! half the physical memory. A poll `ps` cannot answer kills nothing.
 //!
 //! Nothing here interprets output; callers parse it and fail closed when it is
 //! not what they expected.
@@ -18,10 +25,17 @@ use std::ffi::OsString;
 use std::fmt;
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::process::{Child, ChildStderr, ChildStdout, Command, Stdio};
+use std::process::{Child, ChildStderr, ChildStdout, Command, ExitStatus, Stdio};
+use std::sync::OnceLock;
 use std::thread::JoinHandle;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use wait_timeout::ChildExt;
+
+/// The variable that sets the memory budget, in MB.
+pub const MEMORY_LIMIT_VAR: &str = "PROOB_MEMORY_LIMIT_MB";
+/// How often the group's memory is read while the child runs.
+const POLL: Duration = Duration::from_millis(500);
+const MB: u64 = 1024 * 1024;
 
 /// What a finished child left behind. `code` is `None` when the child was
 /// ended by a signal.
@@ -48,6 +62,9 @@ pub enum SpawnError {
     TimedOut { program: PathBuf, after: Duration },
     /// Waiting on the process or reading its pipes failed after it started.
     Io { program: PathBuf, message: String },
+    /// The process group's resident memory passed `limit_bytes` (it read
+    /// `peak_bytes`) and the group was killed.
+    OutOfMemory { program: PathBuf, limit_bytes: u64, peak_bytes: u64 },
 }
 
 impl fmt::Display for SpawnError {
@@ -58,6 +75,13 @@ impl fmt::Display for SpawnError {
                 write!(f, "{} did not finish within {} ms and was killed", program.display(), after.as_millis())
             }
             SpawnError::Io { program, message } => write!(f, "{} failed after starting: {message}", program.display()),
+            SpawnError::OutOfMemory { program, limit_bytes, peak_bytes } => write!(
+                f,
+                "{} passed its memory budget of {} MB (it reached {} MB) and was stopped (out of memory); raise {MEMORY_LIMIT_VAR} to allow more",
+                program.display(),
+                limit_bytes / MB,
+                peak_bytes / MB
+            ),
         }
     }
 }
@@ -65,13 +89,26 @@ impl fmt::Display for SpawnError {
 impl std::error::Error for SpawnError {}
 
 /// Runs `program` with `args` as its argv, in `cwd` when given, with `env`
-/// added to the inherited environment, and waits at most `timeout`.
+/// added to the inherited environment, and waits at most `timeout`, within
+/// the memory budget (module doc).
 pub fn run(
     program: &Path,
     args: &[OsString],
     cwd: Option<&Path>,
     env: &[(OsString, OsString)],
     timeout: Duration,
+) -> Result<Output, SpawnError> {
+    run_within(program, args, cwd, env, timeout, memory_budget())
+}
+
+/// `run` with the budget in bytes given; `None` watches nothing.
+fn run_within(
+    program: &Path,
+    args: &[OsString],
+    cwd: Option<&Path>,
+    env: &[(OsString, OsString)],
+    timeout: Duration,
+    limit: Option<u64>,
 ) -> Result<Output, SpawnError> {
     let mut child = command(program, args, cwd, env)
         .spawn()
@@ -80,24 +117,103 @@ pub fn run(
     let _live = group::Live::track(child.id());
     let stdout = drain_stdout(child.stdout.take());
     let stderr = drain_stderr(child.stderr.take());
-    let status = child.wait_timeout(timeout).map_err(|e| io_error(program, &e.to_string()));
-    match status {
-        Ok(Some(status)) => {
-            Ok(Output { code: status.code(), stdout: joined(program, stdout)?, stderr: joined(program, stderr)? })
+    let stopped = match watch(&mut child, timeout, limit) {
+        Ok(Ended::Exited(status)) => {
+            return Ok(Output {
+                code: status.code(),
+                stdout: joined(program, stdout)?,
+                stderr: joined(program, stderr)?,
+            });
         }
-        Ok(None) => {
-            reap(&mut child);
-            // Draining after the kill lets the reader threads finish; their
-            // partial output is discarded with the timeout.
-            let _ = joined(program, stdout);
-            let _ = joined(program, stderr);
-            Err(SpawnError::TimedOut { program: program.to_path_buf(), after: timeout })
+        Ok(Ended::TimedOut) => SpawnError::TimedOut { program: program.to_path_buf(), after: timeout },
+        Ok(Ended::OutOfMemory { limit_bytes, peak_bytes }) => {
+            SpawnError::OutOfMemory { program: program.to_path_buf(), limit_bytes, peak_bytes }
         }
-        Err(e) => {
-            reap(&mut child);
-            Err(e)
+        Err(e) => io_error(program, &e.to_string()),
+    };
+    reap(&mut child);
+    // Draining after the kill lets the reader threads finish; their partial
+    // output is discarded with the error.
+    let _ = joined(program, stdout);
+    let _ = joined(program, stderr);
+    Err(stopped)
+}
+
+/// How a watched child stopped running.
+enum Ended {
+    Exited(ExitStatus),
+    TimedOut,
+    OutOfMemory { limit_bytes: u64, peak_bytes: u64 },
+}
+
+/// Waits in `POLL` slices until the child exits, `timeout` passes, or its
+/// group's memory passes `limit`.
+fn watch(child: &mut Child, timeout: Duration, limit: Option<u64>) -> std::io::Result<Ended> {
+    let deadline = Instant::now() + timeout;
+    loop {
+        if let Some(status) = child.wait_timeout(POLL.min(deadline.saturating_duration_since(Instant::now())))? {
+            return Ok(Ended::Exited(status));
+        }
+        if Instant::now() >= deadline {
+            return Ok(Ended::TimedOut);
+        }
+        let over = limit.and_then(|l| group_rss(child.id()).filter(|rss| *rss > l).map(|rss| (l, rss)));
+        if let Some((limit_bytes, peak_bytes)) = over {
+            return Ok(Ended::OutOfMemory { limit_bytes, peak_bytes });
         }
     }
+}
+
+/// The resident bytes of every process in the group `pgid` leads, from
+/// `ps`; `None` when `ps` gives no reading.
+fn group_rss(pgid: u32) -> Option<u64> {
+    let out = Command::new("ps")
+        .args(["-axo", "pgid=,rss="])
+        .stdin(Stdio::null())
+        .stderr(Stdio::null())
+        .output()
+        .ok()
+        .filter(|o| o.status.success())?;
+    Some(group_kib(&String::from_utf8_lossy(&out.stdout), pgid).saturating_mul(1024))
+}
+
+/// Pure: the summed `rss` (KiB) of the `pgid rss` rows whose pgid is `pgid`.
+fn group_kib(ps: &str, pgid: u32) -> u64 {
+    let row = |line: &str| {
+        let mut cols = line.split_whitespace().map(str::parse::<u64>);
+        Some((cols.next()?.ok()?, cols.next()?.ok()?))
+    };
+    ps.lines().filter_map(row).filter(|(g, _)| *g == u64::from(pgid)).map(|(_, kib)| kib).sum()
+}
+
+/// The budget in bytes: the variable when set, else half the physical memory;
+/// `None` when there is none (`0`, or no physical-memory probe here).
+pub fn memory_budget() -> Option<u64> {
+    static PHYSICAL: OnceLock<Option<u64>> = OnceLock::new();
+    budget(std::env::var(MEMORY_LIMIT_VAR).ok().as_deref(), *PHYSICAL.get_or_init(physical_memory))
+}
+
+/// Pure: `setting` MB (`0`: no budget); unset or not a whole number, half
+/// of `physical` when known.
+fn budget(setting: Option<&str>, physical: Option<u64>) -> Option<u64> {
+    match setting.and_then(|s| s.trim().parse::<u64>().ok()) {
+        Some(0) => None,
+        Some(mb) => Some(mb.saturating_mul(MB)),
+        None => physical.map(|bytes| bytes / 2),
+    }
+}
+
+#[cfg(unix)]
+fn physical_memory() -> Option<u64> {
+    // SAFETY: sysconf(3) reads a system constant; no memory is touched.
+    let (pages, size) = unsafe { (libc::sysconf(libc::_SC_PHYS_PAGES), libc::sysconf(libc::_SC_PAGESIZE)) };
+    Some(u64::try_from(pages).ok()?.saturating_mul(u64::try_from(size).ok()?)).filter(|b| *b > 0)
+}
+
+// shortcut: no physical-memory probe off unix, so no default budget there; add one if Windows matters.
+#[cfg(not(unix))]
+fn physical_memory() -> Option<u64> {
+    None
 }
 
 fn command(program: &Path, args: &[OsString], cwd: Option<&Path>, env: &[(OsString, OsString)]) -> Command {
@@ -228,5 +344,52 @@ mod group {
             libc::signal(signal, libc::SIG_DFL);
             libc::raise(signal);
         }
+    }
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+
+    const GB: u64 = 1024 * MB;
+
+    #[test]
+    fn the_budget_is_the_variable_else_half_the_machine() {
+        assert_eq!(budget(None, Some(16 * GB)), Some(8 * GB));
+        assert_eq!(budget(Some("100"), Some(16 * GB)), Some(100 * MB));
+        assert_eq!(budget(Some("0"), Some(16 * GB)), None, "0 turns the watch off");
+        assert_eq!(budget(Some("8G"), Some(16 * GB)), Some(8 * GB), "not a number: the default");
+        assert_eq!(budget(Some("-1"), Some(16 * GB)), Some(8 * GB));
+        assert_eq!(budget(None, None), None, "an unknown machine: no watch");
+    }
+
+    #[test]
+    fn group_memory_sums_only_the_group() {
+        let ps = "  41   1000\n 42 20\n42   300\n garbage\n\n 7 5\n";
+        assert_eq!(group_kib(ps, 42), 320);
+        assert_eq!(group_kib(ps, 99), 0);
+    }
+
+    #[test]
+    fn a_child_over_the_budget_is_killed_as_out_of_memory() {
+        // Every byte of the 300 MB is written, so it is resident.
+        let script = "import time; b = b'x' * (300 << 20); time.sleep(30)";
+        let args = [OsString::from("-c"), OsString::from(script)];
+        let started = Instant::now();
+        let err =
+            run_within(Path::new("python3"), &args, None, &[], Duration::from_secs(60), Some(100 * MB)).unwrap_err();
+        assert!(err.to_string().contains(MEMORY_LIMIT_VAR), "{err}");
+        let SpawnError::OutOfMemory { limit_bytes, peak_bytes, .. } = err else { panic!("{err:?}") };
+        assert_eq!(limit_bytes, 100 * MB);
+        assert!(peak_bytes > 100 * MB, "{peak_bytes}");
+        assert!(started.elapsed() < Duration::from_secs(20), "the group was killed, not waited for");
+    }
+
+    #[test]
+    fn a_child_under_the_budget_runs_to_the_end() {
+        // Long enough for the watch to read the group at least once.
+        let out = run_within(Path::new("sleep"), &[OsString::from("1")], None, &[], Duration::from_secs(10), Some(GB))
+            .expect("sleep runs");
+        assert!(out.success());
     }
 }

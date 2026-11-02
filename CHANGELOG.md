@@ -10,6 +10,11 @@ version as a comment.
 
 ### Fixed
 
+- Every missing-tool message now names a pinned install command that works
+  from any repository: `cargo install --locked cargo-nextest --version
+  0.9.150` (and cargo-mutants 27.1.0), and the full pinned set for Python,
+  where it used to point at `tools/python-tools.txt`, a file only proob's
+  own repository has.
 - A runner that timed out is killed with everything it started. Before,
   only the direct child was killed: a grandchild that held its output open
   (CBMC under `cargo kani`, a test binary under `cargo test`) kept running,
@@ -50,6 +55,43 @@ version as a comment.
 
 ### Added
 
+- `proob doctor`: for each adapter in `proob/config.toml`, whether this
+  machine has its tools at the versions proob accepts, with the exact
+  install command for the first one missing; free disk; the memory budget.
+  It installs nothing, exits 1 when anything is not ready, and takes
+  `--json`. A TLC jar other than the pinned release is not ready.
+- `/proob:setup`: runs `proob doctor` and installs what is missing, one step
+  at a time, each after the user approves it, with its source and size
+  shown first; never `sudo`, never a script piped from the network, and no
+  shell profile edited without asking.
+- TLC is pinned: `tools/tla.toml` names TLA+ 1.7.4, its URL, and its
+  SHA-256. The workflows `proob init --tla` writes download that jar, refuse
+  it on a digest mismatch, and set `PROOB_TLA2TOOLS`; a kept workflow gets
+  the steps printed. This repository's CI runs the real TLC tests on it.
+- Models of a design with TLA+: a `tla` adapter binds a `\* proob:<ULID>`
+  line above an invariant or temporal property of a `.tla` module (its
+  `.cfg` beside it) as a `model`, and runs TLC on a temporary copy with only
+  that name checked, one worker, and a fixed fingerprint and seed. TLC's
+  output decides: no violation only after "No error has been found"; a
+  violation carries the error trace's first and last states; a deadlock, a
+  parse or semantic error, a timeout, out of memory, or anything
+  unrecognised is errored. Strength is measured on the spec
+  (`tla-spec-mutants-v1`). TLC comes only from the jar `PROOB_TLA2TOOLS`
+  names, on Java from `PATH`. `proob init --tla` adds the adapter, and `proob validate` rejects a TLA+
+  token on a property whose kind is not `model`.
+- Skills for the model route: with a `tla` adapter, `/proob:declare` may
+  propose `kind = "model"` for a protocol-shaped scope, and `/proob:falsify`
+  writes a TLA+ spec under `proob/specs/` citing the code each action
+  models, runs TLC, and lists the constants and what the model leaves out
+  in the pull request's "Model-checked for" block.
+- A memory budget for every runner proob starts: while it runs, proob reads
+  the resident memory of its process group every half second and kills the
+  group once it passes `PROOB_MEMORY_LIMIT_MB` (default: half the physical
+  memory; `0` turns the watch off). A run stopped for memory is errored, and
+  a mutant stopped for memory counts as a timeout, never killed or survived.
+  CBMC under Kani took 6 to 13 GB per harness (`bench/results/kani-v1.md`).
+- A score, and a Kani check, refuse to start with an errored reason when the
+  volume they build on has under 2 GB free.
 - Proofs on ordinary Rust with Kani 0.68.0: a `kani` adapter binds a
   `#[kani::proof]` harness as a `proof`, so a property on plain Rust code
   can reach `Holds` with no proof language. A run that verifies is reported

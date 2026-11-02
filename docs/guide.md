@@ -1,6 +1,6 @@
 # proob guide
 
-Everything the [README](../README.md) leaves out: installing, the five skills, the status words, team setup, and why a verdict can be trusted. Benchmark details are in [benchmark.md](benchmark.md).
+Everything the [README](../README.md) leaves out: installing, the skills, the status words, team setup, and why a verdict can be trusted. Benchmark details are in [benchmark.md](benchmark.md).
 
 ## Install
 
@@ -23,7 +23,10 @@ Requirements:
 
 - **GitHub read access**, for a verified status: `gh auth login`, or `GITHUB_TOKEN` in the environment. Without it every status is marked `unverified` and nothing reads `Holds`.
 - **Python projects:** pytest 9.1.1, Hypothesis 6.169.4, and mutmut 3.8.0 in the environment your tests run in ([`tools/python-tools.txt`](../tools/python-tools.txt)).
-- **Rust projects:** cargo-nextest and cargo-mutants. For the proof route, the pinned Verus release, which [`tools/get-verus.sh`](../tools/get-verus.sh) fetches.
+- **Rust projects:** cargo-nextest 0.9.150 and cargo-mutants 27.1.0. For the proof route, the pinned Verus release, which [`tools/get-verus.sh`](../tools/get-verus.sh) fetches, or Kani at the version in [`tools/kani.toml`](../tools/kani.toml).
+- **TLA+ models:** Java 11 or later, and `tla2tools.jar` of the TLA+ release in [`tools/tla.toml`](../tools/tla.toml), named by `PROOB_TLA2TOOLS`.
+
+`proob doctor` reports, for each adapter `proob/config.toml` lists, whether this machine has its tools at the versions proob accepts, and the exact command for anything missing; it installs nothing. `/proob:setup` runs it and installs what is missing, one step at a time, each only after you say yes. The workflows `proob init` writes install their own pinned tools in CI.
 
 ## Usage
 
@@ -110,11 +113,38 @@ Kani runs on Linux and macOS, not Windows. It downloads CBMC, whose BSD-style li
 
 Kani is heavy. On indexmap, one CBMC process used 6 to 13 GB of memory per harness, and a harness over maps of 4 entries ran past the adapter's 30-minute limit ([Kani results](../bench/results/kani-v1.md)). proob does not yet check free memory before a run or cap CBMC's memory, so run one Kani job at a time on a machine with memory to spare, and keep harness bounds small.
 
+### Models of a design (TLA+)
+
+For a protocol, a retry loop, or a state machine, a property can be a model: an invariant or temporal property of a TLA+ spec, checked by TLC. Opt in once:
+
+```sh
+proob init --tla
+```
+
+It adds the TLA+ adapter to `proob/config.toml` (`language = "tla"`, `runner = "tlc"`, `mutation_tool = "spec-mutants"`). TLC runs on Java 11 or later, from the `tla2tools.jar` that `PROOB_TLA2TOOLS` names. proob never looks for the jar anywhere else: with the variable unset, or naming no file, or with no `java` on `PATH`, a check is errored and says how to set it. The workflows `proob init` writes download the jar of the release pinned in [`tools/tla.toml`](../tools/tla.toml) (TLA+ 1.7.4), refuse it unless its SHA-256 matches, and set `PROOB_TLA2TOOLS`; a workflow that already exists is kept, and `proob init --tla` prints the steps to add. On your machine, `/proob:setup` does the same with your approval, and `proob doctor` reports a jar other than the pinned release as not ready: TLC's output is what the adapter parses, and it is tested against that release.
+
+A model property declares `kind = "model"` and binds one definition. Write `\* proob:<ULID>` on the line directly above the invariant or property it checks, a definition without parameters at the start of a line (`MutualExclusion == …`), in a `.tla` module whose `.cfg` sits beside it with the same base name. The binding set is the module, its `.cfg`, and every module beside it that it reaches through `EXTENDS` or `INSTANCE`; standard modules such as `Naturals` live in the jar, whose TLC release each result records. `proob validate` rejects a TLA+ token on a property of another kind.
+
+`proob run check` copies those modules into a temporary directory and runs TLC there with one worker, a fixed fingerprint and seed, and a cfg that keeps the original's specification, constants, symmetry, constraints, and `CHECK_DEADLOCK`, but checks only the bound name: as a `PROPERTY` when the cfg lists it under `PROPERTY`, else as an `INVARIANT`. Nothing is written into the repository. TLC's output decides, not its exit code: no violation needs TLC's "No error has been found" after exploring every reachable state; a violation reports the error trace's first and last states; a deadlock (unless the cfg says `CHECK_DEADLOCK FALSE`), a parse or semantic error, a timeout (30 minutes), running out of memory, and anything proob does not recognise are errored, never a pass.
+
+`Holds` on a model means: the approved spec, model-checked by TLC over the approved constants, satisfies the approved property, and mutating the spec shows the property can fail. It is a claim about the design, not about the code. The constants in the `.cfg` are the bounds of that claim, so approving the pull request approves them, as approving a Kani harness approves its bounds.
+
+Strength is measured on the spec, not the code (`tla-spec-mutants-v1`). proob changes the definitions the cfg's `NEXT` or `SPECIFICATION` reaches, never the bound property, the initial predicate, or the cfg: `=` and `#` swapped where nothing is assigned, `<` and `<=`, `>` and `>=`, `+ 1` and `- 1`, one conjunct of a `/\` list dropped, `TRUE` and `FALSE`. A mutant that violates the bound property is killed; one TLC passes survived; one that runs out of time or memory is a timeout; one that does not parse, or deadlocks, says nothing about the property and is excluded. The unmutated spec must pass first, or nothing is scored.
+
+Code that moves away from its spec flags the spec for re-approval: an approved model property whose scope has commits since approval reads `Re-approve (spec drifted: n commits to the modelled scope)`. Drift is file-granular and over-approximate. It cannot miss a change to the scope, and it cannot tell a refactor from a change of behaviour. No method checks that arbitrary code conforms to a TLA+ spec, so proob does not claim one.
+
+What a model does not cover:
+
+- the code: TLC checks the spec, and whether the code follows it is the reviewer's judgement, renewed on every drift;
+- states beyond the constants in the `.cfg`;
+- definitions written other than at the start of a line, such as infix operators: they are never mutated.
+
 ### CLI
 
 The skills drive the `proob` binary, which you can also run directly:
 
 ```sh
+proob doctor                # what this machine lacks to run each adapter (installs nothing)
 proob validate              # check proob's files and binding tokens
 proob status                # derive every property's status
 proob check --base main --head HEAD   # the gate: status plus policy for this change
@@ -184,4 +214,5 @@ For a proof, strength is measured by mutation under proof: proob changes the cod
 - GitHub disables scheduled workflows on a public repository after 60 days without activity. When the nightly run stops, scores go stale: `Holds` drops to `Checked (strength pending)`, and `Checked (tested)` to `Checked (tested, strength pending)`.
 - mutmut needs `os.fork`, so Python checks are scored on Linux and macOS only.
 - A Kani proof holds only within its harness's bounds, and Kani cannot run on Windows (see [Proofs on ordinary Rust](#proofs-on-ordinary-rust-kani)).
-- TLA+ is not supported yet.
+- A TLA+ model holds for its spec over the constants in its `.cfg`, not for the code; a change to the modelled code only flags the spec for re-approval (see [Models of a design](#models-of-a-design-tla)). Alloy is not supported yet.
+- Every runner proob starts (a test runner, Verus, Kani and CBMC, TLC) is held to a memory budget: once its process group's resident memory passes `PROOB_MEMORY_LIMIT_MB` megabytes, proob kills the group. The default is half the machine's physical memory; `0` turns the budget off. A run stopped for memory is reported as errored with the limit it passed, and a mutant stopped for memory counts as a timeout, never killed or survived. A score, or a Kani check, does not start when the volume it builds on has under 2 GB free.

@@ -6,5 +6,6 @@ pub mod cargo_mutants;
 pub mod junit;
 pub mod kani;
 pub mod mutmut;
+pub mod tlc;
 pub mod verus;
 pub mod xml;

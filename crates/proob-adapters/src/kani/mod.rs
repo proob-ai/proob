@@ -57,7 +57,9 @@ pub mod score;
 pub mod tools;
 
 use crate::argv::Checked;
-use crate::{Adapter, AdapterError, Binding, Budget, Check, Language, RegistryError, Score, Seed, Uncovered};
+use crate::{
+    Adapter, AdapterError, Binding, Budget, Check, Language, Readiness, RegistryError, Score, Seed, Uncovered,
+};
 use proob_facts::config::Adapter as AdapterConfig;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -174,6 +176,20 @@ pub fn parse_check_ref(text: &str) -> Result<CheckRef, AdapterError> {
 impl Adapter for KaniAdapter {
     fn language(&self) -> Language {
         Language::Kani
+    }
+
+    fn readiness(&self, repo: &Path) -> Readiness {
+        // A score also lists mutants with cargo-mutants.
+        let tc = match tools::resolve(self.tool_env()) {
+            tools::Resolution::Ready(tc) => tc,
+            tools::Resolution::Missing { reason, versions } => return Readiness::Missing { reason, versions },
+        };
+        match crate::rust::tools::resolve(&self.root_in(repo), &[crate::rust::tools::Need::Mutants], self.tool_env()) {
+            crate::rust::tools::Resolution::Ready(t) => Readiness::Ready([tc.versions, t.versions].concat()),
+            crate::rust::tools::Resolution::Missing { reason, .. } => {
+                Readiness::Missing { reason, versions: tc.versions }
+            }
+        }
     }
 
     fn discover(&self, repo: &Path) -> Result<Vec<Binding>, AdapterError> {
