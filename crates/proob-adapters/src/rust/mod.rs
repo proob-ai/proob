@@ -110,7 +110,7 @@ impl Features {
     pub fn configured(a: &AdapterConfig) -> Result<Features, RegistryError> {
         let names = a.features.iter().map(|f| Checked::feature(f)).collect::<Result<Vec<_>, _>>().map_err(|_| {
             RegistryError::UnsupportedOption {
-                language: Language::Rust,
+                language: a.language,
                 option: "features",
                 message: "must each be a cargo feature name (`name` or `package/name`)",
             }

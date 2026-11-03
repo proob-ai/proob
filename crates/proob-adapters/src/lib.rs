@@ -512,11 +512,11 @@ pub fn adapters_for(config: &Config) -> Result<Vec<Box<dyn Adapter>>, RegistryEr
 pub fn adapter_for(a: &AdapterConfig, witness: WitnessPolicy) -> Result<Option<Box<dyn Adapter>>, RegistryError> {
     let root = argv::Checked::path(Path::new(&a.root))
         .map_err(|rule| RegistryError::UnsafeRoot { root: a.root.clone(), rule })?;
-    if a.language != Language::Rust && a.sets_cargo_features() {
+    if !matches!(a.language, Language::Rust | Language::Kani) && a.sets_cargo_features() {
         return Err(RegistryError::UnsupportedOption {
             language: a.language,
             option: "features",
-            message: "(and `all_features`, `no_default_features`) are cargo options: only a rust adapter takes them",
+            message: "(and `all_features`, `no_default_features`) are cargo options: only a rust or kani adapter takes them",
         });
     }
     match a.language {

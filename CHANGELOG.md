@@ -10,6 +10,15 @@ version as a comment.
 
 ### Fixed
 
+- The Kani adapter takes cargo features. `features`, `all_features`, and
+  `no_default_features` in a kani `[[adapters]]` row go on every cargo call it
+  makes (the build probe, `cargo kani` for the check and each mutant, and the
+  mutant listing); before, a kani row refused them. On vaultwarden, whose
+  `build.rs` refuses to build without a database feature, the probe failed and
+  every property fell back to a test, with no way to set `features =
+  ["sqlite"]` for Kani. `proob init --kani` probes with the row's features and adds the same
+  commented hint as the rust block.
+
 - The shadow report no longer says "test cannot fail" when only a sample of
   the mutants ran and none was killed. The unsampled mutants may be the ones
   the test reads (on vaultwarden, 17 of a file's 160 ran against a test of

@@ -479,3 +479,27 @@ fn the_build_probe_passes_on_the_kani_fixture_and_fails_on_a_crate_newer_than_ka
     assert!(probe.starts_with("kani_probe = \"failed: the crate did not compile under Kani"), "{probe}");
     assert!(probe.contains("is not supported by the following package"), "{probe}");
 }
+
+#[test]
+fn the_build_probe_builds_with_the_kani_rows_cargo_features() {
+    if !kani_present() {
+        return;
+    }
+    let repo = rust_repo();
+    repo.write("Cargo.toml", &repo.read("Cargo.toml").replace("\n[workspace]", "\n[features]\ndb = []\n\n[workspace]"));
+    repo.write(
+        "build.rs",
+        "fn main() {\n    #[cfg(not(feature = \"db\"))]\n    compile_error!(\"enable a backend: --features db\");\n}\n",
+    );
+    repo.commit("needs a feature", NOW - DAY);
+    let probe = probed(&repo);
+    assert!(probe.contains("enable a backend"), "fails without it: {probe}");
+    let config = repo.read("proob/config.toml");
+    let kani = &config[config.find("language = \"kani\"").expect("a kani block")..];
+    assert!(kani.contains("look like they need cargo features"), "the kani block has the hint: {config}");
+    repo.write(
+        "proob/config.toml",
+        &config.replace("language = \"kani\"\n", "language = \"kani\"\nfeatures = [\"db\"]\n"),
+    );
+    assert_eq!(probed(&repo), "kani_probe = \"passed\"\n", "a rerun probes with the row's features");
+}

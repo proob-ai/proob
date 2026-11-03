@@ -11,6 +11,7 @@ use crate::argv::Command;
 use crate::kani::tools::{Resolution, Toolchain, resolve};
 use crate::kani::{CheckRef, KaniAdapter, parse_check_ref};
 use crate::mutation::room;
+use crate::rust::Features;
 use crate::verus::check::{lock, target_base};
 use crate::{AdapterError, Binding, Check, CheckOutcome, ProofMeasure, WITNESS_CAP, cap, exit_text};
 use proob_facts::parsers::kani::{Class, classify};
@@ -23,10 +24,18 @@ pub const TIMEOUT: Duration = Duration::from_secs(30 * 60);
 pub const TARGET_SUBDIR: &str = "proob-kani";
 const REASON_CAP: usize = 600;
 
-/// `cargo-kani kani -p <pkg> --tests --harness <path> --exact --sarif <file> --target-dir <X>`.
-pub fn plan(cargo_kani: &Path, root: &Path, target: &Path, sarif: &Path, r: &CheckRef, timeout: Duration) -> Command {
-    Command::new(cargo_kani, timeout)
-        .arg("kani")
+/// `cargo-kani kani <features> -p <pkg> --tests --harness <path> --exact --sarif <file> --target-dir <X>`.
+pub fn plan(
+    cargo_kani: &Path,
+    root: &Path,
+    target: &Path,
+    sarif: &Path,
+    r: &CheckRef,
+    features: &Features,
+    timeout: Duration,
+) -> Command {
+    features
+        .apply(Command::new(cargo_kani, timeout).arg("kani"))
         .opt("-p", &r.package)
         .arg("--tests")
         .opt("--harness", &r.harness)
@@ -54,7 +63,9 @@ pub fn run(adapter: &KaniAdapter, repo: &Path, binding: &Binding) -> Result<Chec
     let sarif = temp.path().join("kani.sarif");
     let lock_file = root.join("Cargo.lock");
     let before = std::fs::read(&lock_file).ok();
-    let ran = plan(&tc.cargo_kani, &root, &target, &sarif, &r, TIMEOUT).envs(&Toolchain::env(adapter.tool_env())).run();
+    let ran = plan(&tc.cargo_kani, &root, &target, &sarif, &r, adapter.features(), TIMEOUT)
+        .envs(&Toolchain::env(adapter.tool_env()))
+        .run();
     // Kani's nightly cargo cannot take --locked and may rewrite Cargo.lock, a bound file:
     // a check must leave the user's tree as it found it.
     if let Err(e) = restore(&lock_file, before.as_deref()) {

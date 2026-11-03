@@ -149,8 +149,11 @@ committed: the gate and the evidence run replay that and nothing else. A Rust te
 only with a cargo feature (a `#![cfg(feature = "…")]` file, a `[[test]]` with
 `required-features`, an optional `proptest` dependency; `proob init` leaves a comment in the
 adapter block when it sees one) errors as "bound test not found" until the adapter turns that
-feature on. Then set it in the adapter block, `features = ["<name>"]` and no wider (not
-`all_features`), rerun `validate` and `run check`, and commit the change with the test (step 6).
+feature on. A Kani harness in a crate whose `build.rs` stops with `compile_error!` unless a
+feature is on errors as "the crate did not compile under Kani: …" quoting that message; it needs
+the same on the kani adapter block. Then set it in that adapter block, `features = ["<name>"]`
+and no wider (not `all_features`), rerun `validate` and `run check`, and commit the change with
+the test (step 6).
 Never run the check in a scratch copy, or with flags of your own, and report that as its result.
 
 ## 5. Report the outcome, in proob's words
@@ -196,7 +199,7 @@ For a Kani harness:
 | "Kani ran out of memory" | fall back (5K) |
 | "vacuous: the harness cannot reach a case it covers: …" | fix the harness: an assume or a bound excludes a case the statement names. Never delete the cover |
 | "nothing was checked: …" | fix the harness: assert what the statement says |
-| "the crate did not compile under Kani: …" | fix the harness if your code is wrong; otherwise stop and quote it |
+| "the crate did not compile under Kani: …" | fix the harness if your code is wrong; set the kani block's `features` if it names a missing cargo feature (step 4); otherwise stop and quote it |
 | "harness not found: …" | fix the token's placement or the harness path |
 | "the Kani toolchain was not found …" | stop and quote it: the install is the human's, and `/proob:setup` does it with their approval |
 | anything else ("Kani could not decide …", "unrecognised Kani output: …") | stop and quote it |

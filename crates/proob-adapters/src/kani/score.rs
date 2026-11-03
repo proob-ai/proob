@@ -40,6 +40,7 @@ use crate::kani::check::{judge, out_of_memory, plan, restore};
 use crate::kani::tools::{Resolution, Toolchain, resolve};
 use crate::kani::{CheckRef, KaniAdapter, parse_check_ref};
 use crate::mutation::sample;
+use crate::rust::Features;
 use crate::rust::discover::crates;
 use crate::rust::scan::{Bound, scan};
 use crate::rust::score::{LIST_TIMEOUT, Outside, listing, rust_files_under};
@@ -167,11 +168,13 @@ pub fn harness_code(adapter: &KaniAdapter, repo: &Path, files: &[Checked]) -> Re
     Ok(code)
 }
 
-/// `cargo mutants --package <pkg> --file <f>… --list --json --diff`. Pure.
-pub fn list_plan(cargo: &Path, root: &Path, package: &Checked, files: &[Checked]) -> Command {
+/// `cargo mutants <features> --package <pkg> --file <f>… --list --json --diff`. Pure.
+pub fn list_plan(cargo: &Path, root: &Path, package: &Checked, features: &Features, files: &[Checked]) -> Command {
     files
         .iter()
-        .fold(Command::new(cargo, LIST_TIMEOUT).arg("mutants").opt("--package", package), |c, f| c.opt("--file", f))
+        .fold(features.apply(Command::new(cargo, LIST_TIMEOUT).arg("mutants")).opt("--package", package), |c, f| {
+            c.opt("--file", f)
+        })
         .arg("--list")
         .arg("--json")
         .arg("--diff")
@@ -264,7 +267,7 @@ pub fn run(
         return Ok(Score { outcome: ScoreOutcome::NoMutants, tool_versions: versions, jobs: None });
     }
     let code = harness_code(adapter, repo, &files)?;
-    let listed = match list(&cargo.cargo, &root, &r, &files, adapter.tool_env()) {
+    let listed = match list(&cargo.cargo, &root, &r, adapter.features(), &files, adapter.tool_env()) {
         Ok(listed) => listed,
         Err(reason) => return Ok(errored(reason, versions)),
     };
@@ -297,12 +300,13 @@ fn list(
     cargo: &Path,
     root: &Path,
     r: &CheckRef,
+    features: &Features,
     files: &[Checked],
     tool_env: &[(OsString, OsString)],
 ) -> Result<Vec<Listed>, String> {
     let lock_file = root.join("Cargo.lock");
     let before = std::fs::read(&lock_file).ok();
-    let text = listing(list_plan(cargo, root, &r.package, files).envs(tool_env));
+    let text = listing(list_plan(cargo, root, &r.package, features, files).envs(tool_env));
     restore(&lock_file, before.as_deref())
         .map_err(|e| format!("cargo mutants changed Cargo.lock and proob could not restore it: {e}"))?;
     parse_listing(&text?).map_err(|e| format!("cargo mutants --list --json could not be read: {e}"))
@@ -319,6 +323,7 @@ pub(crate) struct Lab<'a> {
     cargo_kani: &'a Path,
     target: PathBuf,
     r: &'a CheckRef,
+    features: Features,
     env: Vec<(OsString, OsString)>,
     /// The target's lock, held for the lab's life: another lab of the same
     /// crate shares its build (module doc), so a mutant written while that
@@ -340,7 +345,15 @@ impl<'a> Lab<'a> {
         let _held = lock(&target)?;
         copy_tree(root, &copy)?;
         touch_tree(&copy, SystemTime::now())?;
-        Ok(Lab { dir, cargo_kani: &tc.cargo_kani, target, r, env: Toolchain::env(adapter.tool_env()), _held })
+        Ok(Lab {
+            dir,
+            cargo_kani: &tc.cargo_kani,
+            target,
+            r,
+            features: adapter.features().clone(),
+            env: Toolchain::env(adapter.tool_env()),
+            _held,
+        })
     }
 
     /// The copy of the adapter root.
@@ -353,7 +366,9 @@ impl<'a> Lab<'a> {
         let sarif = self.dir.path().join("kani.sarif");
         let _ = std::fs::remove_file(&sarif);
         let started = Instant::now();
-        let out = plan(self.cargo_kani, &self.copy(), &self.target, &sarif, self.r, timeout).envs(&self.env).run();
+        let out = plan(self.cargo_kani, &self.copy(), &self.target, &sarif, self.r, &self.features, timeout)
+            .envs(&self.env)
+            .run();
         Ok((out, std::fs::read_to_string(&sarif).ok(), started.elapsed()))
     }
 

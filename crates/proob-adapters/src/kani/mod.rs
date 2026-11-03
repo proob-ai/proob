@@ -50,6 +50,16 @@
 //!
 //! `probe` asks once whether Kani can build the crate at all, so a crate it
 //! cannot build is never declared full of proofs.
+//!
+//! # Cargo features
+//!
+//! As for the Rust adapter (`rust` module doc, "Cargo features"): the config
+//! row's `features`, `all_features`, and `no_default_features`
+//! (`rust::Features`) go on every cargo invocation the adapter makes,
+//! identically: `cargo kani` for the check, the probe, the score's baseline
+//! and each mutant, and `cargo mutants --list`. A crate whose `build.rs`
+//! refuses to build without a feature cannot be probed, checked, or scored
+//! without them. They are a config amendment, never a binding-set member.
 pub mod check;
 pub mod discover;
 pub mod probe;
@@ -57,6 +67,7 @@ pub mod score;
 pub mod tools;
 
 use crate::argv::Checked;
+use crate::rust::Features;
 use crate::{
     Adapter, AdapterError, Binding, Budget, Check, Language, Readiness, RegistryError, Score, Seed, Uncovered,
 };
@@ -78,11 +89,17 @@ pub struct KaniAdapter {
     /// production: the process environment.
     tool_env: Vec<(OsString, OsString)>,
     max_mutants: u32,
+    features: Features,
 }
 
 impl KaniAdapter {
     pub fn at(root: impl Into<PathBuf>) -> KaniAdapter {
-        KaniAdapter { root: root.into(), tool_env: Vec::new(), max_mutants: DEFAULT_MAX_MUTANTS }
+        KaniAdapter {
+            root: root.into(),
+            tool_env: Vec::new(),
+            max_mutants: DEFAULT_MAX_MUTANTS,
+            features: Features::default(),
+        }
     }
 
     /// A tool environment override, for sandboxes and tests.
@@ -90,8 +107,7 @@ impl KaniAdapter {
         KaniAdapter { tool_env, ..self }
     }
 
-    /// From a config entry whose root already passed the path grammar; the
-    /// cargo feature options are refused before this (`adapter_for`).
+    /// From a config entry whose root already passed the path grammar.
     pub fn configured(a: &AdapterConfig, root: Checked) -> Result<KaniAdapter, RegistryError> {
         if a.runner != RUNNER {
             return Err(RegistryError::UnsupportedRunner {
@@ -125,7 +141,17 @@ impl KaniAdapter {
             root: PathBuf::from(root.as_str()),
             tool_env: Vec::new(),
             max_mutants: a.max_mutants.unwrap_or(DEFAULT_MAX_MUTANTS),
+            features: Features::configured(a)?,
         })
+    }
+
+    /// Another cargo feature selection, for tests and benchmarks.
+    pub fn with_features(self, features: Features) -> KaniAdapter {
+        KaniAdapter { features, ..self }
+    }
+
+    pub fn features(&self) -> &Features {
+        &self.features
     }
 
     pub fn tool_env(&self) -> &[(OsString, OsString)] {

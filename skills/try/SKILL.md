@@ -44,7 +44,12 @@ directory (`cd "$work"` first, every time), and every file path you read or writ
 
 In a Rust repository `shadow open` sets Kani up only when the pinned `cargo kani` is already
 installed (it never installs it), and then runs Kani's build probe; its result is the
-`kani_probe` line in `$work/proob/.cache/kani-probe.toml`, which declare reads.
+`kani_probe` line in `$work/proob/.cache/kani-probe.toml`, which declare reads. The probe
+builds with the kani block's cargo features. When it failed because the crate needs one (the
+line quotes a `compile_error!` asking for a feature, and `init` left its features hint in the
+block), set `features = ["<name>"]` on both the rust and the kani block of
+`$work/proob/config.toml`, run `"$proob" init --kani` in `$work` to re-probe, and say so in the
+report.
 
 ## 2. Sense, declare, falsify, in the shadow
 
