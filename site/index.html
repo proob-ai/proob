@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>proob: find the input that breaks your code's promises</title>
+<meta name="description" content="proob writes down the rules your code promises, in plain English, then searches for the input that breaks each one. It found 12 bugs still in the latest releases of attrs, rich, vaultwarden, python-semver, rust-url and tomlkit.">
+<meta property="og:title" content="proob">
+<meta property="og:description" content="Plain-English rules for your code, checked against thousands of generated inputs. It found 12 bugs still in popular libraries.">
+<meta property="og:url" content="https://proob.ai/">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%276%27 fill=%27%2318212b%27/%3E%3Ctext x=%2716%27 y=%2723%27 font-family=%27Georgia,serif%27 font-size=%2722%27 text-anchor=%27middle%27 fill=%27%23f3f5f2%27%3Ep%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Public+Sans:wght@400;600&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap" rel="stylesheet">
+<style>
+:root {
+  --paper: #f3f5f2;
+  --ink: #18212b;
+  --graphite: #56616b;
+  --rule: #cbd3cf;
+  --broken: #b4232a;
+  --held: #1e6b57;
+  --code-bg: #e6eae6;
+  --serif: "Source Serif 4", "Iowan Old Style", Georgia, serif;
+  --sans: "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --measure: 40rem;
+  --wide: 64rem;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #161b21;
+    --ink: #e4e8e5;
+    --graphite: #9aa5ad;
+    --rule: #2f3943;
+    --broken: #f07178;
+    --held: #6cc3a6;
+    --code-bg: #1f262e;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  padding: 0 1.25rem;
+  background: var(--paper);
+  color: var(--ink);
+  font: 400 1.0625rem/1.6 var(--sans);
+}
+a { color: inherit; text-decoration-thickness: 1px; text-underline-offset: 0.2em; }
+a:hover { color: var(--held); }
+:focus-visible { outline: 2px solid var(--held); outline-offset: 3px; border-radius: 2px; }
+code, kbd, pre { font-family: var(--mono); font-size: 0.875em; }
+.wrap { max-width: var(--wide); margin: 0 auto; }
+
+/* Header */
+.top { display: flex; flex-wrap: wrap; gap: 0.5rem 1.5rem; align-items: baseline; justify-content: space-between; padding-block: 1.5rem; }
+.mark { font: 600 1.375rem/1 var(--serif); text-decoration: none; letter-spacing: -0.01em; }
+.top nav { display: flex; gap: 1.25rem; font-size: 0.9375rem; }
+.top nav a { text-decoration: none; color: var(--graphite); }
+.top nav a:hover { color: var(--ink); }
+
+/* Hero: a promise, then the input that breaks it */
+.hero { padding-block: 4rem 3rem; }
+.promise {
+  margin: 0;
+  max-width: 22ch;
+  font: 400 clamp(2.25rem, 6vw, 4rem)/1.08 var(--serif);
+  letter-spacing: -0.015em;
+}
+.promise q { quotes: "\201C" "\201D"; }
+.source { margin: 1rem 0 0; color: var(--graphite); font-size: 0.9375rem; }
+.break {
+  margin: 2.25rem 0 0;
+  padding: 1.25rem 0 0;
+  border-top: 2px solid var(--broken);
+  max-width: var(--measure);
+  font: 400 1rem/1.7 var(--mono);
+  overflow-wrap: anywhere;
+}
+.break .sum { color: var(--broken); font-weight: 500; }
+.break .sum s { color: var(--graphite); text-decoration-color: var(--broken); }
+@media (prefers-reduced-motion: no-preference) {
+  .break { animation: arrive 0.5s ease-out 0.7s both; }
+  @keyframes arrive { from { opacity: 0; transform: translateY(0.4rem); } to { opacity: 1; transform: none; } }
+}
+.claim { max-width: var(--measure); margin: 3.5rem 0 0; }
+.claim h1 { margin: 0; font: 600 clamp(1.5rem, 3vw, 1.875rem)/1.3 var(--sans); letter-spacing: -0.01em; }
+.claim p { margin: 1rem 0 0; color: var(--graphite); }
+
+/* Install */
+.install { margin: 2rem 0 0; max-width: var(--measure); }
+.install pre {
+  margin: 0;
+  padding: 1rem 1.125rem;
+  background: var(--code-bg);
+  border-radius: 6px;
+  overflow-x: auto;
+  line-height: 1.75;
+}
+.install-row { display: flex; flex-wrap: wrap; gap: 0.75rem 1.25rem; align-items: center; margin-top: 0.75rem; font-size: 0.9375rem; color: var(--graphite); }
+button.copy {
+  font: 600 0.9375rem/1 var(--sans);
+  padding: 0.625rem 1rem;
+  border: 0;
+  border-radius: 6px;
+  background: var(--ink);
+  color: var(--paper);
+  cursor: pointer;
+}
+button.copy:hover { background: var(--held); }
+
+/* Sections */
+section { padding-block: 4rem; border-top: 1px solid var(--rule); }
+h2 { margin: 0; max-width: var(--measure); font: 400 clamp(1.75rem, 3.5vw, 2.25rem)/1.2 var(--serif); letter-spacing: -0.01em; }
+.lede { max-width: var(--measure); margin: 0.75rem 0 0; color: var(--graphite); }
+
+/* The ledger of bugs */
+.ledger { margin: 2.5rem 0 0; padding: 0; list-style: none; }
+.ledger li {
+  display: grid;
+  grid-template-columns: 9rem minmax(0, 1fr) minmax(0, 1.15fr);
+  gap: 0.5rem 2rem;
+  padding: 1.5rem 0;
+  border-bottom: 1px solid var(--rule);
+}
+.ledger li:first-child { border-top: 1px solid var(--rule); }
+.lib { font-weight: 600; }
+.rule { margin: 0; font: italic 400 1.1875rem/1.4 var(--serif); }
+.input { margin: 0; font-size: 0.9375rem; }
+.input code { color: var(--broken); overflow-wrap: anywhere; }
+.input .why { display: block; margin-top: 0.375rem; color: var(--graphite); }
+@media (max-width: 52rem) {
+  .ledger li { grid-template-columns: 1fr; }
+}
+.footnote { max-width: var(--measure); margin: 1.5rem 0 0; font-size: 0.9375rem; color: var(--graphite); }
+
+/* Evidence */
+.evidence { margin: 2.5rem 0 0; display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 1.25rem 2rem; max-width: 48rem; }
+.evidence dt { font: 600 1.625rem/1.2 var(--serif); font-variant-numeric: tabular-nums; text-align: right; }
+.evidence dd { margin: 0; padding-top: 0.2rem; }
+.evidence dd span { display: block; color: var(--graphite); font-size: 0.9375rem; }
+@media (max-width: 34rem) {
+  .evidence { grid-template-columns: 1fr; gap: 0.25rem; }
+  .evidence dt { text-align: left; margin-top: 1rem; }
+}
+
+/* Steps */
+.steps { margin: 2.5rem 0 0; padding: 0; list-style: none; counter-reset: step; display: grid; gap: 2rem; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); }
+.steps li { counter-increment: step; }
+.steps li::before { content: counter(step); display: block; font: 400 2rem/1 var(--serif); color: var(--held); margin-bottom: 0.5rem; }
+.steps h3 { margin: 0; font: 600 1.0625rem/1.4 var(--sans); }
+.steps p { margin: 0.5rem 0 0; color: var(--graphite); }
+figure { margin: 3rem 0 0; }
+figure img { display: block; max-width: 100%; height: auto; border-radius: 6px; border: 1px solid var(--rule); }
+figcaption { max-width: var(--measure); margin-top: 0.75rem; font-size: 0.9375rem; color: var(--graphite); }
+
+/* Limits */
+.limits { max-width: var(--measure); margin: 2rem 0 0; padding-left: 1.25rem; }
+.limits li + li { margin-top: 0.75rem; }
+
+footer { padding-block: 2.5rem 3rem; border-top: 1px solid var(--rule); color: var(--graphite); font-size: 0.9375rem; display: flex; flex-wrap: wrap; gap: 0.5rem 1.5rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <a class="mark" href="/">proob</a>
+  <nav aria-label="Site">
+    <a href="#bugs">Bugs found</a>
+    <a href="#how">How it works</a>
+    <a href="https://github.com/proob-ai/proob">GitHub</a>
+  </nav>
+</header>
+
+<main>
+<div class="hero">
+  <p class="promise"><q>The parts are guaranteed to sum to total.</q></p>
+  <p class="source">From the documentation of <code>ratio_distribute</code> in rich, the Python library that draws tables in your terminal.</p>
+  <p class="break">ratio_distribute(80, [1, 1, 1], [10, 10, 50])<br>returns [27, 27, 50]<br><span class="sum">which adds up to 104, not <s>80</s></span></p>
+
+  <div class="claim">
+    <h1>proob writes down the rules your code promises, then searches for the input that breaks them.</h1>
+    <p>That rule and the input above came from one run. Pointed at the latest releases of six popular Python and Rust libraries, proob found 12 bugs their test suites had missed.</p>
+  </div>
+
+  <div class="install">
+    <pre id="install-cmd"><code>/plugin marketplace add proob-ai/proob
+/plugin install proob@proob
+/proob:try</code></pre>
+    <div class="install-row">
+      <button class="copy" type="button" data-copy="install-cmd">Copy commands</button>
+      <span>Run them in Claude Code, inside your repository. proob works on a private copy, so your files and <code>git status</code> stay as they were.</span>
+    </div>
+  </div>
+</div>
+
+<section id="bugs" aria-labelledby="bugs-h">
+  <h2 id="bugs-h">Bugs it found in libraries you may already use</h2>
+  <p class="lede">Each row is a rule proob wrote down for the code, and the input that broke it. Every one was reproduced against the library's latest release in October 2026.</p>
+  <ul class="ledger">
+    <li>
+      <span class="lib">attrs</span>
+      <p class="rule">Any value not in the accepted list raises <code>ValueError</code>.</p>
+      <p class="input"><code>converters.to_bool(0.0)</code> returns <code>False</code>.<span class="why">0.0 equals 0, so it slips through the membership test.</span></p>
+    </li>
+    <li>
+      <span class="lib">vaultwarden</span>
+      <p class="rule">Hiding part of an email address works for any address.</p>
+      <p class="input">An address that starts with <code>já</code> makes <code>obscure_email</code> panic.<span class="why">It cuts the string at 2 bytes, not 2 characters. This runs during two-factor login.</span></p>
+    </li>
+    <li>
+      <span class="lib">python-semver</span>
+      <p class="rule">Two versions that compare equal have the same hash.</p>
+      <p class="input"><code>Version(0, 0, 0, "0")</code> and <code>Version(0, 0, 0, "00")</code> compare equal and hash differently.<span class="why">So a set or dict can hold the same version twice.</span></p>
+    </li>
+    <li>
+      <span class="lib">tomlkit</span>
+      <p class="rule">Reading a document and writing it back gives the original text.</p>
+      <p class="input"><code>a=[1979-05-27 ,0]</code> comes back as <code>a=[1979-05-27,0]</code>.<span class="why">The space after a date is dropped, though tomlkit promises to keep formatting.</span></p>
+    </li>
+    <li>
+      <span class="lib">rust-url</span>
+      <p class="rule">Changing part of a URL leaves a URL that reads back the same.</p>
+      <p class="input"><code>set_ip_host(0.0.0.0)</code> on <code>foo://</code> stores an IP address that reads back as a domain name.</p>
+    </li>
+    <li>
+      <span class="lib">rich</span>
+      <p class="rule">Cutting text into cells never loses text.</p>
+      <p class="input"><code>chop_cells("\x1f", 1)</code> returns <code>[]</code>.<span class="why">Text made only of zero-width characters disappears.</span></p>
+    </li>
+  </ul>
+  <p class="footnote">These are 6 of the 12. The full list, with the exact input and a command to replay each one, is in the <a href="https://github.com/proob-ai/proob/blob/master/docs/benchmark.md">benchmark</a>.</p>
+</section>
+
+<section aria-labelledby="proof-h">
+  <h2 id="proof-h">How we know it wasn't luck</h2>
+  <p class="lede">We also took bugs that maintainers had already fixed, rolled each library back to the commit before the fix, and ran proob with no hint that anything was wrong.</p>
+  <dl class="evidence">
+    <dt>14 of 15</dt>
+    <dd>known bugs found, in libraries such as more-itertools, cattrs, packaging, tomlkit, bytes and time.</dd>
+    <dt>9 of 10</dt>
+    <dd>found among bugs fixed after the AI model's training data ends.<span>It could not have remembered them.</span></dd>
+    <dt>50 of 59</dt>
+    <dd>reported failures were real bugs.<span>The rest were rules that assumed more than the library promises.</span></dd>
+    <dt>0 of 501</dt>
+    <dd>simulated scenarios, some built to trick it, in which proob called a broken rule holding.</dd>
+  </dl>
+  <p class="footnote">Method, raw data and every number: <a href="https://github.com/proob-ai/proob/blob/master/docs/benchmark.md">docs/benchmark.md</a>.</p>
+</section>
+
+<section id="how" aria-labelledby="how-h">
+  <h2 id="how-h">What happens when you run it</h2>
+  <ol class="steps">
+    <li>
+      <h3>Try it on a private copy</h3>
+      <p><code>/proob:try</code> proposes up to five rules in plain English, writes a check for each, and runs thousands of generated inputs against it. Your repository is not touched.</p>
+    </li>
+    <li>
+      <h3>Keep what your team agrees with</h3>
+      <p><code>proob shadow adopt</code> puts the rules and their checks on a new branch. A teammate's pull request review is the approval: the agent only ever proposes.</p>
+    </li>
+    <li>
+      <h3>Let every pull request answer to them</h3>
+      <p>Make the <code>proob gate</code> check required. A change that breaks an approved rule cannot merge, and new code that no rule covers is pointed out, never blocked.</p>
+    </li>
+  </ol>
+  <figure>
+    <img src="try.gif" width="1400" height="900" loading="lazy" alt="A recording of /proob:try in Claude Code on python-semver: it proposes five rules, runs a check for each, and two fail, one of them the bug the maintainers later fixed in issue 497.">
+    <figcaption>A real run on python-semver, rolled back to before its maintainers fixed issue #497. Five minutes, five rules, and the bug they later fixed: asking for the next prerelease could return an older version.</figcaption>
+  </figure>
+</section>
+
+<section aria-labelledby="limits-h">
+  <h2 id="limits-h">What it does not do yet</h2>
+  <ul class="limits">
+    <li>Most rules are checked with generated inputs, which sample the space. A rule reads <em>Holds</em> only when a proof (Kani or Verus) or a model check (TLA+) backs it; on a typical project that is the minority today.</li>
+    <li>proob also breaks your code on purpose to see whether each check notices. A check that never notices is reported as unable to fail, not as passing.</li>
+    <li>It supports Python and Rust, and runs inside Claude Code. Python needs pytest, Hypothesis and mutmut; Rust needs cargo-nextest and cargo-mutants. <code>/proob:setup</code> installs what is missing, after asking.</li>
+  </ul>
+</section>
+</main>
+
+<footer>
+  <span>Apache-2.0</span>
+  <a href="https://github.com/proob-ai/proob">Source on GitHub</a>
+  <a href="https://github.com/proob-ai/proob/blob/master/docs/guide.md">Guide</a>
+  <a href="https://github.com/proob-ai/proob/blob/master/SECURITY.md">Security</a>
+</footer>
+
+</div>
+<script>
+document.querySelectorAll("button.copy").forEach((b) => {
+  b.addEventListener("click", async () => {
+    const text = document.getElementById(b.dataset.copy).innerText;
+    try {
+      await navigator.clipboard.writeText(text);
+      b.textContent = "Copied";
+    } catch {
+      b.textContent = "Select the text to copy";
+    }
+    setTimeout(() => { b.textContent = "Copy commands"; }, 2000);
+  });
+});
+</script>
+</body>
+</html>
