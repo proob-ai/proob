@@ -113,7 +113,7 @@ For a summary in your own words, read `"$proob" shadow report --json` (also save
 | `counts` | `tried`, `fails`, `passes`, `not_run`, `errored` |
 | `properties[]` | `id`, `title`, `statement`, `verdict` (`Proposed`), `result`, `strength`, `line` |
 | `properties[].result.state` | `no_test`, `not_run`, `passes` (`cases`, `seed`), `checks`, `fails` (`input`, `seed`), `errored` (`reason`) |
-| `properties[].strength.state` | `not_scored`, `can_fail` (`killed`, `mutants`, `unsampled` when sampled), `cannot_fail` (`mutants`, `unsampled` when sampled), `nothing_to_mutate`, `errored` (`reason`) |
+| `properties[].strength.state` | `not_scored`, `can_fail` (`killed`, `mutants`, `unsampled` when sampled), `cannot_fail` (`mutants`; every mutant in scope ran), `none_killed_in_sample` (`mutants`, `unsampled`: a sample killed none, which is not "cannot fail"), `nothing_to_mutate`, `errored` (`reason`) |
 | `make_it_real[]` | the numbered steps, as printed |
 | `adopted_branch` | the branch `proob shadow adopt` made, or null |
 
