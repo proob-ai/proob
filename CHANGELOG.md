@@ -10,6 +10,13 @@ version as a comment.
 
 ### Fixed
 
+- The shadow report no longer says "test cannot fail" when only a sample of
+  the mutants ran and none was killed. The unsampled mutants may be the ones
+  the test reads (on vaultwarden, 17 of a file's 160 ran against a test of
+  two small functions). Such a score now reads "not shown able to fail",
+  says to raise `max_mutants` and rescore, and has the new JSON state
+  `none_killed_in_sample` (`mutants`, `unsampled`); `cannot_fail` now means
+  every mutant in scope ran.
 - Every missing-tool message now names a pinned install command that works
   from any repository: `cargo install --locked cargo-nextest --version
   0.9.150` (and cargo-mutants 27.1.0), and the full pinned set for Python,

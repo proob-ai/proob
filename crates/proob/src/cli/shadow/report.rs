@@ -19,14 +19,16 @@
 //!       "result": { "state": "no_test" | "not_run" | "passes" (cases, seed)
 //!                   | "checks" | "fails" (input, seed?) | "errored" (reason) },
 //!       "strength": { "state": "not_scored" | "can_fail" (killed, mutants, unsampled?)
-//!                   | "cannot_fail" (mutants, unsampled?) | "nothing_to_mutate" | "errored" (reason) },
+//!                   | "cannot_fail" (mutants) | "none_killed_in_sample" (mutants, unsampled)
+//!                   | "nothing_to_mutate" | "errored" (reason) },
 //!       "line": "<the terminal line>" } ],
 //!   "make_it_real": [ "<step line>", ... ], "adopted_branch": "<branch>" | null }
 //! ```
 //!
 //! `unsampled` is present only on a sampled score: that many mutants in scope
 //! were listed and not run (`max_mutants`), and `killed` of `mutants` is the
-//! sample's.
+//! sample's. A sample that kills nothing is `none_killed_in_sample`, never
+//! `cannot_fail`: the mutants not run may be the ones the test reads.
 use crate::cli::adapters::{Discovered, discover};
 use crate::cli::backend::with_offline_backend;
 use crate::cli::error::CliError;
@@ -78,10 +80,14 @@ pub enum Strength {
         #[serde(skip_serializing_if = "Option::is_none")]
         unsampled: Option<u32>,
     },
+    /// Every mutant in scope ran and none was killed.
     CannotFail {
         mutants: u32,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        unsampled: Option<u32>,
+    },
+    /// A sample ran and killed none; `unsampled` more were not run.
+    NoneKilledInSample {
+        mutants: u32,
+        unsampled: u32,
     },
     NothingToMutate,
     Errored {
@@ -204,10 +210,11 @@ pub fn strength_of(o: &OutcomeRecord) -> Strength {
     match o {
         OutcomeRecord::Scored { killed, survived, timeout, unsampled, .. } => {
             let unsampled = unsampled.filter(|n| *n > 0);
-            match (killed, killed + survived + timeout) {
-                (_, 0) => Strength::NothingToMutate,
-                (0, mutants) => Strength::CannotFail { mutants, unsampled },
-                (k, mutants) => Strength::CanFail { killed: *k, mutants, unsampled },
+            match (killed, killed + survived + timeout, unsampled) {
+                (_, 0, _) => Strength::NothingToMutate,
+                (0, mutants, None) => Strength::CannotFail { mutants },
+                (0, mutants, Some(unsampled)) => Strength::NoneKilledInSample { mutants, unsampled },
+                (k, mutants, unsampled) => Strength::CanFail { killed: *k, mutants, unsampled },
             }
         }
         OutcomeRecord::NoMutants => Strength::NothingToMutate,
@@ -295,9 +302,13 @@ fn strength_text(id: &str, s: &Strength) -> String {
         Strength::CanFail { killed, mutants, unsampled } => {
             format!("test can fail: killed {killed} of {mutants} {}", sampled(*mutants, *unsampled))
         }
-        Strength::CannotFail { mutants, unsampled } => format!(
-            "test cannot fail: killed 0 of {mutants} {}; make it look at the code",
-            sampled(*mutants, *unsampled)
+        Strength::CannotFail { mutants } => {
+            format!("test cannot fail: killed 0 of {mutants} mutants; make it look at the code")
+        }
+        Strength::NoneKilledInSample { mutants, unsampled } => format!(
+            "not shown able to fail: killed 0 of {mutants} {}; the sample may miss the code the test reads: \
+             raise max_mutants in proob/config.toml and rescore: proob --shadow run score {id}",
+            sampled(*mutants, Some(*unsampled))
         ),
         Strength::NothingToMutate => "nothing in its scope to mutate".to_string(),
         Strength::Errored { reason } => format!("score could not run: {reason}"),
@@ -531,12 +542,29 @@ mod tests {
         let scored =
             |killed, survived| OutcomeRecord::Scored { killed, survived, timeout: 0, unviable: 3, unsampled: None };
         assert_eq!(strength_of(&scored(9, 3)), Strength::CanFail { killed: 9, mutants: 12, unsampled: None });
-        assert_eq!(strength_of(&scored(0, 4)), Strength::CannotFail { mutants: 4, unsampled: None });
+        assert_eq!(strength_of(&scored(0, 4)), Strength::CannotFail { mutants: 4 });
         assert_eq!(strength_of(&scored(0, 0)), Strength::NothingToMutate);
         let sample = OutcomeRecord::Scored { killed: 9, survived: 18, timeout: 2, unviable: 1, unsampled: Some(382) };
         let s = strength_of(&sample);
         assert_eq!(s, Strength::CanFail { killed: 9, mutants: 29, unsampled: Some(382) });
         assert_eq!(strength_text("X", &s), "test can fail: killed 9 of 29 sampled mutants (382 more in scope not run)");
+    }
+
+    #[test]
+    fn a_sample_that_kills_nothing_is_not_cannot_fail() {
+        // vaultwarden: 17 of a file's 160 mutants sampled, likely none in the two functions the test calls.
+        let sampled =
+            |unsampled| OutcomeRecord::Scored { killed: 0, survived: 17, timeout: 0, unviable: 13, unsampled };
+        let s = strength_of(&sampled(Some(143)));
+        assert_eq!(s, Strength::NoneKilledInSample { mutants: 17, unsampled: 143 });
+        let text = strength_text("X", &s);
+        assert!(!text.contains("cannot fail"), "{text}");
+        assert!(text.starts_with("not shown able to fail: killed 0 of 17 sampled mutants (143 more in scope not run)"));
+        assert!(text.contains("raise max_mutants") && text.ends_with("proob --shadow run score X"), "{text}");
+        let json = serde_json::to_value(&s).unwrap();
+        assert_eq!(json, serde_json::json!({ "state": "none_killed_in_sample", "mutants": 17, "unsampled": 143 }));
+        // a sample of everything is the whole scope
+        assert_eq!(strength_of(&sampled(Some(0))), Strength::CannotFail { mutants: 17 });
     }
 
     #[test]

@@ -106,7 +106,8 @@ test clear the bar; that is a config amendment for the team, and the skill does 
 Verdicts are only: Holds, Checked, Not checked, Re-approve, Broken, Proposed, Waived until d, with
 modifiers in parentheses. Scores are "killed K of M"; proofs are `verified` or `proof failed`,
 models `no violation` or `violation`, exactly as the JSON says; a local run is "local, unverified". Say "can fail" and "cannot fail",
-not "strong" and "weak" as verdicts.
+not "strong" and "weak" as verdicts. A sample that killed nothing (`none_killed_in_sample`) is "not shown
+able to fail", never "cannot fail": the mutants not run may be the ones the test reads.
 
 ## Never
 

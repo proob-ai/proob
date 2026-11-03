@@ -103,7 +103,7 @@ def run(tid, trial):
     print(json.dumps({k: v for k, v in meta.items() if k != "final"}))
 
 def ratio(s):
-    return s["killed"] / s["mutants"] if s["state"] == "can_fail" else 0.0 if s["state"] == "cannot_fail" else None
+    return s["killed"] / s["mutants"] if s["state"] == "can_fail" else 0.0 if s["state"] in ("cannot_fail", "none_killed_in_sample") else None
 
 def score(trial):
     trial = os.path.abspath(trial); meta = json.load(open(os.path.join(trial, "meta.json")))
@@ -130,6 +130,7 @@ def selfcheck():
     assert not f["zero"] and f["changed"] == ["a"] and f["added"] == ["b"] and f["git_changed"] == ["x"]
     assert shadow_work("/t", "/t/repo").startswith("/t/shadow/repo-") and shadow_work("/t", "/t/repo").endswith("/work")
     assert ratio({"state": "can_fail", "killed": 1, "mutants": 4}) == 0.25 and ratio({"state": "not_scored"}) is None
+    assert ratio({"state": "none_killed_in_sample", "mutants": 17, "unsampled": 143}) == 0.0
 
 if __name__ == "__main__":
     selfcheck()
