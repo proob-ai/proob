@@ -20,6 +20,7 @@
 //! given the steps to add.
 use crate::cli::error::CliError;
 use crate::cli::workspace::Workspace;
+use proob_adapters::argv::Checked;
 use proob_adapters::kani::{self, KaniAdapter};
 use proob_adapters::tla;
 use proob_facts::config::{self, Language, PolicyTable, defaults};
@@ -171,7 +172,7 @@ pub fn tests_require_features(manifest: &str) -> bool {
 // Config
 // ---------------------------------------------------------------------------
 
-/// The commented line `init` adds to a rust adapter block that needs features.
+/// The commented line `init` adds to a rust or kani adapter block that needs features.
 pub const FEATURES_HINT: &str = "# This crate's tests look like they need cargo features (build.rs compile_error!\n\
      # or [[test]] required-features); set one: features = [\"name\"], all_features = true, no_default_features = true\n";
 
@@ -186,8 +187,9 @@ fn adapter_block(d: Detected) -> String {
     }
 }
 
-/// The Kani adapter block; `max_mutants` only when it is not the default.
-pub fn kani_block(k: KaniSetup) -> String {
+/// The Kani adapter block; `max_mutants` only when it is not the default,
+/// and the features hint when a crate visibly needs them (`needs_features`).
+pub fn kani_block(k: KaniSetup, needs_features: bool) -> String {
     let sample = k.max_mutants.map_or(String::new(), |n| {
         format!(
             "# A smaller mutant sample than the default ({}), for a first look.\nmax_mutants = {n}\n",
@@ -195,9 +197,10 @@ pub fn kani_block(k: KaniSetup) -> String {
         )
     });
     format!(
-        "[[adapters]]\n# Kani harnesses (#[kani::proof]) as proofs, each verified within its bounds.\nroot = \".\"\nlanguage = \"kani\"\nrunner = \"{}\"\nmutation_tool = \"{}\"\n{sample}",
+        "[[adapters]]\n# Kani harnesses (#[kani::proof]) as proofs, each verified within its bounds.\nroot = \".\"\nlanguage = \"kani\"\nrunner = \"{}\"\nmutation_tool = \"{}\"\n{sample}{}",
         kani::RUNNER,
-        kani::MUTATION_TOOL
+        kani::MUTATION_TOOL,
+        if needs_features { FEATURES_HINT } else { "" }
     )
 }
 
@@ -241,10 +244,11 @@ fn policy_block(p: PolicyTable) -> String {
 /// The config text: the built-in defaults, commented, with the detected
 /// adapters and, when asked, Kani's.
 pub fn config_text(detected: &[Detected], opts: Options) -> String {
+    let needs = detected.iter().any(|d| matches!(d, Detected::Rust { needs_features: true, .. }));
     let adapters: String = detected
         .iter()
         .map(|d| adapter_block(*d))
-        .chain(opts.kani.map(kani_block))
+        .chain(opts.kani.map(|k| kani_block(k, needs)))
         .chain(opts.tla.then(tla_block))
         .map(|b| format!("\n{b}"))
         .collect();
@@ -588,7 +592,7 @@ fn kani_to_add(ws: &Workspace, k: KaniSetup) -> Result<Vec<(String, String)>, Cl
     let config_lacks = ws.read_optional(CONFIG)?.is_some_and(|text| !has_kani(&text));
     let steps = kani_steps().join("\n") + "\n";
     let mut out: Vec<(String, String)> =
-        config_lacks.then(|| (CONFIG.to_string(), kani_block(k))).into_iter().collect();
+        config_lacks.then(|| (CONFIG.to_string(), kani_block(k, needs_features(&ws.root)))).into_iter().collect();
     for wf in [GATE_WORKFLOW, EVIDENCE_WORKFLOW] {
         if ws.read_optional(wf)?.is_some_and(|text| !text.contains("kani-verifier")) {
             out.push((wf.to_string(), steps.clone()));
@@ -597,11 +601,25 @@ fn kani_to_add(ws: &Workspace, k: KaniSetup) -> Result<Vec<(String, String)>, Cl
     Ok(out)
 }
 
-/// Runs the build probe and keeps its line in `proob/.cache/kani-probe.toml`.
+/// Runs the build probe with the config's kani row (its root and cargo
+/// features) and keeps its line in `proob/.cache/kani-probe.toml`.
 fn probe(ws: &Workspace) -> Result<String, CliError> {
-    let result = kani::probe::run(&KaniAdapter::at("."), &ws.root);
+    let result = kani::probe::run(&kani_adapter(ws)?, &ws.root);
     write(ws, KANI_PROBE, &result.record())?;
     Ok(result.line())
+}
+
+/// The adapter of the config's kani row; the default one at the root when
+/// the config has none or does not parse (`validate` says why).
+fn kani_adapter(ws: &Workspace) -> Result<KaniAdapter, CliError> {
+    let row = ws
+        .read_optional(CONFIG)?
+        .and_then(|text| config::parse_config(&text).ok())
+        .and_then(|c| c.adapters.into_iter().find(|a| a.language == Language::Kani));
+    let Some(a) = row else { return Ok(KaniAdapter::at(".")) };
+    let root = Checked::path(Path::new(&a.root))
+        .map_err(|rule| CliError::invalid(CONFIG, format!("kani adapter root `{}`: {rule}", a.root)))?;
+    KaniAdapter::configured(&a, root).map_err(|e| CliError::invalid(CONFIG, e))
 }
 
 fn write_settings(ws: &Workspace, text: &str, change: Change) -> Result<Change, CliError> {
@@ -709,6 +727,17 @@ mod tests {
         let parsed = config::parse_config(&config_text(&[rust], opts)).expect("parses");
         let kani = parsed.adapters.iter().find(|a| a.language == Language::Kani).expect("a kani adapter");
         assert_eq!(kani.max_mutants, Some(10));
+    }
+
+    #[test]
+    fn the_kani_block_carries_the_features_hint_when_a_crate_needs_features() {
+        let rust = Detected::Rust { toolchain_file: false, needs_features: true };
+        let text = config_text(&[rust], Options { kani: Some(KaniSetup::default()), tla: false });
+        let kani = &text[text.find("language = \"kani\"").expect("a kani block")..];
+        assert!(kani.contains(FEATURES_HINT), "{text}");
+        assert!(!kani_block(KaniSetup::default(), false).contains("features"), "no sign, no hint");
+        let parsed = config::parse_config(&text).expect("parses");
+        assert!(parsed.adapters.iter().all(|a| !a.sets_cargo_features()), "a hint, not a setting");
     }
 
     #[test]

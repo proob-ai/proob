@@ -10,6 +10,7 @@ use proob_adapters::kani::check::{judge, outcome, plan, stopped};
 use proob_adapters::kani::score::{Fate, OPERATOR_SET, fate, fate_of, harness_code, list_plan, patch};
 use proob_adapters::kani::tools::{Resolution, resolve};
 use proob_adapters::kani::{KaniAdapter, parse_check_ref};
+use proob_adapters::rust::Features;
 use proob_adapters::{
     Adapter, Binding, Budget, Check, CheckOutcome, Location, ProofMeasure, RegistryError, Score, ScoreOutcome, Seed,
 };
@@ -162,7 +163,10 @@ fn a_file_module_harness_binds_its_cfg_kani_tree_the_manifests_and_the_lock() {
     assert!(uncovered[0].reason.contains("integration test"), "{}", uncovered[0].reason);
     // The multi-package argv names its package.
     let r = parse_check_ref(&found[0].check_ref).expect("parses");
-    let args = strs(plan(Path::new("cargo-kani"), root, Path::new("/t"), Path::new("/s"), &r, Duration::ZERO).args());
+    let args = strs(
+        plan(Path::new("cargo-kani"), root, Path::new("/t"), Path::new("/s"), &r, &Features::default(), Duration::ZERO)
+            .args(),
+    );
     assert_eq!(&args[..3], ["kani", "-p", "a"]);
 }
 
@@ -183,6 +187,7 @@ fn the_argv_names_one_harness_exactly_and_never_quiets_or_drops_unwinding_checks
         Path::new("/t/proob-kani"),
         Path::new("/s/k.sarif"),
         &r,
+        &Features::default(),
         Duration::ZERO,
     );
     assert_eq!(
@@ -219,10 +224,6 @@ fn config_refuses_what_the_kani_adapter_does_not_take() {
     assert_eq!(ok[0].language(), proob_adapters::Language::Kani);
     assert_eq!(proob_adapters::language_name(proob_adapters::Language::Kani), "kani");
     let refused = |runner: &str, options: &str| config(runner, options).err().expect("refused");
-    for options in ["features = [\"x\"]", "all_features = true", "no_default_features = true"] {
-        let err = refused("kani", options);
-        assert!(matches!(err, RegistryError::UnsupportedOption { option: "features", .. }), "{err}");
-    }
     let err = refused("kani", "jobs = 2");
     assert!(matches!(err, RegistryError::UnsupportedOption { option: "jobs", .. }), "{err}");
     assert!(err.to_string().contains("one at a time"), "says why: {err}");
@@ -231,6 +232,44 @@ fn config_refuses_what_the_kani_adapter_does_not_take() {
         RegistryError::UnsupportedOption { option: "max_mutants", .. }
     ));
     assert!(matches!(refused("nextest", ""), RegistryError::UnsupportedRunner { expected: "kani", .. }));
+}
+
+#[test]
+fn cargo_features_go_identically_on_every_cargo_invocation_each_name_after_its_flag() {
+    let r = parse_check_ref("kani-crate verification::clamp_stays_within_bounds").expect("parses");
+    let files = [Checked::path(Path::new("src/lib.rs")).expect("checked")];
+    let names = ["sqlite", "serde/std"].map(|n| Checked::feature(n).expect("feature")).to_vec();
+    let features = Features { names, all: true, no_default: true };
+    let flags = ["--all-features", "--no-default-features", "--features", "sqlite", "--features", "serde/std"];
+    // The check's, the probe's, and every score run's `cargo kani` is this one plan (`Lab::harness`).
+    let kani =
+        plan(Path::new("cargo-kani"), &fixture(), Path::new("/t"), Path::new("/s"), &r, &features, Duration::ZERO);
+    let listing = list_plan(Path::new("cargo"), &fixture(), &r.package, &features, &files);
+    for (what, command) in [("cargo kani", &kani), ("listing", &listing)] {
+        let args = strs(command.args());
+        assert_eq!(&args[1..1 + flags.len()], flags, "{what}: right after the subcommand: {args:?}");
+        assert_eq!(args.iter().filter(|a| a.contains("feature")).count(), 4, "{what}: once each: {args:?}");
+    }
+}
+
+#[test]
+fn cargo_feature_options_are_read_from_a_kani_row_and_a_bad_name_is_refused() {
+    use proob_facts::config::parse_config;
+    let text = |options: &str| {
+        format!(
+            "schema_version = 1\n[[adapters]]\nroot = \".\"\nlanguage = \"kani\"\nrunner = \"kani\"\nmutation_tool = \"cargo-mutants\"\n{options}\n[policy]\nholds = \"pass\"\nchecked = \"pass\"\nproposed = \"pass\"\nwaived = \"pass\"\nnot_checked_within_grace = \"pass\"\nnot_checked_after_grace = \"warn\"\nre_approve = \"warn\"\nbroken_affected = \"block\"\nbroken_unaffected = \"pass\"\n"
+        )
+    };
+    let config = parse_config(&text("features = [\"sqlite\"]\nno_default_features = true")).expect("parses");
+    let root = Checked::path(Path::new(".")).expect("root");
+    let configured = KaniAdapter::configured(&config.adapters[0], root).expect("kani takes them");
+    assert_eq!(
+        configured.features(),
+        &Features { names: vec![Checked::feature("sqlite").expect("feature")], all: false, no_default: true }
+    );
+    assert!(proob_adapters::adapters_for(&config).is_ok(), "the registry lets them through");
+    let err = parse_config(&text("features = [\"--all-features\"]")).expect_err("not a feature name");
+    assert!(err.to_string().contains("adapters[0].features[0]"), "{err}");
 }
 
 // ---------------------------------------------------------------------------
@@ -524,7 +563,7 @@ fn the_listing_argv_names_the_package_and_each_scope_file_and_asks_for_diffs() {
         Checked::path(Path::new("src/lib.rs")).expect("checked"),
         Checked::path(Path::new("src/a.rs")).expect("checked"),
     ];
-    let command = list_plan(Path::new("cargo"), &fixture(), &r.package, &files);
+    let command = list_plan(Path::new("cargo"), &fixture(), &r.package, &Features::default(), &files);
     assert_eq!(
         strs(command.args()),
         [

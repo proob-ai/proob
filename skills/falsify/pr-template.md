@@ -89,7 +89,7 @@ statement's approval: approving this PR approves the change. After merge it read
 
 The bound tests compile only with the cargo feature `<name>` (<why: the `cfg` line, the
 `required-features`, or the optional dependency>), so this PR adds `features = ["<name>"]` to
-the `<root>` adapter in `proob/config.toml`. Every proob run of this adapter, the gate's
+the `<root>` <rust | kani> adapter in `proob/config.toml`. Every proob run of this adapter, the gate's
 included, builds with it. `proob/config.toml` is governed: approving this PR approves the
 change, and until then every property reads `Re-approve (config amended)`.
 

@@ -122,21 +122,22 @@ pub struct Adapter {
     /// At least 1; verus rejects it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub jobs: Option<u32>,
-    /// rust only: cargo features passed as `--features <name>` to every cargo
-    /// invocation the adapter makes (check, mutant listing, mutation run).
-    /// Each a cargo feature name (`feature_name`); other languages reject it.
+    /// rust and kani only: cargo features passed as `--features <name>` to
+    /// every cargo invocation the adapter makes (check, mutant listing,
+    /// mutation run, Kani's build probe). Each a cargo feature name
+    /// (`feature_name`); other languages reject it.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub features: Vec<String>,
-    /// rust only: `--all-features` on every cargo invocation.
+    /// rust and kani only: `--all-features` on every cargo invocation.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub all_features: Option<bool>,
-    /// rust only: `--no-default-features` on every cargo invocation.
+    /// rust and kani only: `--no-default-features` on every cargo invocation.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub no_default_features: Option<bool>,
 }
 
 impl Adapter {
-    /// Whether any of the cargo feature options is set (only rust takes them).
+    /// Whether any of the cargo feature options is set (only rust and kani take them).
     pub fn sets_cargo_features(&self) -> bool {
         !self.features.is_empty() || self.all_features.is_some() || self.no_default_features.is_some()
     }

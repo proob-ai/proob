@@ -231,7 +231,10 @@ rationale = "<why it matters, citing the evidence: files, tests, notes, the requ
   for a reason it shows the reviewer), and `kind = "test"` otherwise: the file
   is missing, or reads `kani_probe = "failed: …"`. Say why in one line in the
   report and in the PR body, quoting that `kani_probe` line or saying the file
-  is missing (`proob init --kani` writes it). Kani is Rust only: a Python
+  is missing (`proob init --kani` writes it). When the failed line shows the
+  crate needs a cargo feature (a `compile_error!` asking for one), name the
+  fix too: `features = ["<name>"]` on the kani adapter block, then `proob
+  init --kani` again to re-probe; this skill does not make it. Kani is Rust only: a Python
   property never gets `kind = "proof"` from this rule. Without a kani adapter,
   `kind = "proof"` only when the user asked for the proof route; otherwise
   omit the key and the bound check's adapter decides.
