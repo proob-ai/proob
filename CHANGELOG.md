@@ -10,6 +10,17 @@ version as a comment.
 
 ### Fixed
 
+- `/proob:try` fails loudly when it can check nothing. `proob shadow open`
+  exits 2 with "proob cannot check this repository" when it finds no Python or
+  Rust project at the repository root, before any property is written. When
+  properties were written but none has a check result, `proob shadow report`
+  leads with "nothing was checked", offers nothing to adopt, and exits 1; a
+  property with no check result also blocks adopting the rest. The try skill
+  reports only what a check recorded: a bug noticed while reading the code is
+  not a finding. On a Go and TypeScript repository the try wrote five Go
+  properties it could not check, then reported bugs found by reading, and
+  its steps still offered to adopt them.
+
 - The Kani adapter takes cargo features. `features`, `all_features`, and
   `no_default_features` in a kani `[[adapters]]` row go on every cargo call it
   makes (the build probe, `cargo kani` for the check and each mutant, and the

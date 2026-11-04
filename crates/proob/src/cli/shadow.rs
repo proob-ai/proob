@@ -17,7 +17,7 @@ pub mod place;
 pub mod report;
 
 use crate::cli::error::CliError;
-use crate::cli::workspace::Workspace;
+use crate::cli::workspace::{ConfigSource, Workspace};
 use crate::cli::{Common, Exit, init};
 use clap::Subcommand;
 use git::{Step, line};
@@ -125,6 +125,7 @@ fn open(common: &Common) -> Result<Exit, CliError> {
     let place = place::locate(common.repo.as_deref())?;
     let user = user_repo(&place, common)?;
     let opened = refresh(&place, &user)?;
+    require_adapter(&place.work())?;
     let n = property_count(&place.work());
     println!("{}", opened_line(&place, &user, opened, n));
     if user.dirty {
@@ -132,6 +133,18 @@ fn open(common: &Common) -> Result<Exit, CliError> {
     }
     Ok(Exit::Pass)
 }
+
+/// A try that could produce no test and no proof stops here, before any
+/// property is written: a finding is a check's result, never a reading.
+fn require_adapter(work: &Path) -> Result<(), CliError> {
+    match Workspace::open(Some(work))?.load_config()? {
+        ConfigSource::File(c) if !c.adapters.is_empty() => Ok(()),
+        _ => Err(CliError::Shadow(NOTHING_TO_CHECK.into())),
+    }
+}
+
+pub const NOTHING_TO_CHECK: &str = "proob cannot check this repository: it found no Python or Rust project at its root \
+     (pyproject.toml, setup.py, requirements.txt, or Cargo.toml), so it can write no test and no proof here; nothing was tried";
 
 fn property_count(work: &Path) -> usize {
     Workspace::open(Some(work)).and_then(|ws| ws.property_paths()).map_or(0, |p| p.len())
@@ -305,7 +318,8 @@ fn report_cmd(common: &Common) -> Result<Exit, CliError> {
     } else {
         print!("{text}");
     }
-    Ok(if report::counts(&rows).fails > 0 { Exit::Block } else { Exit::Pass })
+    let c = report::counts(&rows);
+    Ok(if c.fails > 0 || report::unchecked(&c) > 0 { Exit::Block } else { Exit::Pass })
 }
 
 /// The session hook's line for a repository that has a shadow, from the
