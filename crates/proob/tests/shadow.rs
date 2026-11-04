@@ -271,6 +271,26 @@ fn outside_a_git_repository_the_error_says_so_in_one_line() {
 }
 
 #[test]
+fn open_fails_loudly_when_nothing_in_the_repository_can_be_checked() {
+    let repo = TempRepo::new();
+    repo.write("go.mod", "module example.com/svc\n");
+    repo.write("main.go", "package main\n\nfunc main() {}\n");
+    repo.commit("a Go service", NOW - DAY);
+    let w = World { repo, home: tempfile::tempdir().expect("home") };
+    let before = w.footprint();
+    let out = run(w.proob().args(["shadow", "open"]));
+    assert_untouched(&w, &before, "open");
+    assert_eq!(out.code, 2, "{}{}", out.stdout, out.stderr);
+    assert_eq!(out.stderr.lines().count(), 1, "{}", out.stderr);
+    assert!(
+        out.stderr.starts_with("shadow: proob cannot check this repository: it found no Python or Rust project")
+            && out.stderr.contains("nothing was tried"),
+        "{}",
+        out.stderr
+    );
+}
+
+#[test]
 fn without_a_shadow_every_shadow_command_says_how_to_make_one() {
     let w = World::new();
     let expected = "shadow: no shadow yet for this repository; run /proob:try or proob shadow open\n";
@@ -359,7 +379,8 @@ fn the_report_shows_each_result_the_replay_and_how_to_make_it_real() {
     assert!(text.contains(&format!("not run yet: proob --shadow run check {PASSING}")), "{text}");
     assert!(
         text.contains(
-            "Make it real:\n  0. fix the code or drop the failing property before adopting\n  1. proob shadow adopt — "
+            "Make it real:\n  0. fix the code or drop the failing property, and check or drop the property with no check result \
+             (each line says how) before adopting\n  1. proob shadow adopt — "
         ),
         "{text}"
     );

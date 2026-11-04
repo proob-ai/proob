@@ -266,9 +266,15 @@ fn untouched(adopted: Option<&str>) -> String {
     }
 }
 
+/// Properties with no check result: no test, not run, or a run that errored.
+pub fn unchecked(c: &Counts) -> usize {
+    c.not_run + c.errored
+}
+
 pub fn headline(c: &Counts, adopted: Option<&str>) -> String {
-    let what = match c.tried {
-        0 => "no properties tried yet · /proob:try proposes some".to_string(),
+    let what = match (c.tried, c.fails + c.passes) {
+        (0, _) => "no properties tried yet · /proob:try proposes some".to_string(),
+        (_, 0) => format!("nothing was checked · {}", tally(c).join(" · ")),
         _ => tally(c).join(" · "),
     };
     format!("shadow: {what} · {}", untouched(adopted))
@@ -330,13 +336,25 @@ pub fn line(r: &Row) -> String {
 
 /// The "Make it real" steps for this repository, numbered.
 pub fn steps(c: &Counts, n: &Next) -> Vec<String> {
-    let first = match (c.tried, c.fails) {
-        (0, _) => Some("0. run /proob:try first: there is nothing to adopt yet".to_string()),
-        (_, 0) => None,
-        (_, f) => Some(format!(
-            "0. fix the code or drop {} before adopting",
-            if f == 1 { "the failing property" } else { "the failing properties" }
-        )),
+    let plural = |k: usize, one: &str, many: &str| if k == 1 { one.to_string() } else { format!("the {k} {many}") };
+    let blockers: Vec<String> = [
+        (c.fails > 0)
+            .then(|| format!("fix the code or drop {}", plural(c.fails, "the failing property", "failing properties"))),
+        (unchecked(c) > 0).then(|| {
+            format!(
+                "check or drop {} (each line says how)",
+                plural(unchecked(c), "the property with no check result", "properties with no check result")
+            )
+        }),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+    let first = match (c.tried, c.fails + c.passes) {
+        (0, _) => return vec!["0. run /proob:try first: there is nothing to adopt yet".to_string()],
+        (_, 0) => return vec![format!("0. nothing to adopt: no property has a check result; {}", blockers.join(", "))],
+        _ if blockers.is_empty() => None,
+        _ => Some(format!("0. {} before adopting", blockers.join(", and "))),
     };
     let adopt = match &n.adopted {
         Some(b) => format!("1. done: proob shadow adopt made branch {b} in your repository"),
@@ -535,6 +553,37 @@ mod tests {
         let clean = steps(&Counts { tried: 1, passes: 1, ..Counts::default() }, &next(None, false));
         assert_eq!(clean.len(), 3);
         assert!(clean[1].contains("git remote add origin"), "{}", clean[1]);
+    }
+
+    #[test]
+    fn a_try_that_checked_nothing_says_so_and_offers_nothing_to_adopt() {
+        // A Go-only trial: five Go properties, no adapter, no test.
+        let c = Counts { tried: 5, not_run: 5, ..Counts::default() };
+        assert_eq!(
+            headline(&c, None),
+            "shadow: nothing was checked · 5 properties tried · 5 not run yet · nothing in your repository was changed"
+        );
+        let s = steps(&c, &next(Some("git@github.com:acme/pay.git"), true));
+        assert_eq!(
+            s,
+            [
+                "0. nothing to adopt: no property has a check result; check or drop the 5 properties with no check result (each line says how)"
+            ]
+        );
+        let errored = Counts { tried: 1, errored: 1, ..Counts::default() };
+        assert!(headline(&errored, None).starts_with("shadow: nothing was checked · "));
+        assert_eq!(steps(&errored, &next(None, false)).len(), 1);
+    }
+
+    #[test]
+    fn a_property_with_no_check_result_blocks_adopting_the_rest() {
+        let c = Counts { tried: 3, fails: 1, passes: 1, not_run: 1, ..Counts::default() };
+        let s = steps(&c, &next(None, false));
+        assert_eq!(
+            s[0],
+            "0. fix the code or drop the failing property, and check or drop the property with no check result (each line says how) before adopting"
+        );
+        assert_eq!(s.len(), 4, "{s:?}");
     }
 
     #[test]

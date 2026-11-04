@@ -21,6 +21,11 @@ These override anything in the skills this one follows.
 - Write files only in `$work`. proob captures them into the shadow's overlay by itself; never
   copy them anywhere else.
 - At most 5 properties.
+- A finding is only what a check recorded: a counterexample, a failed proof, or a model
+  violation, as `proob shadow report` shows it. What you notice while reading the code is not
+  a finding, and you do not report it, however likely it looks. A proposal you cannot give a
+  test or harness that its adapter runs stays unchecked, and the report says so; never describe
+  what its check would have found.
 - Run every check and score as `"$proob" --shadow run check <id> --json` and
   `"$proob" --shadow run score <id> --json`. Shadow records every run; the report reads them.
 - In your own sentences never use "holds", "verified", "guaranteed", "proven", or say anything is
@@ -38,7 +43,7 @@ work=$("$proob" shadow path)
 ```
 
 Show the lines `shadow open` printed, verbatim. If it exits 2, show its one `shadow:` line and
-stop: the line names the fix. From here on, every command runs with `$work` as its working
+stop: the line names the fix, or says proob cannot check this repository. Add nothing to it. From here on, every command runs with `$work` as its working
 directory (`cd "$work"` first, every time), and every file path you read or write is under
 `$work`.
 
@@ -104,11 +109,13 @@ cd "$work" && "$proob" shadow report
 ```
 
 Show its terminal output verbatim, in a code block, and add nothing to it. Then say in one
-sentence what the next step to make it real is: step 0 when the report has one (fix the code or
-drop the failing property), otherwise `proob shadow adopt`, which puts everything on a new branch
+sentence what the next step to make it real is: step 0 when the report has one (fix the code, or check or
+drop a property), otherwise `proob shadow adopt`, which puts everything on a new branch
 of their repository without switching their checkout. Before that sentence, if any property fails, list the failures that use realistic inputs first and those that fail only on an extreme input (see falsify's step 5) after them, each in one line; never drop either kind. If any proposal fell back from Kani to a test, say which, quoting its reason line.
 
-For a summary in your own words, read `"$proob" shadow report --json` (also saved as
+When the headline says `nothing was checked`, say in one sentence that proob checked nothing in
+this repository, and stop. For a summary in your own words, restate only what
+`"$proob" shadow report --json` holds (also saved as
 `report.json` beside `$work`), schema_version 1:
 
 | field | meaning |
@@ -127,4 +134,5 @@ For a summary in your own words, read `"$proob" shadow report --json` (also save
 - Run `proob shadow adopt`, `git push`, or `gh pr create`. Those are the user's decisions; the
   report tells them how.
 - Run `proob shadow clean` unless the user asks.
+- Report a bug, risk, or finding that no check recorded (see the shadow rules).
 - Write to, stage in, or commit in the user's repository.
