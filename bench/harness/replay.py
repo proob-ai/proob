@@ -83,7 +83,9 @@ def environment(e, work):
     # The venv is keyed by the tool pins, so bumping python-tools.txt rebuilds it.
     key = hashlib.sha256((open(TOOLS).read() + e["python"] + " ".join(e["install"])).encode()).hexdigest()[:12]
     venv = os.path.join(CACHE, "venv", f"{e['bug']}-{key}")
-    if not os.path.isfile(os.path.join(venv, "ready")):
+    # A venv links to its interpreter by path; a runner image that updates
+    # Python leaves a restored venv dangling, so it is rebuilt.
+    if not (os.path.isfile(os.path.join(venv, "ready")) and os.path.exists(os.path.join(venv, "bin", "python"))):
         shutil.rmtree(venv, ignore_errors=True)
         venv_env = dict(env, VIRTUAL_ENV=venv)
         sh(["uv", "venv", "-q", "--python", e["python"], venv], cwd=work)

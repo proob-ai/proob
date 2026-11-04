@@ -338,6 +338,7 @@ jobs:
         with:
           tool: cargo-nextest@0.9.150
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        id: python
         with:
           python-version: "3.13"
       - name: Install uv (the replayer builds each Python repository's venv with it)
@@ -346,7 +347,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/proob-bench
-          key: bench-replay-${{ runner.os }}-${{ hashFiles('bench/corpus/*/entry.toml', 'tools/python-tools.txt', 'rust-toolchain.toml') }}
+          key: bench-replay-${{ runner.os }}-py${{ steps.python.outputs.python-version }}-${{ hashFiles('bench/corpus/*/entry.toml', 'tools/python-tools.txt', 'rust-toolchain.toml') }}
           restore-keys: bench-replay-${{ runner.os }}-
       - name: Replay the corpus
         run: cargo xtask bench replay
