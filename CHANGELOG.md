@@ -10,6 +10,12 @@ version as a comment.
 
 ### Fixed
 
+- The Python adapter no longer tells you to install into your own Python.
+  It uses its own virtual environment, `proob/.cache/python` (gitignored),
+  whenever it exists, and a missing tool's message gives the one command that
+  makes it with the pinned tools and your project. The old message pointed at
+  `tools/python-tools.txt`, a file only proob's own repository has.
+
 - `/proob:try` fails loudly when it can check nothing. `proob shadow open`
   exits 2 with "proob cannot check this repository" when it finds no Python or
   Rust project at the repository root, before any property is written. When

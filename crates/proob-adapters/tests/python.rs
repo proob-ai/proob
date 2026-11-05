@@ -97,7 +97,7 @@ fn assert_fixture_untouched() {
 
 #[test]
 fn python_tools_are_installed_at_their_pins() {
-    match resolve(&fixture(), &[Need::Pytest, Need::Mutmut], &[]) {
+    match resolve(&fixture(), &fixture(), &[Need::Pytest, Need::Mutmut], &[]) {
         Resolution::Ready(tools) => {
             let names: Vec<&str> = tools.versions.iter().map(|(k, _)| k.as_str()).collect();
             assert_eq!(names, vec!["python", "pytest", "hypothesis", "mutmut"], "{:?}", tools.versions);

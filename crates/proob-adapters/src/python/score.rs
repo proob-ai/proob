@@ -282,7 +282,7 @@ pub fn run(
     if cfg!(windows) {
         return Ok(errored(FORK_HINT.to_string(), Vec::new()));
     }
-    let tools = match resolve(&root, &[Need::Pytest, Need::Mutmut], adapter.tool_env()) {
+    let tools = match resolve(repo, &root, &[Need::Pytest, Need::Mutmut], adapter.tool_env()) {
         Resolution::Ready(tools) => tools,
         Resolution::Missing { reason, versions } => return Ok(errored(reason, versions)),
     };
