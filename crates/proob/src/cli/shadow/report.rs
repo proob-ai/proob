@@ -16,6 +16,7 @@
 //!   "verdict": { "word": "Proposed", "why": "no one has approved it: shadow results are local" },
 //!   "counts": { "tried", "fails", "passes", "not_run", "errored" },
 //!   "properties": [ { "id", "title", "statement", "verdict": "Proposed",
+//!       "severity": "low" | "medium" | "high" | "critical", "rationale",
 //!       "result": { "state": "no_test" | "not_run" | "passes" (cases, seed)
 //!                   | "checks" | "fails" (input, seed?) | "errored" (reason) },
 //!       "strength": { "state": "not_scored" | "can_fail" (killed, mutants, unsampled?)
@@ -24,6 +25,11 @@
 //!       "line": "<the terminal line>" } ],
 //!   "make_it_real": [ "<step line>", ... ], "adopted_branch": "<branch>" | null }
 //! ```
+//!
+//! `properties` lists failures first, then the rest, each part from the most
+//! severe down; the property files' order breaks ties. Severity and rationale
+//! are the property file's, written at declare before any check ran; editing
+//! either changes the content hash, so earlier runs stop counting.
 //!
 //! `unsampled` is present only on a sampled score: that many mutants in scope
 //! were listed and not run (`max_mutants`), and `killed` of `mutants` is the
@@ -38,6 +44,7 @@ use proob_effects::github::RepoId;
 use proob_facts::config::Config;
 use proob_facts::evidence::{EvidenceKind, OutcomeRecord, Replay};
 use proob_facts::paths::RESULTS_DIR;
+use proob_facts::property::SeverityName;
 use proob_facts::results::{RESULTS_FILE, RunResultRecord, parse_results};
 use serde::Serialize;
 use std::path::Path;
@@ -100,6 +107,8 @@ pub struct Row {
     pub id: String,
     pub title: String,
     pub statement: String,
+    pub severity: SeverityName,
+    pub rationale: String,
     pub outcome: Outcome,
     pub strength: Strength,
 }
@@ -134,7 +143,15 @@ pub fn rows(work: &Path) -> Result<Vec<Row>, CliError> {
     let config = ws.load_config()?.candidate();
     let discovered = discover(&ws, &config)?;
     let records = records(work);
-    properties.iter().map(|p| row(&ws, &config, discovered.as_ref(), &records, p)).collect()
+    let rows: Result<Vec<Row>, CliError> =
+        properties.iter().map(|p| row(&ws, &config, discovered.as_ref(), &records, p)).collect();
+    rows.map(ranked)
+}
+
+/// Failures first, then the rest; most severe first within each; stable otherwise.
+pub fn ranked(mut rows: Vec<Row>) -> Vec<Row> {
+    rows.sort_by_key(|r| (!matches!(r.outcome, Outcome::Fails { .. }), std::cmp::Reverse(r.severity)));
+    rows
 }
 
 /// The local results, oldest first; a line that does not parse is skipped.
@@ -175,6 +192,8 @@ fn row(
         id: p.file.id.clone(),
         title: p.file.title.clone(),
         statement: p.file.statement.clone(),
+        severity: p.file.severity,
+        rationale: p.file.rationale.clone(),
         outcome,
         strength,
     })
@@ -329,9 +348,18 @@ fn sampled(mutants: u32, unsampled: Option<u32>) -> String {
     }
 }
 
-/// One line per property: its statement, then its local result.
+/// One line per property: its severity, its statement, then its local result.
 pub fn line(r: &Row) -> String {
-    format!("  - {} — {}", r.statement.trim().trim_end_matches('.'), result_text(r))
+    format!("  - [{}] {} — {}", word(r.severity), r.statement.trim().trim_end_matches('.'), result_text(r))
+}
+
+fn word(s: SeverityName) -> &'static str {
+    match s {
+        SeverityName::Low => "low",
+        SeverityName::Medium => "medium",
+        SeverityName::High => "high",
+        SeverityName::Critical => "critical",
+    }
 }
 
 /// The "Make it real" steps for this repository, numbered.
@@ -414,6 +442,8 @@ struct RowJ<'a> {
     title: &'a str,
     statement: &'a str,
     verdict: &'static str,
+    severity: SeverityName,
+    rationale: &'a str,
     result: &'a Outcome,
     strength: &'a Strength,
     line: String,
@@ -450,6 +480,8 @@ pub fn json<'a>(rows: &'a [Row], n: &'a Next, repo: &Path, work: &Path, base: &'
                 title: &r.title,
                 statement: &r.statement,
                 verdict: "Proposed",
+                severity: r.severity,
+                rationale: &r.rationale,
                 result: &r.outcome,
                 strength: &r.strength,
                 line: line(r),
@@ -496,6 +528,8 @@ mod tests {
             id: "01K8V5NQ4A0F3R7Y2M9D6P1XPB".into(),
             title: "t".into(),
             statement: "The balance is never below zero.".into(),
+            severity: SeverityName::High,
+            rationale: "r".into(),
             outcome,
             strength,
         }
@@ -511,12 +545,30 @@ mod tests {
         }
     }
 
+    /// The bug that matters most comes first: any failure before any pass,
+    /// and a critical failure before a high one.
+    #[test]
+    fn failures_come_first_most_severe_first() {
+        let fails = || Outcome::Fails { input: "[6]".into(), seed: None };
+        let passes = || Outcome::Passes { cases: 256, seed: "1".into() };
+        let at = |id: &str, severity, outcome| Row { id: id.into(), severity, ..row(outcome, Strength::NotScored) };
+        let rows = vec![
+            at("pass-critical", SeverityName::Critical, passes()),
+            at("fail-medium", SeverityName::Medium, fails()),
+            at("pass-low", SeverityName::Low, passes()),
+            at("fail-critical", SeverityName::Critical, fails()),
+            at("fail-medium-2", SeverityName::Medium, fails()),
+        ];
+        let order: Vec<String> = ranked(rows).into_iter().map(|r| r.id).collect();
+        assert_eq!(order, ["fail-critical", "fail-medium", "fail-medium-2", "pass-critical", "pass-low"]);
+    }
+
     #[test]
     fn a_failing_row_names_its_input_and_the_replay_command() {
         let r = row(Outcome::Fails { input: "[6]".into(), seed: Some("42".into()) }, Strength::NotScored);
         assert_eq!(
             line(&r),
-            "  - The balance is never below zero — fails: input [6] · replay: proob --shadow run check 01K8V5NQ4A0F3R7Y2M9D6P1XPB --seed 42"
+            "  - [high] The balance is never below zero — fails: input [6] · replay: proob --shadow run check 01K8V5NQ4A0F3R7Y2M9D6P1XPB --seed 42"
         );
     }
 

@@ -8,6 +8,15 @@ version as a comment.
 
 ## Unreleased
 
+### Changed
+
+- `proob shadow report` ranks what it found. Failures come first, most
+  severe first, and every line starts with the property's severity;
+  `report.json` adds `severity` and `rationale` to each property. Severity
+  is set at declare, before any check runs, by the consequence of a
+  violation (money or an irreversible action, a security boundary, or lost
+  data is critical), and the try summary lists failures in that order.
+
 ### Fixed
 
 - The Python adapter no longer tells you to install into your own Python.

@@ -61,6 +61,14 @@ One block per candidate, strongest evidence first.
 - evidence: <name | test | comment | doc | incident | changelog> `path:line` — <what it says>
 - evidence: <another source, when there is one>
 - severity: <low | medium | high | critical> — <why: who notices, what is lost: money, data, safety, uptime>
+  (by the consequence when it is violated, the highest class that applies:
+  critical: money moves or is lost, an action that cannot be undone runs (an order, a payment,
+  a deletion, a message sent), a security or permission boundary is crossed, or stored data is
+  lost or corrupted with no way back;
+  high: stored data is wrong but recoverable, a limit or refusal that should stop something does
+  not, or a crash or hang on a path users reach;
+  medium: a wrong value is shown or returned that a person notices and can redo;
+  low: diagnostics, formatting, speed, or an input no caller can produce)
 - scope: `<glob>`, `<glob>` (<N> tracked files match)
 - kind: <proof | model> — only when the files are already under Verus or a spec exists; otherwise omit this line
 

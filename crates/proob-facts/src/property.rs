@@ -37,7 +37,8 @@ pub struct PropertyFile {
     pub waiver: Option<WaiverFile>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+/// Declared in rising order, so `Ord` ranks `Critical` highest.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum SeverityName {
     Low,

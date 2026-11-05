@@ -115,7 +115,7 @@ cd "$work" && "$proob" shadow report
 Show its terminal output verbatim, in a code block, and add nothing to it. Then say in one
 sentence what the next step to make it real is: step 0 when the report has one (fix the code, or check or
 drop a property), otherwise `proob shadow adopt`, which puts everything on a new branch
-of their repository without switching their checkout. Before that sentence, if any property fails, list the failures that use realistic inputs first and those that fail only on an extreme input (see falsify's step 5) after them, each in one line; never drop either kind. If any proposal fell back from Kani to a test, say which, quoting its reason line.
+of their repository without switching their checkout. Before that sentence, if any property fails, list the failures in the report's order (most severe first), each in one line with its severity and the consequence its `rationale` names (from `report.json`); within one severity, those that use realistic inputs come before those that fail only on an extreme input (see falsify's step 5); never drop either kind. If any proposal fell back from Kani to a test, say which, quoting its reason line.
 
 When the headline says `nothing was checked`, say in one sentence that proob checked nothing in
 this repository, and stop. For a summary in your own words, restate only what
@@ -127,7 +127,7 @@ this repository, and stop. For a summary in your own words, restate only what
 | `headline` | the first line of the terminal report |
 | `verdict` | `{ "word": "Proposed", "why": "no one has approved it: shadow results are local" }` |
 | `counts` | `tried`, `fails`, `passes`, `not_run`, `errored` |
-| `properties[]` | `id`, `title`, `statement`, `verdict` (`Proposed`), `result`, `strength`, `line` |
+| `properties[]` | `id`, `title`, `statement`, `verdict` (`Proposed`), `severity`, `rationale`, `result`, `strength`, `line`; failures first, most severe first |
 | `properties[].result.state` | `no_test`, `not_run`, `passes` (`cases`, `seed`), `checks`, `fails` (`input`, `seed`), `errored` (`reason`) |
 | `properties[].strength.state` | `not_scored`, `can_fail` (`killed`, `mutants`, `unsampled` when sampled), `cannot_fail` (`mutants`; every mutant in scope ran), `none_killed_in_sample` (`mutants`, `unsampled`: a sample killed none, which is not "cannot fail"), `nothing_to_mutate`, `errored` (`reason`) |
 | `make_it_real[]` | the numbered steps, as printed |
