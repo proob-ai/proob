@@ -85,8 +85,8 @@ pub struct KaniAdapter {
     /// The adapter root, relative to the repository (`.` for the root itself).
     root: PathBuf,
     /// Variables set on every tool process; `PATH`, `KANI_HOME`, and `HOME`
-    /// here also steer where the toolchain is looked for. Empty in
-    /// production: the process environment.
+    /// here also steer where the toolchain is looked for. In production,
+    /// proob's own tool directory and Kani home when they exist (else empty).
     tool_env: Vec<(OsString, OsString)>,
     max_mutants: u32,
     features: Features,
@@ -96,7 +96,7 @@ impl KaniAdapter {
     pub fn at(root: impl Into<PathBuf>) -> KaniAdapter {
         KaniAdapter {
             root: root.into(),
-            tool_env: Vec::new(),
+            tool_env: crate::rust::tools::own_tools_env(),
             max_mutants: DEFAULT_MAX_MUTANTS,
             features: Features::default(),
         }
@@ -139,7 +139,7 @@ impl KaniAdapter {
         }
         Ok(KaniAdapter {
             root: PathBuf::from(root.as_str()),
-            tool_env: Vec::new(),
+            tool_env: crate::rust::tools::own_tools_env(),
             max_mutants: a.max_mutants.unwrap_or(DEFAULT_MAX_MUTANTS),
             features: Features::configured(a)?,
         })

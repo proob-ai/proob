@@ -132,7 +132,7 @@ impl RustAdapter {
         RustAdapter {
             root: root.into(),
             witness: WitnessPolicy::Full,
-            tool_env: Vec::new(),
+            tool_env: tools::own_tools_env(),
             limits: Limits::DEFAULT,
             features: Features::default(),
         }
@@ -170,7 +170,13 @@ impl RustAdapter {
         }
         let limits = mutation::limits(a, Language::Rust)?;
         let features = Features::configured(a)?;
-        Ok(RustAdapter { root: PathBuf::from(root.as_str()), witness, tool_env: Vec::new(), limits, features })
+        Ok(RustAdapter {
+            root: PathBuf::from(root.as_str()),
+            witness,
+            tool_env: tools::own_tools_env(),
+            limits,
+            features,
+        })
     }
 
     /// Another cargo feature selection, for tests and benchmarks.

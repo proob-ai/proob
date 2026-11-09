@@ -389,7 +389,10 @@ fn a_missing_toolchain_yields_errored_with_the_stable_hint() {
     let out = none.check(&fixture(), &binding(PASSING), Budget(1), Seed(1)).expect("check returns a result");
     let reason = reason(&out);
     assert!(reason.starts_with("the Kani toolchain was not found"), "{reason}");
-    assert!(reason.contains("cargo install --locked kani-verifier --version 0.68.0"), "{reason}");
+    assert!(
+        reason.contains("cargo install --locked --root $HOME/.proob/tools/rust kani-verifier --version 0.68.0"),
+        "{reason}"
+    );
     assert!(reason.contains("cargo kani setup"), "{reason}");
 }
 
