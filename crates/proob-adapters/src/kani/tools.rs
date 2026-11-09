@@ -37,7 +37,7 @@ pub static PIN: LazyLock<Pin> = LazyLock::new(|| {
 /// phrase "the Kani toolchain was not found".
 pub fn hint(detail: &str) -> String {
     format!(
-        "the Kani toolchain was not found ({detail}): install Kani {v} with `cargo install --locked kani-verifier --version {v}` and then `cargo kani setup`, so `cargo-kani` is on PATH and its bundle is under $KANI_HOME or ~/.kani",
+        "the Kani toolchain was not found ({detail}): install Kani {v} into proob's own directories, which proob looks in first and which leave your ~/.cargo/bin and ~/.kani as they are: `cargo install --locked --root $HOME/.proob/tools/rust kani-verifier --version {v} && PATH=$HOME/.proob/tools/rust/bin:$PATH KANI_HOME=$HOME/.proob/tools/kani cargo kani setup`",
         v = PIN.version
     )
 }
@@ -82,7 +82,7 @@ pub fn resolve(tool_env: &[(OsString, OsString)]) -> Resolution {
     if kani != PIN.version {
         return Resolution::Missing {
             reason: format!(
-                "cargo-kani {kani} is installed but this proob drives Kani {v} exactly (its output is the contract the adapter reads): `cargo install --locked kani-verifier --version {v}` and then `cargo kani setup`",
+                "cargo-kani {kani} is installed but this proob drives Kani {v} exactly (its output is the contract the adapter reads): `cargo install --locked --root $HOME/.proob/tools/rust kani-verifier --version {v} && PATH=$HOME/.proob/tools/rust/bin:$PATH KANI_HOME=$HOME/.proob/tools/kani cargo kani setup` (proob looks there first, so your own install is left as it is)",
                 v = PIN.version
             ),
             versions: vec![("kani".to_string(), kani)],
@@ -165,7 +165,10 @@ mod tests {
         ];
         let Resolution::Missing { reason, .. } = resolve(&env) else { panic!("resolved") };
         assert!(reason.starts_with("the Kani toolchain was not found"), "{reason}");
-        assert!(reason.contains("cargo install --locked kani-verifier --version 0.68.0"), "{reason}");
+        assert!(
+            reason.contains("cargo install --locked --root $HOME/.proob/tools/rust kani-verifier --version 0.68.0"),
+            "{reason}"
+        );
         assert!(reason.contains("cargo kani setup"), "{reason}");
     }
 }

@@ -25,6 +25,12 @@ version as a comment.
   makes it with the pinned tools and your project. The old message pointed at
   `tools/python-tools.txt`, a file only proob's own repository has.
 
+- The Rust and Kani adapters no longer tell you to install into your own
+  `~/.cargo/bin`, where a pinned cargo-nextest, cargo-mutants, or Kani would
+  replace the version you use. proob looks in its own `~/.proob/tools/rust/bin`
+  first and uses `~/.proob/tools/kani` as `KANI_HOME` when you set none, and
+  a missing tool's message installs there.
+
 - `/proob:try` fails loudly when it can check nothing. `proob shadow open`
   exits 2 with "proob cannot check this repository" when it finds no Python or
   Rust project at the repository root, before any property is written. When
