@@ -217,7 +217,7 @@ impl Adapter for PythonAdapter {
     }
 
     fn readiness(&self, repo: &Path) -> Readiness {
-        match tools::resolve(&self.root_in(repo), &[tools::Need::Pytest, tools::Need::Mutmut], self.tool_env()) {
+        match tools::resolve(repo, &self.root_in(repo), &[tools::Need::Pytest, tools::Need::Mutmut], self.tool_env()) {
             tools::Resolution::Ready(t) => Readiness::Ready(t.versions),
             tools::Resolution::Missing { reason, versions } => Readiness::Missing { reason, versions },
         }

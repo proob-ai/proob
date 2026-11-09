@@ -121,7 +121,7 @@ pub fn run(
 ) -> Result<Check, AdapterError> {
     let r = parse_check_ref(&binding.check_ref)?;
     let root = adapter.root_in(repo);
-    let tools = match resolve(&root, &[Need::Pytest], adapter.tool_env()) {
+    let tools = match resolve(repo, &root, &[Need::Pytest], adapter.tool_env()) {
         Resolution::Ready(tools) => tools,
         Resolution::Missing { reason, versions } => return Ok(errored(reason, versions)),
     };
