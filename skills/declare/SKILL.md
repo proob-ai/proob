@@ -220,7 +220,12 @@ rationale = "<why it matters, citing the evidence: files, tests, notes, the requ
   <ULID>`: `scope_files` must list at least one file. An untracked file is
   not in `scope_files` until it is committed; in branch mode commit the code
   first (step 6) or `git add` it, then check.
-- `severity`: the evidence's guess (the picture's, the requirement's).
+- `severity`: the evidence's guess (the picture's, the requirement's), checked against the
+  consequence classes in sense's
+  [picture template](../sense/reference/picture-template.md); `rationale` names the
+  consequence. It is set here, before any check runs, and never changed after a result: the
+  report ranks failures by it, and editing it changes the content hash, so earlier runs stop
+  counting.
 - `rationale`: cites the evidence by path, test name, note, or issue number;
   never the picture file itself; never a credential or a long token. A
   superseding property's rationale begins `Supersedes <old ULID>: `.
