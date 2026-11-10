@@ -8,98 +8,7 @@ version as a comment.
 
 ## Unreleased
 
-### Changed
-
-- `proob shadow report` ranks what it found. Failures come first, most
-  severe first, and every line starts with the property's severity;
-  `report.json` adds `severity` and `rationale` to each property. Severity
-  is set at declare, before any check runs, by the consequence of a
-  violation (money or an irreversible action, a security boundary, or lost
-  data is critical), and the try summary lists failures in that order.
-
-### Fixed
-
-- The Python adapter no longer tells you to install into your own Python.
-  It uses its own virtual environment, `proob/.cache/python` (gitignored),
-  whenever it exists, and a missing tool's message gives the one command that
-  makes it with the pinned tools and your project. The old message pointed at
-  `tools/python-tools.txt`, a file only proob's own repository has.
-
-- The Rust and Kani adapters no longer tell you to install into your own
-  `~/.cargo/bin`, where a pinned cargo-nextest, cargo-mutants, or Kani would
-  replace the version you use. proob looks in its own `~/.proob/tools/rust/bin`
-  first and uses `~/.proob/tools/kani` as `KANI_HOME` when you set none, and
-  a missing tool's message installs there.
-
-- `/proob:try` fails loudly when it can check nothing. `proob shadow open`
-  exits 2 with "proob cannot check this repository" when it finds no Python or
-  Rust project at the repository root, before any property is written. When
-  properties were written but none has a check result, `proob shadow report`
-  leads with "nothing was checked", offers nothing to adopt, and exits 1; a
-  property with no check result also blocks adopting the rest. The try skill
-  reports only what a check recorded: a bug noticed while reading the code is
-  not a finding. On a Go and TypeScript repository the try wrote five Go
-  properties it could not check, then reported bugs found by reading, and
-  its steps still offered to adopt them.
-
-- The Kani adapter takes cargo features. `features`, `all_features`, and
-  `no_default_features` in a kani `[[adapters]]` row go on every cargo call it
-  makes (the build probe, `cargo kani` for the check and each mutant, and the
-  mutant listing); before, a kani row refused them. On vaultwarden, whose
-  `build.rs` refuses to build without a database feature, the probe failed and
-  every property fell back to a test, with no way to set `features =
-  ["sqlite"]` for Kani. `proob init --kani` probes with the row's features and adds the same
-  commented hint as the rust block.
-
-- The shadow report no longer says "test cannot fail" when only a sample of
-  the mutants ran and none was killed. The unsampled mutants may be the ones
-  the test reads (on vaultwarden, 17 of a file's 160 ran against a test of
-  two small functions). Such a score now reads "not shown able to fail",
-  says to raise `max_mutants` and rescore, and has the new JSON state
-  `none_killed_in_sample` (`mutants`, `unsampled`); `cannot_fail` now means
-  every mutant in scope ran.
-- Every missing-tool message now names a pinned install command that works
-  from any repository: `cargo install --locked cargo-nextest --version
-  0.9.150` (and cargo-mutants 27.1.0), and the full pinned set for Python,
-  where it used to point at `tools/python-tools.txt`, a file only proob's
-  own repository has.
-- A runner that timed out is killed with everything it started. Before,
-  only the direct child was killed: a grandchild that held its output open
-  (CBMC under `cargo kani`, a test binary under `cargo test`) kept running,
-  so the timeout never returned and the grandchild kept its memory. On Unix
-  each runner now leads its own process group, and a timeout, or SIGINT,
-  SIGTERM, or SIGHUP sent to proob, kills the whole group.
-- The shadow report no longer shows a property as passing when a later run
-  with another seed passed after a counterexample on the same code and
-  test; the counterexample is reported.
-
-### Changed
-
-- **Breaking:** `Holds` is reserved for a property of kind `proof` or
-  `model`: approved, proved, shown able to fail. A property-based test
-  reaches `Checked (tested)` at best, and every `Checked` on a test-kind
-  property carries the `tested` modifier, first:
-  `Checked (tested, strength pending, self-signed)`. `status --json` gains a
-  boolean `tested` on a `checked` verdict. Test-backed properties now count
-  under `checked`, not `holds`, in the status counts, the headline, and the
-  Action's outputs (a new `checked` output). A test-backed property that
-  passes is gated by the new `[policy] tested` row (default `pass`), so a
-  config that left `holds` at its default gates it as before; one that set
-  `holds` to `warn` should set `tested` to match. `[policy] checked` keeps covering a
-  `Checked` with a defect pending (strength pending or self-signed). The
-  soundness simulation now has 480 worlds, every one of them crossed for a
-  test-kind and a proof-kind property, and CI's `verify` job reaches `Holds`
-  through the real Verus adapter.
-- README rewritten around what proob is, the evidence, and a three-command
-  quick start; the full usage guide and benchmark tables moved to
-  `docs/guide.md` and `docs/benchmark.md`. The README's GIF is recorded by
-  `tools/demo/record.sh`.
-- **Breaking for older readers:** a proof's evidence record (`verified`)
-  gains an optional `checks` field for Kani, beside Verus's `rlimit`; a
-  record carries exactly one of them, and a Verus record is unchanged on the
-  wire. A proob older than this release cannot read a Kani `verified` record
-  and fails the whole retrieval, so once a repository uses Kani the gate, the
-  evidence workflow, and the local shim must run this release or newer.
+## v0.2.0 (2026-11-10)
 
 ### Added
 
@@ -162,6 +71,103 @@ version as a comment.
 - `cargo xtask fmt`, `cargo xtask clippy`, and `cargo xtask commit-lint`, run
   by `cargo xtask ci` and by CI's new `lint` job; pull requests have every
   commit subject and their title checked.
+
+### Changed
+
+- `proob shadow report` ranks what it found. Failures come first, most
+  severe first, and every line starts with the property's severity;
+  `report.json` adds `severity` and `rationale` to each property. Severity
+  is set at declare, before any check runs, by the consequence of a
+  violation (money or an irreversible action, a security boundary, or lost
+  data is critical), and the try summary lists failures in that order.
+
+- **Breaking:** `Holds` is reserved for a property of kind `proof` or
+  `model`: approved, proved, shown able to fail. A property-based test
+  reaches `Checked (tested)` at best, and every `Checked` on a test-kind
+  property carries the `tested` modifier, first:
+  `Checked (tested, strength pending, self-signed)`. `status --json` gains a
+  boolean `tested` on a `checked` verdict. Test-backed properties now count
+  under `checked`, not `holds`, in the status counts, the headline, and the
+  Action's outputs (a new `checked` output). A test-backed property that
+  passes is gated by the new `[policy] tested` row (default `pass`), so a
+  config that left `holds` at its default gates it as before; one that set
+  `holds` to `warn` should set `tested` to match. `[policy] checked` keeps covering a
+  `Checked` with a defect pending (strength pending or self-signed). The
+  soundness simulation now has 480 worlds, every one of them crossed for a
+  test-kind and a proof-kind property, and CI's `verify` job reaches `Holds`
+  through the real Verus adapter.
+- README rewritten around what proob is, the evidence, and a three-command
+  quick start; the full usage guide and benchmark tables moved to
+  `docs/guide.md` and `docs/benchmark.md`. The README's GIF is recorded by
+  `tools/demo/record.sh`.
+- **Breaking for older readers:** a proof's evidence record (`verified`)
+  gains an optional `checks` field for Kani, beside Verus's `rlimit`; a
+  record carries exactly one of them, and a Verus record is unchanged on the
+  wire. A proob older than this release cannot read a Kani `verified` record
+  and fails the whole retrieval, so once a repository uses Kani the gate, the
+  evidence workflow, and the local shim must run this release or newer.
+
+### Fixed
+
+- Release archives carry a signed GitHub build record again. v0.1.0 was
+  built while the repository was private, without one, so the launcher
+  refused it ("attestation verification failed") for anyone whose `gh` is
+  logged in; every v0.2.0 archive has one, which `gh attestation verify`
+  checks.
+
+- The Python adapter no longer tells you to install into your own Python.
+  It uses its own virtual environment, `proob/.cache/python` (gitignored),
+  whenever it exists, and a missing tool's message gives the one command that
+  makes it with the pinned tools and your project. The old message pointed at
+  `tools/python-tools.txt`, a file only proob's own repository has.
+
+- The Rust and Kani adapters no longer tell you to install into your own
+  `~/.cargo/bin`, where a pinned cargo-nextest, cargo-mutants, or Kani would
+  replace the version you use. proob looks in its own `~/.proob/tools/rust/bin`
+  first and uses `~/.proob/tools/kani` as `KANI_HOME` when you set none, and
+  a missing tool's message installs there.
+
+- `/proob:try` fails loudly when it can check nothing. `proob shadow open`
+  exits 2 with "proob cannot check this repository" when it finds no Python or
+  Rust project at the repository root, before any property is written. When
+  properties were written but none has a check result, `proob shadow report`
+  leads with "nothing was checked", offers nothing to adopt, and exits 1; a
+  property with no check result also blocks adopting the rest. The try skill
+  reports only what a check recorded: a bug noticed while reading the code is
+  not a finding. On a Go and TypeScript repository the try wrote five Go
+  properties it could not check, then reported bugs found by reading, and
+  its steps still offered to adopt them.
+
+- The Kani adapter takes cargo features. `features`, `all_features`, and
+  `no_default_features` in a kani `[[adapters]]` row go on every cargo call it
+  makes (the build probe, `cargo kani` for the check and each mutant, and the
+  mutant listing); before, a kani row refused them. On vaultwarden, whose
+  `build.rs` refuses to build without a database feature, the probe failed and
+  every property fell back to a test, with no way to set `features =
+  ["sqlite"]` for Kani. `proob init --kani` probes with the row's features and adds the same
+  commented hint as the rust block.
+
+- The shadow report no longer says "test cannot fail" when only a sample of
+  the mutants ran and none was killed. The unsampled mutants may be the ones
+  the test reads (on vaultwarden, 17 of a file's 160 ran against a test of
+  two small functions). Such a score now reads "not shown able to fail",
+  says to raise `max_mutants` and rescore, and has the new JSON state
+  `none_killed_in_sample` (`mutants`, `unsampled`); `cannot_fail` now means
+  every mutant in scope ran.
+- Every missing-tool message now names a pinned install command that works
+  from any repository: `cargo install --locked cargo-nextest --version
+  0.9.150` (and cargo-mutants 27.1.0), and the full pinned set for Python,
+  where it used to point at `tools/python-tools.txt`, a file only proob's
+  own repository has.
+- A runner that timed out is killed with everything it started. Before,
+  only the direct child was killed: a grandchild that held its output open
+  (CBMC under `cargo kani`, a test binary under `cargo test`) kept running,
+  so the timeout never returned and the grandchild kept its memory. On Unix
+  each runner now leads its own process group, and a timeout, or SIGINT,
+  SIGTERM, or SIGHUP sent to proob, kills the whole group.
+- The shadow report no longer shows a property as passing when a later run
+  with another seed passed after a counterexample on the same code and
+  test; the counterexample is reported.
 
 ## v0.1.0 (2026-10-30)
 

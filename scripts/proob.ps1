@@ -4,7 +4,7 @@
 # $env:PROOB_HOME (default $env:CLAUDE_PLUGIN_DATA\bin or $HOME\.proob\bin),
 # then a verified download of proob-x86_64-pc-windows-msvc.zip and its .sha256.
 # Any failure prints one line starting with "proob:" and exits 1.
-$PROOB_VERSION = "0.1.0"
+$PROOB_VERSION = "0.2.0"
 $ErrorActionPreference = "Stop"
 
 function Fail([string]$Message) {
