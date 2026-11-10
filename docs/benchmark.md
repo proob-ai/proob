@@ -42,5 +42,6 @@ Every change to proob is measured against the previous version on the bug set's 
 | v0.0.1 | baseline | 10 of 18 trials | 12 of 15 trials |
 | dev-1 | state the laws of standard interfaces (mappings, iterators, equality and hashing, round trips) | 14 of 18 trials; the two bugs it targeted went from 1 of 6 to 6 of 6 | measured at the next release |
 | v0.1.0 ([results](../bench/results/v0.1.0.md)) | dev-1, plus sampled and parallel mutation scoring, cargo features | not rerun | 9 of 10 trials, plus 9 of 10 post-cutoff bugs |
+| v0.2.0 ([results](../bench/results/v0.2.0.md)) | `Holds` reserved for proofs and models; Kani and TLA+ adapters | not rerun | not rerun |
 
 The [v0.1.0-rc1 results](../bench/results/v0.1.0-rc1.md) add a second, stricter test: **10 real bugs fixed after the agent model's training cutoff, so it cannot have seen them. proob caught 9, one trial each.** Across every held-out bug, 18 of 20 trials caught their bug (90%, 95% interval 70% to 97%). On 260 generated verdicts, scored the SV-COMP way, proob never said `Holds` where the code did not hold. A strength score on indexmap now takes 66 seconds instead of 700.

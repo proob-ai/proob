@@ -951,7 +951,7 @@ dependencies = [
 
 [[package]]
 name = "proob"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "clap",
  "proob-adapters",
@@ -967,7 +967,7 @@ dependencies = [
 
 [[package]]
 name = "proob-adapters"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "proob-core",
  "proob-facts",
@@ -980,7 +980,7 @@ dependencies = [
 
 [[package]]
 name = "proob-core"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "proob-trusted",
  "vstd",
@@ -988,7 +988,7 @@ dependencies = [
 
 [[package]]
 name = "proob-effects"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "globset",
  "proob-core",
@@ -1005,7 +1005,7 @@ dependencies = [
 
 [[package]]
 name = "proob-facts"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "proob-core",
  "proptest",
@@ -1016,7 +1016,7 @@ dependencies = [
 
 [[package]]
 name = "proob-spawn"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "libc",
  "tempfile",
@@ -1025,7 +1025,7 @@ dependencies = [
 
 [[package]]
 name = "proob-trusted"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "sha2",
  "vstd",
@@ -1425,7 +1425,7 @@ checksum = "f8fadd59c855ef2080decdef8ff161eb6661b86933c9d82e5ba29dc602a55aba"
 
 [[package]]
 name = "sim"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "serde_json",
  "tempfile",
@@ -2090,7 +2090,7 @@ checksum = "3ad82d2a33cdc9674dc7465672f271e096168fcdbe0f799d9e6db8c5892679dc"
 
 [[package]]
 name = "xtask"
-version = "0.1.0"
+version = "0.2.0"
 
 [[package]]
 name = "yoke"

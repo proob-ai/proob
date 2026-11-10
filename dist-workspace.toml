@@ -21,11 +21,11 @@ targets = [
 ]
 # One proob-<target>.<archive>.sha256 per archive, plus a unified sha256.sum.
 checksum = "sha256"
-# GitHub artifact attestations (Sigstore) are off while the repository is
-# private: on this plan GitHub offers them only for public repositories, and the
-# release build fails at that step. Re-enable (true) the day it goes public; the
-# shim verifies them when present and when gh is authenticated.
-github-attestations = false
+# GitHub artifact attestations (Sigstore): every release archive gets a signed
+# build record, which the shim checks with `gh attestation verify` whenever
+# gh is authenticated (it refuses an archive without one). They were off for
+# v0.1.0, released while the repository was private.
+github-attestations = true
 # Where to host releases
 hosting = "github"
 # Script installers install here when a team uses them.
