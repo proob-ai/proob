@@ -143,6 +143,19 @@ fn with_python(mut cmd: Command) -> Command {
 // ---------------------------------------------------------------------------
 
 #[test]
+fn open_works_when_the_repository_ignores_dot_claude() {
+    // git add refuses an exclude pathspec that names an ignored path.
+    for rule in [".claude/", ".claude/settings.json", ".gitignore"] {
+        let w = World::new();
+        w.repo.write(".gitignore", &format!("{rule}\n"));
+        w.repo.git(&["add", "-f", ".gitignore"]);
+        w.repo.commit("ignore", NOW - DAY);
+        let out = w.ok(&["shadow", "open"]);
+        assert!(out.stdout.starts_with("shadow: ready at "), "{rule}: {}", out.stdout);
+    }
+}
+
+#[test]
 fn open_makes_a_shadow_and_changes_nothing_in_the_repository() {
     let w = World::new();
     let before = w.footprint();

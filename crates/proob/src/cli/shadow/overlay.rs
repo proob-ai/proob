@@ -23,13 +23,16 @@ fn pathspec() -> Vec<String> {
 /// patch and the name list against `base`.
 pub fn plan(work: &Path, index: &Path, base: &str) -> (Step, Step, Step) {
     let spec = pathspec();
+    let scratch = |args: &[&str]| Step::new(work, args).env("GIT_INDEX_FILE", &index.display().to_string());
     let with = |head: &[&str]| {
         let args: Vec<&str> =
             head.iter().copied().chain(std::iter::once("--")).chain(spec.iter().map(String::as_str)).collect();
-        Step::new(work, &args).env("GIT_INDEX_FILE", &index.display().to_string())
+        scratch(&args)
     };
     (
-        with(&["add", "--all"]),
+        // Stage everything: git add fails when an exclude names a path the user's
+        // .gitignore ignores (`.claude/` often is). The diffs below do the leaving out.
+        scratch(&["add", "--all", "--", "."]),
         with(&["diff", "--cached", "--binary", "--no-renames", "--no-ext-diff", base]),
         with(&["diff", "--cached", "--name-only", "-z", "--no-renames", base]),
     )
@@ -97,9 +100,12 @@ mod tests {
 
     #[test]
     fn the_overlay_leaves_out_the_files_init_regenerates() {
-        let (add, diff, _) = plan(Path::new("/w"), Path::new("/i"), "abc");
-        assert!(add.args.contains(&":(exclude).gitignore".to_string()));
-        assert!(diff.args.contains(&":(exclude).claude/settings.json".to_string()));
+        let (add, diff, names) = plan(Path::new("/w"), Path::new("/i"), "abc");
+        assert!(!add.args.iter().any(|a| a.starts_with(":(exclude)")), "{:?}", add.args);
+        for step in [&diff, &names] {
+            assert!(step.args.contains(&":(exclude).gitignore".to_string()));
+            assert!(step.args.contains(&":(exclude).claude/settings.json".to_string()));
+        }
         assert_eq!(diff.env, [("GIT_INDEX_FILE".to_string(), "/i".to_string())]);
     }
 }
