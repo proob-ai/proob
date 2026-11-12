@@ -24,6 +24,10 @@ version as a comment.
 
 ### Changed
 
+- A missing Python tool on a Python older than 3.11, which the pinned
+  Hypothesis does not install on, now gets the command that makes proob's own
+  environment with a newer Python; the command it gave before could not work
+  there.
 - `shadow open`'s line for a repository with no project at its root now says
   how to name one in a subdirectory.
 

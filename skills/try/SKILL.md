@@ -106,7 +106,8 @@ directory (and `verify` in step 4). Read the files rather than invoking the skil
    When a check errors because a Python tool is missing, run the command its reason gives in
    `$work`, which makes proob's own environment `proob/.cache/python`, then install the
    project's test dependencies with that environment's pip; never install into the user's
-   Python or their `.venv`.
+   Python or their `.venv`. When the reason says the Python is too old for the pinned tools,
+   make that environment with the newer interpreter it names, and say so in the report.
    A `kind = "proof"` proposal gets one Kani harness instead, under falsify's harness rules; a
    Kani failure is a finding like a counterexample. When Kani cannot take a proposal for one of
    falsify's fallback reasons, follow its fallback (the one property edit it allows) and keep the
