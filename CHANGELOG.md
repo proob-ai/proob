@@ -8,6 +8,25 @@ version as a comment.
 
 ## Unreleased
 
+### Added
+
+- Monorepos: `proob init` and `proob shadow open` take `--project
+  <language>:<dir>` (`rust` or `python`, repeatable) for a project below the
+  repository root. proob still looks for a project by itself at the root
+  only; `/proob:try`, `/proob:sense`, and `/proob:declare` now read where the
+  projects are and pass the flag, and proob then picks the adapter, the
+  runner, the mutation tool, and the workflows' install steps from what is at
+  the named directory. Existing files are kept: `init` prints the adapter
+  block and the workflow steps to add. `shadow open` adds the block to the
+  shadow's config and renders again the workflows it wrote itself; a workflow
+  the repository committed, and any file edited in the shadow since, is left
+  as it is.
+
+### Changed
+
+- `shadow open`'s line for a repository with no project at its root now says
+  how to name one in a subdirectory.
+
 ## v0.2.1 (2026-11-12)
 
 ### Fixed

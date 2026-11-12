@@ -191,6 +191,60 @@ fn init_without_an_adapter_says_so_and_keeps_existing_files() {
 }
 
 #[test]
+fn init_sets_up_the_projects_named_below_the_root() {
+    let repo = TempRepo::new();
+    repo.write("package.json", "{}\n");
+    repo.write("svc/pyproject.toml", "[project]\nname = \"svc\"\nversion = \"0\"\n");
+    repo.write("svc/requirements.txt", "");
+    repo.write("lib/a.py", "");
+    repo.write("docs/b.py", "");
+    let out = run(repo.proob().args(["init", "--project", "python:svc", "--project", "python:lib"]));
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    assert!(out.stdout.contains("named project: python at svc\nnamed project: python at lib\n"), "{}", out.stdout);
+    let config = repo.read("proob/config.toml");
+    for root in ["svc", "lib"] {
+        assert!(config.contains(&format!("root = \"{root}\"\nlanguage = \"python\"")), "{config}");
+    }
+    assert!(!config.contains("No adapter detected"), "{config}");
+    let gate = repo.read(".github/workflows/proob-gate.yml");
+    assert!(gate.contains("pip install -e svc -r svc/requirements.txt && "), "{gate}");
+
+    // Existing files are the team's: what they lack is printed, not written.
+    repo.write("web/requirements.txt", "");
+    let again = run(repo.proob().args([
+        "init",
+        "--project",
+        "python:docs",
+        "--project",
+        "python:./svc/",
+        "--project",
+        "python:web",
+    ]));
+    assert_eq!(again.code, 0, "{}", again.stderr);
+    assert!(again.stdout.contains("add this adapter block:\n\n[[adapters]]\nroot = \"docs\"\n"), "{}", again.stdout);
+    assert_eq!(count(&again.stdout, "add this adapter block"), 2, "svc is listed already: {}", again.stdout);
+    // docs installs what lib does; web has its own requirements, which neither workflow has.
+    assert_eq!(count(&again.stdout, "add these steps to its execute job"), 2, "{}", again.stdout);
+    assert_eq!(count(&again.stdout, "pip install -r web/requirements.txt && "), 2, "{}", again.stdout);
+    assert_eq!(repo.read("proob/config.toml"), config);
+    assert_eq!(repo.read(".github/workflows/proob-gate.yml"), gate);
+
+    for (spec, why) in [
+        ("rust:lib", "there is no Cargo.toml in `lib`"),
+        ("python:nope", "`nope` is not a committed directory"),
+        ("python:../svc", "no `..`"),
+        ("python:~", "a leading `~`"),
+        ("python:./-x", "no leading `-`"),
+        ("go:svc", "proob has no adapter for `go`"),
+        ("svc", "there is no `:`"),
+    ] {
+        let out = run(repo.proob().args(["init", "--project", spec]));
+        assert_eq!(out.code, 2, "{spec}: {}", out.stdout);
+        assert!(out.stderr.contains(&format!("--project {spec}: ")) && out.stderr.contains(why), "{}", out.stderr);
+    }
+}
+
+#[test]
 fn init_refuses_to_clobber_an_unreadable_settings_file() {
     let repo = TempRepo::new();
     repo.write(".claude/settings.json", "{ not json");

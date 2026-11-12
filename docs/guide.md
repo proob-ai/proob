@@ -58,7 +58,7 @@ Open your repository in Claude Code and run the skills in order:
 /proob:guard      show where the team stands and what is missing
 ```
 
-The first `/proob:declare` also runs `proob init`, so its pull request carries `proob/config.toml` and the two workflows that run the checks. Reviewers approve with GitHub alone:
+The first `/proob:declare` also runs `proob init`, so its pull request carries `proob/config.toml` and the two workflows that run the checks. `proob init` finds a Rust or Python project at the repository root. In a monorepo, name each project below the root with `--project python:<dir>` or `--project rust:<dir>` (repeatable; `proob shadow open` takes the same flag): the skills read the repository and pass it, and proob then picks the adapter, the runner, and the install steps from what is at that directory. A config or workflow that already exists is kept, and the adapter block and the workflow steps to add are printed. Reviewers approve with GitHub alone:
 
 1. Merging approves every file in this pull request as its current content. Only a review by someone other than the author counts as a team approval; a merge without one is self-signed, and proob says so.
 2. To change wording, use GitHub's "suggest" on the line and let the author commit the suggestion. You may push your own edit instead, knowing that a file you edited then needs someone else's approval.
