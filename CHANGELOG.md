@@ -8,6 +8,8 @@ version as a comment.
 
 ## Unreleased
 
+## v0.2.1 (2026-11-12)
+
 ### Fixed
 
 - `proob shadow open` (and so `/proob:try`) no longer stops with
