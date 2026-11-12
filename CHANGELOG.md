@@ -8,6 +8,13 @@ version as a comment.
 
 ## Unreleased
 
+### Fixed
+
+- `proob shadow open` (and so `/proob:try`) no longer stops with
+  `shadow: git add failed: The following paths are ignored by one of your
+  .gitignore files:` in a repository whose `.gitignore` ignores `.claude/`,
+  `.claude/settings.json`, or `.gitignore` itself.
+
 ## v0.2.0 (2026-11-10)
 
 ### Added
