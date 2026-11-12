@@ -27,7 +27,7 @@ inputs:
   version:
     description: "The proob release to download and verify. Ignored when `binary` is given."
     required: false
-    default: "0.2.0"
+    default: "0.2.1"
   binary:
     description: >-
       A path to an already-built proob binary, relative to the workspace. Skips the

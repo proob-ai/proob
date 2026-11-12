@@ -22,7 +22,7 @@ members = [
 exclude = ["tests/fixtures/rust-repo", "tests/fixtures/verus-crate", "tests/fixtures/kani-crate"]
 
 [workspace.package]
-version = "0.2.0"
+version = "0.2.1"
 edition = "2024"
 license = "Apache-2.0"
 repository = "https://github.com/proob-ai/proob"
@@ -32,12 +32,12 @@ rust-version = "1.99.1"
 # Pinned as a set with the Verus release in tools/get-verus.sh and the channel in
 # rust-toolchain.toml. Bump all of them together, in one reviewed PR.
 vstd = "=0.0.0-2026-10-25-0158"
-proob-trusted = { path = "crates/proob-trusted", version = "0.2.0" }
-proob-core = { path = "crates/proob-core", version = "0.2.0" }
-proob-facts = { path = "crates/proob-facts", version = "0.2.0" }
-proob-spawn = { path = "crates/proob-spawn", version = "0.2.0" }
-proob-effects = { path = "crates/proob-effects", version = "0.2.0" }
-proob-adapters = { path = "crates/proob-adapters", version = "0.2.0" }
+proob-trusted = { path = "crates/proob-trusted", version = "0.2.1" }
+proob-core = { path = "crates/proob-core", version = "0.2.1" }
+proob-facts = { path = "crates/proob-facts", version = "0.2.1" }
+proob-spawn = { path = "crates/proob-spawn", version = "0.2.1" }
+proob-effects = { path = "crates/proob-effects", version = "0.2.1" }
+proob-adapters = { path = "crates/proob-adapters", version = "0.2.1" }
 sha2 = "0.10"
 clap = { version = "4.5", features = ["derive"] }
 serde = { version = "1.0", features = ["derive"] }
