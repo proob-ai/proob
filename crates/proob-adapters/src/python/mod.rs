@@ -69,6 +69,7 @@
 pub mod check;
 pub mod discover;
 pub mod hypothesis;
+pub mod provision;
 pub mod scan;
 pub mod score;
 pub mod tools;

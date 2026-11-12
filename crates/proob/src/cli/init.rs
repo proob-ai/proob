@@ -482,7 +482,7 @@ fn setup_steps(p: &Project) -> Vec<String> {
             vec![
                 format!("      - uses: {SETUP_PYTHON_ACTION}"),
                 "        with:".into(),
-                "          python-version: \"3.12\"".into(),
+                format!("          python-version: \"{}\"", proob_adapters::python::provision::GATE_PYTHON),
                 "      - name: Install the project and the Python adapter's pinned tools".into(),
                 "        # The pins are the adapter's (tools/python-tools.txt in the proob repository); mutmut must match exactly.".into(),
                 format!("        run: python -m pip install --upgrade pip && {install}python -m pip install {}", python_pins()),
@@ -720,10 +720,21 @@ fn projects_to_add(ws: &Workspace, named: &[Project]) -> Result<Vec<(String, Str
     Ok(out)
 }
 
+/// Whether every line of `text` is a line of one of `rendered`: nothing in it
+/// is anyone's edit. The Action's pin is not compared: it differs by the
+/// build that wrote it, never by project.
+fn only_rendered(text: &str, rendered: &[String]) -> bool {
+    let known = |line: &str| rendered.iter().any(|r| r.lines().any(|l| l == line));
+    text.lines().filter(|l| !l.contains("proob-ai/proob@")).all(known)
+}
+
 /// For a workspace `init` has set up already (the shadow): each named project
 /// its config lacks is added. A file is written again, for every project the
 /// config then lists, only when it is `own` (`init` wrote it; the repository
-/// did not commit it) and still reads exactly as `init` wrote it. Any other
+/// did not commit it) and nobody edited it since: the config reads exactly
+/// as `init` wrote it, and a workflow holds only lines `init` renders, for
+/// the projects before or after (so one written for fewer projects, another
+/// default branch, or by another build is still written again). Any other
 /// config gains the blocks, and any other workflow is kept: an edit made
 /// since is never lost. Nothing changes when the config lacks none.
 pub fn add_projects(
@@ -739,8 +750,11 @@ pub fn add_projects(
     let listed: Vec<Project> = adapters.iter().filter_map(|a| Project::listed(&ws.root, a)).collect();
     let before = with_named(&detect(&ws.root), &listed);
     let projects = with_named(&detect(&ws.root), &[listed, named.to_vec()].concat());
-    let as_written = |path: &str, was: String| own(path) && ws.read_optional(path).is_ok_and(|now| now == Some(was));
-    let config = if as_written(CONFIG, config_text(&before, opts)) {
+    let unedited = |path: &str, template: &str| {
+        let rendered = [&before, &projects].map(|p| render_workflow(template, default_branch, p, opts));
+        own(path) && ws.read_optional(path).is_ok_and(|now| now.is_some_and(|now| only_rendered(&now, &rendered)))
+    };
+    let config = if own(CONFIG) && text == config_text(&before, opts) {
         config_text(&projects, opts)
     } else {
         format!("{}\n\n{}", text.trim_end(), blocks.join("\n"))
@@ -750,7 +764,7 @@ pub fn add_projects(
     write(ws, CONFIG, &config)?;
     [(GATE_WORKFLOW, GATE_TEMPLATE), (EVIDENCE_WORKFLOW, EVIDENCE_TEMPLATE)]
         .into_iter()
-        .filter(|(path, template)| as_written(path, render_workflow(template, default_branch, &before, opts)))
+        .filter(|(path, template)| unedited(path, template))
         .try_for_each(|(path, template)| write(ws, path, &render_workflow(template, default_branch, &projects, opts)))
 }
 

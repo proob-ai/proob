@@ -103,11 +103,12 @@ directory (and `verify` in step 4). Read the files rather than invoking the skil
    `$work`, each with its `proob:<ULID>` token. Run each with
    `"$proob" --shadow run check <id> --json`. A counterexample is a finding. Keep it, and never
    weaken the test or edit the property to make it pass. Skip its step 6 (pull request).
-   When a check errors because a Python tool is missing, run the command its reason gives in
-   `$work`, which makes proob's own environment `proob/.cache/python`, then install the
-   project's test dependencies with that environment's pip; never install into the user's
-   Python or their `.venv`. When the reason says the Python is too old for the pinned tools,
-   make that environment with the newer interpreter it names, and say so in the report.
+   For a Python project, `proob shadow open` has made proob's own environment
+   `$work/proob/.cache/python` and installed the pinned tools and the project's requirement
+   files into it: install nothing before a check. Only when a check still errors because a
+   Python tool or a dependency is missing, run the command its reason gives in `$work`, or
+   install the missing dependency with that environment's pip, and say so in the report;
+   never install into the user's Python or their `.venv`.
    A `kind = "proof"` proposal gets one Kani harness instead, under falsify's harness rules; a
    Kani failure is a finding like a counterexample. When Kani cannot take a proposal for one of
    falsify's fallback reasons, follow its fallback (the one property edit it allows) and keep the

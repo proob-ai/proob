@@ -31,7 +31,7 @@ const PROBE_TIMEOUT: Duration = Duration::from_secs(120);
 /// Prints `<tool> <version>` or `<tool> missing` per line.
 const PROBE: &str = "import importlib.metadata as m\nfor d in ('pytest', 'hypothesis', 'mutmut'):\n    try:\n        print(d, m.version(d))\n    except m.PackageNotFoundError:\n        print(d, 'missing')\n";
 
-pub const PYTHON_HINT: &str = "python3 was not found on PATH: install Python 3.10 or newer (in CI: actions/setup-python) and activate the environment that holds pytest, hypothesis, and mutmut, so `python3` is that interpreter";
+pub const PYTHON_HINT: &str = "python3 was not found on PATH: install Python 3.11 or newer (in CI: actions/setup-python) and activate the environment that holds pytest, hypothesis, and mutmut, so `python3` is that interpreter";
 
 /// The `name==version` pins, in file order.
 pub fn pins() -> Vec<(&'static str, &'static str)> {

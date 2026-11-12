@@ -332,11 +332,13 @@ fn open_checks_a_project_below_the_root_once_it_is_named() {
     assert!(typo.stderr.contains("`chatbto` is not a committed directory"), "{}", typo.stderr);
     assert!(w.work().join("proob/config.toml").is_file(), "the shadow is still there");
 
-    // The shadow the first open left has no adapter in its files; they are written again.
-    let out = w.ok(&["shadow", "open", "--project", "python:chatbot"]);
-    assert!(out.stdout.starts_with("shadow: ready at"), "{}", out.stdout);
+    // The shadow the first open left has no adapter in its files: its workflows are written
+    // again, and its config, edited since, gains the block and keeps the edit.
     let work = w.work();
     let read = |p: &str| std::fs::read_to_string(work.join(p)).expect("read");
+    std::fs::write(work.join("proob/config.toml"), format!("{}# ours\n", read("proob/config.toml"))).expect("edit");
+    let out = w.ok(&["shadow", "open", "--project", "python:chatbot"]);
+    assert!(out.stdout.starts_with("shadow: ready at"), "{}", out.stdout);
     assert!(read("proob/config.toml").contains("root = \"chatbot\"\nlanguage = \"python\""));
     let gate = read(".github/workflows/proob-gate.yml");
     assert!(gate.contains("-r chatbot/requirements.txt") && !gate.contains("No adapter detected"), "{gate}");
@@ -347,6 +349,7 @@ fn open_checks_a_project_below_the_root_once_it_is_named() {
     let config = read("proob/config.toml");
     assert_eq!(config.matches("root = \"docio\"\nlanguage = \"python\"").count(), 1, "{config}");
     assert_eq!(config.matches("root = \"chatbot\"").count(), 1, "{config}");
+    assert!(config.contains("# ours\n"), "{config}");
     w.ok(&["--shadow", "validate"]);
     assert_untouched(&w, &before, "open --project");
 }
@@ -358,6 +361,7 @@ fn a_project_named_later_joins_the_files_the_shadow_wrote_and_not_the_teams() {
     repo.write("a.py", "def f(x):\n    return x\n");
     repo.write("svc/requirements.txt", "");
     repo.write("svc/b.py", "def g(x):\n    return x\n");
+    repo.write("tools/requirements.txt", "");
     repo.write(".github/workflows/proob-evidence.yml", "name: ours\n");
     repo.commit("a root project, one below it, and a workflow of the team's", NOW - DAY);
     let w = World { repo, home: tempfile::tempdir().expect("home") };
@@ -367,17 +371,25 @@ fn a_project_named_later_joins_the_files_the_shadow_wrote_and_not_the_teams() {
     let work = w.work();
     let read = |p: &str| std::fs::read_to_string(work.join(p)).expect("read");
     assert!(!read(".github/workflows/proob-gate.yml").contains("svc"));
-    // An edit made in the shadow since: the config gains the block and is not written again.
-    std::fs::write(work.join("proob/config.toml"), format!("{}# ours\n", read("proob/config.toml"))).expect("edit");
+    // Another build's pin of the Action is not an edit: the gate is still as the shadow wrote it.
+    let gate = work.join(".github/workflows/proob-gate.yml");
+    let other = read(".github/workflows/proob-gate.yml").replace("proob-ai/proob@", "proob-ai/proob@other-build-");
+    std::fs::write(&gate, other).expect("pin");
 
     w.ok(&["shadow", "open", "--project", "python:svc"]);
     let config = read("proob/config.toml");
     assert!(config.contains("root = \".\"\nlanguage = \"python\""), "{config}");
     assert_eq!(config.matches("root = \"svc\"\nlanguage = \"python\"").count(), 1, "{config}");
-    assert!(config.contains("# ours\n"), "{config}");
-    let gate = read(".github/workflows/proob-gate.yml");
-    assert!(gate.contains("-r requirements.txt") && gate.contains("-r svc/requirements.txt"), "{gate}");
+    let written = read(".github/workflows/proob-gate.yml");
+    assert!(written.contains("-r requirements.txt") && written.contains("-r svc/requirements.txt"), "{written}");
+    assert!(!written.contains("other-build"), "{written}");
     assert_eq!(read(".github/workflows/proob-evidence.yml"), "name: ours\n", "the team's workflow is kept");
+
+    // A workflow edited in the shadow is kept as it is; the config still gains the project.
+    std::fs::write(&gate, format!("{written}# ours\n")).expect("edit");
+    w.ok(&["shadow", "open", "--project", "python:tools"]);
+    assert_eq!(read(".github/workflows/proob-gate.yml"), format!("{written}# ours\n"));
+    assert!(read("proob/config.toml").contains("root = \"tools\"\nlanguage = \"python\""));
     assert_untouched(&w, &before, "open --project, later");
 }
 

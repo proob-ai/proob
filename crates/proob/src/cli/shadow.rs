@@ -28,10 +28,12 @@ use clap::Subcommand;
 use git::{Step, line};
 use place::{MARKER, Place};
 use proob_adapters::kani::tools::Resolution;
+use proob_adapters::python::{provision, tools::OWN_ENV};
 use proob_effects::git::{Git, Repo};
+use proob_facts::config::Language;
 use proob_facts::paths::{CONFIG, EVIDENCE_WORKFLOW, GATE_WORKFLOW, RESULTS_DIR};
 use proob_facts::results::RESULTS_FILE;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 #[derive(Subcommand)]
 pub enum ShadowCmd {
@@ -136,6 +138,7 @@ fn open(common: &Common, specs: &[String]) -> Result<Exit, CliError> {
     let opened = refresh(&place, &user, specs)?;
     add_projects(&place.work(), &user, specs)?;
     require_adapter(&place.work())?;
+    provide_python(&place.work())?;
     let n = property_count(&place.work());
     println!("{}", opened_line(&place, &user, opened, n));
     if user.dirty {
@@ -152,6 +155,31 @@ fn require_adapter(work: &Path) -> Result<(), CliError> {
 
 fn has_adapter(work: &Path) -> Result<bool, CliError> {
     Ok(matches!(Workspace::open(Some(work))?.load_config()?, ConfigSource::File(c) if !c.adapters.is_empty()))
+}
+
+/// proob's own Python environment in the shadow, made and filled here so
+/// nobody has to before a check can run. A failure is said and is not the
+/// open's: the check that needs the environment names what to do.
+fn provide_python(work: &Path) -> Result<(), CliError> {
+    let roots = python_roots(work)?;
+    if roots.is_empty() || !provision::stale(work, &roots) {
+        return Ok(());
+    }
+    eprintln!(
+        "shadow: setting up proob's Python environment ({OWN_ENV}): the pinned tools and the project's requirements"
+    );
+    match provision::provide(work, &roots) {
+        Ok(()) => eprintln!("shadow: the Python environment is set up"),
+        Err(e) => {
+            eprintln!("shadow: the Python environment could not be set up ({e}); a check names the command to run")
+        }
+    }
+    Ok(())
+}
+
+fn python_roots(work: &Path) -> Result<Vec<PathBuf>, CliError> {
+    let ConfigSource::File(config) = Workspace::open(Some(work))?.load_config()? else { return Ok(Vec::new()) };
+    Ok(config.adapters.iter().filter(|a| a.language == Language::Python).map(|a| work.join(&a.root)).collect())
 }
 
 pub const NOTHING_TO_CHECK: &str = "proob cannot check this repository: it found no Python or Rust project at its root \
@@ -298,6 +326,10 @@ fn swap(place: &Place, fresh: &Path) -> Result<(), CliError> {
         rename(&work, &old)?;
     }
     rename(fresh, &work)?;
+    // proob's Python environment is at the same path again, so it still runs; `open` fills it again when stale.
+    if old.join(OWN_ENV).is_dir() && std::fs::create_dir_all(work.join("proob/.cache")).is_ok() {
+        let _ = std::fs::rename(old.join(OWN_ENV), work.join(OWN_ENV));
+    }
     remove_dir(&old)
 }
 

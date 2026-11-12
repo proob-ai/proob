@@ -19,8 +19,17 @@ version as a comment.
   the named directory. Existing files are kept: `init` prints the adapter
   block and the workflow steps to add. `shadow open` adds the block to the
   shadow's config and renders again the workflows it wrote itself; a workflow
-  the repository committed, and any file edited in the shadow since, is left
-  as it is.
+  the repository committed, or one edited in the shadow since, is left as it
+  is.
+- `proob shadow open` sets up proob's own Python environment in the shadow
+  (`proob/.cache/python`) for a Python project: the pinned tools, then the
+  project's requirement files (`requirements.txt`, `requirements-test.txt`,
+  and the like) and the project itself when it is a package. It is made with
+  Python 3.12 (the gate's) from `PATH` or from uv, else another `python3`
+  the pins install on; a `python3` that already has every pinned tool is
+  used as it is. The environment is kept across commits and filled again
+  when the pins or a requirement file change. `/proob:try` no longer
+  installs anything before a check.
 
 ### Changed
 
