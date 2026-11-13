@@ -31,7 +31,7 @@ const PROBE_TIMEOUT: Duration = Duration::from_secs(120);
 /// Prints `<tool> <version>` or `<tool> missing` per line.
 const PROBE: &str = "import importlib.metadata as m\nfor d in ('pytest', 'hypothesis', 'mutmut'):\n    try:\n        print(d, m.version(d))\n    except m.PackageNotFoundError:\n        print(d, 'missing')\n";
 
-pub const PYTHON_HINT: &str = "python3 was not found on PATH: install Python 3.10 or newer (in CI: actions/setup-python) and activate the environment that holds pytest, hypothesis, and mutmut, so `python3` is that interpreter";
+pub const PYTHON_HINT: &str = "python3 was not found on PATH: install Python 3.11 or newer (in CI: actions/setup-python) and activate the environment that holds pytest, hypothesis, and mutmut, so `python3` is that interpreter";
 
 /// The `name==version` pins, in file order.
 pub fn pins() -> Vec<(&'static str, &'static str)> {
@@ -85,6 +85,32 @@ pub fn install_hint(tool: &str, fix: &Fix) -> String {
             all_pins()
         ),
     }
+}
+
+/// The oldest Python the pinned set installs on (Hypothesis's pin requires
+/// it); bump it with `tools/python-tools.txt`.
+const MIN_PYTHON: (u32, u32) = (3, 11);
+
+/// Whether `version` (`3.10.19`) is a Python the pins do not install on; one
+/// that cannot be read is not.
+fn too_old(version: &str) -> bool {
+    let mut parts = version.split('.').map(|p| p.parse::<u32>().ok());
+    matches!((parts.next().flatten(), parts.next().flatten()), (Some(major), Some(minor)) if (major, minor) < MIN_PYTHON)
+}
+
+/// For a missing tool: the install, or, on a Python the pins do not install
+/// on, the environment to make with a newer one first.
+fn missing_hint(tool: &str, python: &str, fix: &Fix) -> String {
+    if !too_old(python) {
+        return install_hint(tool, fix);
+    }
+    let (major, minor) = MIN_PYTHON;
+    let which = if fix.own { format!("proob's environment {OWN_ENV}") } else { "`python3`".to_string() };
+    format!(
+        "{tool} is not installed, and the pinned tools need Python {major}.{minor} or newer where {which} is Python {python}: make proob's own environment, which it uses whenever it exists, with a newer Python: `python{major}.{minor} -m venv --clear {OWN_ENV} && {OWN_ENV}/bin/python -m pip install {}{}` (any newer `python3.N` does; with uv, `uv venv --clear --seed --python {major}.{minor} {OWN_ENV}` makes it), then install your tests' own dependencies with the same pip",
+        all_pins(),
+        fix.project
+    )
 }
 
 pub fn version_mismatch(tool: &str, expected: &str, found: &str, fix: &Fix) -> String {
@@ -148,10 +174,11 @@ pub fn resolve(repo: &Path, root: &Path, needs: &[Need], tool_env: &[(OsString, 
         return Resolution::Missing { reason: PYTHON_HINT.to_string(), versions: Vec::new() };
     };
     let mut versions = Vec::new();
-    match probe(&python, root, &["--version"], tool_env) {
-        Ok(text) => versions.push(("python".to_string(), second_word(&text))),
+    let version = match probe(&python, root, &["--version"], tool_env) {
+        Ok(text) => second_word(&text),
         Err(e) => return Resolution::Missing { reason: format!("python3 --version failed: {e}"), versions },
-    }
+    };
+    versions.push(("python".to_string(), version.clone()));
     let found = match probe(&python, root, &["-c", PROBE], tool_env) {
         Ok(text) => parse_probe(&text),
         Err(e) => {
@@ -160,7 +187,7 @@ pub fn resolve(repo: &Path, root: &Path, needs: &[Need], tool_env: &[(OsString, 
     };
     for tool in required(needs) {
         match found.get(tool).cloned().flatten() {
-            None => return Resolution::Missing { reason: install_hint(tool, &fix), versions },
+            None => return Resolution::Missing { reason: missing_hint(tool, &version, &fix), versions },
             Some(version) => match accept(tool, &version, &fix) {
                 Ok(()) => versions.push((tool.to_string(), version)),
                 Err(reason) => return Resolution::Missing { reason, versions },
@@ -229,6 +256,18 @@ mod tests {
         let names: Vec<&str> = pins().into_iter().map(|(n, _)| n).collect();
         assert_eq!(names, vec![PYTEST, HYPOTHESIS, MUTMUT]);
         assert!(pinned(MUTMUT).is_some_and(|v| v.starts_with("3.")));
+    }
+
+    #[test]
+    fn a_python_the_pins_do_not_install_on_gets_the_environment_to_make() {
+        assert_eq!(["3.10.19", "3.9.6", "2.7.18"].map(too_old), [true; 3]);
+        assert_eq!(["3.11.0", "3.15.0", "4.0.0", "unknown"].map(too_old), [false; 4]);
+        let fix = Fix { own: false, project: " -r svc/requirements.txt".into() };
+        let hint = missing_hint(HYPOTHESIS, "3.10.19", &fix);
+        assert!(hint.contains("where `python3` is Python 3.10.19"), "{hint}");
+        assert!(hint.contains("`python3.11 -m venv --clear proob/.cache/python && "), "{hint}");
+        assert!(hint.contains(" -r svc/requirements.txt`"), "{hint}");
+        assert_eq!(missing_hint(HYPOTHESIS, "3.12.1", &fix), install_hint(HYPOTHESIS, &fix));
     }
 
     #[test]

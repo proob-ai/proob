@@ -120,6 +120,9 @@ enum Command {
         /// Also set up the TLA+ adapter (TLC); TLC itself is not installed.
         #[arg(long)]
         tla: bool,
+        /// Also set up a project below the repository root, as rust:<dir> or python:<dir> (repeatable).
+        #[arg(long, value_name = "LANGUAGE:DIR")]
+        project: Vec<String>,
     },
     /// Whether this machine has the tools each configured adapter runs, and the room to run them; installs nothing.
     Doctor,
@@ -218,8 +221,8 @@ fn dispatch(common: &Common, command: Command) -> Result<Exit, CliError> {
         Command::Run { what, id, budget, seed, record } => {
             cmd_run(common, what, &id, run::Options { budget, seed, record, json: common.json })
         }
-        Command::Init { kani, tla } => {
-            cmd_init(common, init::Options { kani: kani.then_some(init::KaniSetup::default()), tla })
+        Command::Init { kani, tla, project } => {
+            cmd_init(common, init::Options { kani: kani.then_some(init::KaniSetup::default()), tla }, &project)
         }
         Command::Doctor => cmd_doctor(common),
         Command::Shadow { cmd } => shadow::run(common, cmd),
@@ -527,11 +530,12 @@ fn cmd_run(common: &Common, what: run::What, id: &str, opts: run::Options) -> Re
     run::run(&loaded.ws, &loaded.config.candidate(), &loaded.properties, what, id, opts)
 }
 
-fn cmd_init(common: &Common, opts: init::Options) -> Result<Exit, CliError> {
+fn cmd_init(common: &Common, opts: init::Options, projects: &[String]) -> Result<Exit, CliError> {
     let ws = Workspace::open(common.repo.as_deref())?;
+    let named = projects.iter().map(|spec| init::Project::named(&ws.root, spec)).collect::<Result<Vec<_>, _>>()?;
     let repo = proob_effects::git::Git::open(&ws.root);
     let branch = default_branch(&repo, common.default_branch.as_deref()).unwrap_or_else(|_| "main".to_string());
-    let outcome = init::run(&ws, &branch, opts)?;
+    let outcome = init::run(&ws, &branch, opts, &named)?;
     if common.json {
         println!("{}", serde_json::to_string_pretty(&outcome).unwrap_or_default());
     } else {

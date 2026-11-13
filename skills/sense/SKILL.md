@@ -49,12 +49,19 @@ With no argument, read the whole repository.
    declaration" section needs the binary.
 
 2. Inventory. `git ls-files` (under `$ARGUMENTS` when given), then apply the
-   exclusions above. Note the languages by their root files: `Cargo.toml`
+   exclusions above. Note the languages by their marker files, at any depth,
+   and each project's root (the directory its marker file is in; a Cargo
+   workspace is one project at its workspace root): `Cargo.toml`
    (Rust; a `verus` or `vstd` dependency means Rust under Verus),
    `pyproject.toml`, `setup.py`, `requirements.txt` (Python), `package.json`
    (TypeScript or JavaScript), `go.mod` (Go), and so on. proob has adapters
    for Rust with proptest, Rust under Verus, and Python with Hypothesis; the
-   TypeScript adapter arrives after launch; nothing else. A repository in any
+   TypeScript adapter arrives after launch; nothing else. proob finds a
+   project at the repository root by itself; one below the root is checked
+   only when an adapter in `proob/config.toml` has that `root`
+   (`proob init --project <language>:<dir>` writes the block, or prints it
+   when the config exists), so record for each project whether it has one.
+   A repository in any
    other language still gets a picture and proposals, and its properties
    render `Not checked (no adapter)` until an adapter exists. Say which case
    this repository is.

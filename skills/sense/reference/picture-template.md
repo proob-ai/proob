@@ -17,10 +17,11 @@ is never committed.
 
 ## Languages and adapters
 
-| language | signal | proob adapter |
-|---|---|---|
-| Rust | Cargo.toml | available: proptest |
-| Go | go.mod | none: properties render Not checked (no adapter) |
+| language | root | signal | proob adapter |
+|---|---|---|---|
+| Rust | . | Cargo.toml | available: proptest |
+| Python | services/chatbot | requirements.txt | available: Hypothesis; no adapter in proob/config.toml has this root yet |
+| Go | tools/sync | go.mod | none: properties render Not checked (no adapter) |
 
 ## Entry points
 

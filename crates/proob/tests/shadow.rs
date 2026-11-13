@@ -304,6 +304,96 @@ fn open_fails_loudly_when_nothing_in_the_repository_can_be_checked() {
 }
 
 #[test]
+fn open_checks_a_project_below_the_root_once_it_is_named() {
+    let repo = TempRepo::new();
+    repo.write("package.json", "{}\n");
+    repo.write("chatbot/requirements.txt", "");
+    repo.write("chatbot/app/a.py", "def f(x):\n    return x\n");
+    repo.write("docio/b.py", "def g(x):\n    return x\n");
+    repo.commit("a monorepo", NOW - DAY);
+    let w = World { repo, home: tempfile::tempdir().expect("home") };
+    let before = w.footprint();
+
+    let bare = run(w.proob().args(["shadow", "open"]));
+    assert_eq!(bare.code, 2, "{}{}", bare.stdout, bare.stderr);
+    assert!(bare.stderr.contains("proob shadow open --project python:<dir>"), "{}", bare.stderr);
+    let other = run(w.proob().args(["shadow", "open", "--project", "go:chatbot"]));
+    assert_eq!(other.code, 2, "{}{}", other.stdout, other.stderr);
+    assert_eq!(other.stderr.lines().count(), 1, "{}", other.stderr);
+    assert!(
+        other.stderr.starts_with("shadow: --project go:chatbot: proob has no adapter for `go`"),
+        "{}",
+        other.stderr
+    );
+
+    // A project that is not there changes nothing: the shadow the first open left stays.
+    let typo = run(w.proob().args(["shadow", "open", "--project", "python:chatbto"]));
+    assert_eq!(typo.code, 2, "{}{}", typo.stdout, typo.stderr);
+    assert!(typo.stderr.contains("`chatbto` is not a committed directory"), "{}", typo.stderr);
+    assert!(w.work().join("proob/config.toml").is_file(), "the shadow is still there");
+
+    // The shadow the first open left has no adapter in its files: its workflows are written
+    // again, and its config, edited since, gains the block and keeps the edit.
+    let work = w.work();
+    let read = |p: &str| std::fs::read_to_string(work.join(p)).expect("read");
+    std::fs::write(work.join("proob/config.toml"), format!("{}# ours\n", read("proob/config.toml"))).expect("edit");
+    let out = w.ok(&["shadow", "open", "--project", "python:chatbot"]);
+    assert!(out.stdout.starts_with("shadow: ready at"), "{}", out.stdout);
+    assert!(read("proob/config.toml").contains("root = \"chatbot\"\nlanguage = \"python\""));
+    let gate = read(".github/workflows/proob-gate.yml");
+    assert!(gate.contains("-r chatbot/requirements.txt") && !gate.contains("No adapter detected"), "{gate}");
+
+    // A project named later, twice and in two spellings, joins the shadow's config once.
+    w.ok(&["shadow", "open", "--project", "python:docio/", "--project", "python:./docio"]);
+    w.ok(&["shadow", "open", "--project", "python:./docio", "--project", "python:chatbot/."]);
+    let config = read("proob/config.toml");
+    assert_eq!(config.matches("root = \"docio\"\nlanguage = \"python\"").count(), 1, "{config}");
+    assert_eq!(config.matches("root = \"chatbot\"").count(), 1, "{config}");
+    assert!(config.contains("# ours\n"), "{config}");
+    w.ok(&["--shadow", "validate"]);
+    assert_untouched(&w, &before, "open --project");
+}
+
+#[test]
+fn a_project_named_later_joins_the_files_the_shadow_wrote_and_not_the_teams() {
+    let repo = TempRepo::new();
+    repo.write("requirements.txt", "");
+    repo.write("a.py", "def f(x):\n    return x\n");
+    repo.write("svc/requirements.txt", "");
+    repo.write("svc/b.py", "def g(x):\n    return x\n");
+    repo.write("tools/requirements.txt", "");
+    repo.write(".github/workflows/proob-evidence.yml", "name: ours\n");
+    repo.commit("a root project, one below it, and a workflow of the team's", NOW - DAY);
+    let w = World { repo, home: tempfile::tempdir().expect("home") };
+    let before = w.footprint();
+
+    w.ok(&["shadow", "open"]);
+    let work = w.work();
+    let read = |p: &str| std::fs::read_to_string(work.join(p)).expect("read");
+    assert!(!read(".github/workflows/proob-gate.yml").contains("svc"));
+    // Another build's pin of the Action is not an edit: the gate is still as the shadow wrote it.
+    let gate = work.join(".github/workflows/proob-gate.yml");
+    let other = read(".github/workflows/proob-gate.yml").replace("proob-ai/proob@", "proob-ai/proob@other-build-");
+    std::fs::write(&gate, other).expect("pin");
+
+    w.ok(&["shadow", "open", "--project", "python:svc"]);
+    let config = read("proob/config.toml");
+    assert!(config.contains("root = \".\"\nlanguage = \"python\""), "{config}");
+    assert_eq!(config.matches("root = \"svc\"\nlanguage = \"python\"").count(), 1, "{config}");
+    let written = read(".github/workflows/proob-gate.yml");
+    assert!(written.contains("-r requirements.txt") && written.contains("-r svc/requirements.txt"), "{written}");
+    assert!(!written.contains("other-build"), "{written}");
+    assert_eq!(read(".github/workflows/proob-evidence.yml"), "name: ours\n", "the team's workflow is kept");
+
+    // A workflow edited in the shadow is kept as it is; the config still gains the project.
+    std::fs::write(&gate, format!("{written}# ours\n")).expect("edit");
+    w.ok(&["shadow", "open", "--project", "python:tools"]);
+    assert_eq!(read(".github/workflows/proob-gate.yml"), format!("{written}# ours\n"));
+    assert!(read("proob/config.toml").contains("root = \"tools\"\nlanguage = \"python\""));
+    assert_untouched(&w, &before, "open --project, later");
+}
+
+#[test]
 fn without_a_shadow_every_shadow_command_says_how_to_make_one() {
     let w = World::new();
     let expected = "shadow: no shadow yet for this repository; run /proob:try or proob shadow open\n";

@@ -8,6 +8,14 @@
 //! `.gitignore`. Idempotent: a file that exists is kept as it is, the
 //! settings merge adds nothing twice, so a second run changes no byte.
 //!
+//! With `--project <language>:<dir>` (repeatable): a Rust or Python project
+//! below the repository root gets its adapter block and its setup steps too.
+//! `init` looks for marker files at the root only; where the projects of a
+//! monorepo are is for the caller to say (an agent reads the repository), and
+//! the runner, the mutation tool, and the install then follow from what is at
+//! the named root. A config that already exists is kept; the block it lacks is
+//! printed.
+//!
 //! With `--kani` (a Rust repository only): the Kani adapter block, a pinned,
 //! cached Kani install in both workflows' setup steps, and the build probe,
 //! whose result is kept in `proob/.cache/kani-probe.toml`. A config or
@@ -56,6 +64,101 @@ pub enum Detected {
     TypeScript,
 }
 
+/// A detected project and its root. The ones at the repository root `init`
+/// finds itself; one below it is named by the caller (`--project`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct Project {
+    /// Relative to the repository, in `Checked::path`'s grammar; `.` is the root.
+    pub root: String,
+    pub detected: Detected,
+}
+
+impl Project {
+    pub fn at_root(detected: Detected) -> Project {
+        Project { root: ".".to_string(), detected }
+    }
+
+    /// `<language>:<dir>` read against the repository at `repo`. Rust needs
+    /// its `Cargo.toml` there; Python needs no marker file, since the caller
+    /// has said what the directory is.
+    pub fn named(repo: &Path, spec: &str) -> Result<Project, CliError> {
+        let bad = |why: String| {
+            CliError::Usage(format!(
+                "--project {spec}: {why}; name a project as rust:<dir> or python:<dir>, the directory relative to the repository root"
+            ))
+        };
+        let (language, dir) = spec.split_once(':').ok_or_else(|| bad("there is no `:`".into()))?;
+        Checked::path(Path::new(dir.trim_end_matches('/'))).map_err(|rule| bad(format!("`{dir}`: {rule}")))?;
+        let root = normal(dir);
+        // Checked again as it will be written: `./-x` is `-x` once normalised.
+        Checked::path(Path::new(&root)).map_err(|rule| bad(format!("`{dir}`: {rule}")))?;
+        if root.starts_with('~') {
+            return Err(bad(format!("`{dir}`: a leading `~` is the shell's home directory")));
+        }
+        let at = repo.join(&root);
+        // By its exact name: a symlink or another spelling is a second name for a directory, or a way out.
+        if !at.is_dir() || at.canonicalize().ok() != repo.canonicalize().ok().map(|r| r.join(&root)) {
+            return Err(bad(format!("`{root}` is not a committed directory of the repository")));
+        }
+        let mut found = detect(&at).into_iter();
+        let detected = match language {
+            "rust" => found
+                .find(|d| matches!(d, Detected::Rust { .. }))
+                .ok_or_else(|| bad(format!("there is no Cargo.toml in `{root}`")))?,
+            "python" => found
+                .find(|d| matches!(d, Detected::Python { .. }))
+                .unwrap_or(Detected::Python { pyproject: false, requirements: false }),
+            other => return Err(bad(format!("proob has no adapter for `{other}`"))),
+        };
+        Ok(Project { root, detected })
+    }
+
+    /// The project of a config's Rust or Python adapter; none for another
+    /// language, or when its directory is not there.
+    fn listed(repo: &Path, a: &config::Adapter) -> Option<Project> {
+        let language = match a.language {
+            Language::Rust => "rust",
+            Language::Python => "python",
+            _ => return None,
+        };
+        Project::named(repo, &format!("{language}:{}", a.root)).ok()
+    }
+
+    /// Whether `a` is this project's adapter: the same root and language.
+    pub fn is_adapter(&self, a: &config::Adapter) -> bool {
+        let language = match self.detected {
+            Detected::Rust { .. } => Some(Language::Rust),
+            Detected::Python { .. } => Some(Language::Python),
+            Detected::TypeScript => None,
+        };
+        language == Some(a.language) && normal(&a.root) == self.root
+    }
+
+    /// `file` at the project's root, as a step run from the repository root names it.
+    fn path(&self, file: &str) -> String {
+        if self.root == "." { file.to_string() } else { format!("{}/{file}", self.root) }
+    }
+}
+
+/// `dir` as one spelling: no `./`, no doubled or trailing `/`, no `.` segment; `.` is the root.
+fn normal(dir: &str) -> String {
+    let parts: Vec<&str> = dir.split('/').filter(|s| !s.is_empty() && *s != ".").collect();
+    if parts.is_empty() { ".".to_string() } else { parts.join("/") }
+}
+
+/// The projects to set up: the root's own, then each named one not already among them.
+fn with_named(detected: &[Detected], named: &[Project]) -> Vec<Project> {
+    let same = |a: &Project, b: &Project| {
+        a.root == b.root && std::mem::discriminant(&a.detected) == std::mem::discriminant(&b.detected)
+    };
+    detected.iter().copied().map(Project::at_root).chain(named.iter().cloned()).fold(Vec::new(), |mut all, p| {
+        if !all.iter().any(|q| same(q, &p)) {
+            all.push(p);
+        }
+        all
+    })
+}
+
 /// What `init` sets up beyond what it detects.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Options {
@@ -87,6 +190,12 @@ pub enum Change {
 #[derive(Debug, Clone, Serialize)]
 pub struct Outcome {
     pub detected: Vec<Detected>,
+    /// The projects named with `--project`.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub projects: Vec<Project>,
+    /// The kept files that lack a named project: each path and the text to add.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub projects_to_add: Vec<(String, String)>,
     pub files: Vec<(String, Change)>,
     pub action_pin: String,
     pub action_pinned_by_sha: bool,
@@ -112,7 +221,7 @@ pub struct KaniOutcome {
     pub min_proob_version: String,
 }
 
-/// Adapters by the files at the repository root (monorepo detection is deferred).
+/// Adapters by the files at `root`: the repository's, or a named project's.
 pub fn detect(root: &Path) -> Vec<Detected> {
     let has = |name: &str| root.join(name).is_file();
     let mut found = Vec::new();
@@ -176,13 +285,14 @@ pub fn tests_require_features(manifest: &str) -> bool {
 pub const FEATURES_HINT: &str = "# This crate's tests look like they need cargo features (build.rs compile_error!\n\
      # or [[test]] required-features); set one: features = [\"name\"], all_features = true, no_default_features = true\n";
 
-fn adapter_block(d: Detected) -> String {
-    match d {
+fn adapter_block(p: &Project) -> String {
+    let root = &p.root;
+    match p.detected {
         Detected::Rust { needs_features, .. } => format!(
-            "[[adapters]]\nroot = \".\"\nlanguage = \"rust\"\nrunner = \"nextest\"\nmutation_tool = \"cargo-mutants\"\n{}",
+            "[[adapters]]\nroot = \"{root}\"\nlanguage = \"rust\"\nrunner = \"nextest\"\nmutation_tool = \"cargo-mutants\"\n{}",
             if needs_features { FEATURES_HINT } else { "" }
         ),
-        Detected::Python { .. } => "[[adapters]]\nroot = \".\"\nlanguage = \"python\"\nrunner = \"pytest\"\nmutation_tool = \"mutmut\"\n".to_string(),
+        Detected::Python { .. } => format!("[[adapters]]\nroot = \"{root}\"\nlanguage = \"python\"\nrunner = \"pytest\"\nmutation_tool = \"mutmut\"\n"),
         Detected::TypeScript => "# package.json detected: the TypeScript adapter (fast-check, StrykerJS) arrives\n# after launch; until then TypeScript properties render Not checked (no adapter).\n".to_string(),
     }
 }
@@ -241,19 +351,20 @@ fn policy_block(p: PolicyTable) -> String {
     )
 }
 
-/// The config text: the built-in defaults, commented, with the detected
+/// The config text: the built-in defaults, commented, with the projects'
 /// adapters and, when asked, Kani's.
-pub fn config_text(detected: &[Detected], opts: Options) -> String {
-    let needs = detected.iter().any(|d| matches!(d, Detected::Rust { needs_features: true, .. }));
-    let adapters: String = detected
+pub fn config_text(projects: &[Project], opts: Options) -> String {
+    let needs =
+        projects.iter().any(|p| p.root == "." && matches!(p.detected, Detected::Rust { needs_features: true, .. }));
+    let adapters: String = projects
         .iter()
-        .map(|d| adapter_block(*d))
+        .map(adapter_block)
         .chain(opts.kani.map(|k| kani_block(k, needs)))
         .chain(opts.tla.then(tla_block))
         .map(|b| format!("\n{b}"))
         .collect();
     let adapters = if adapters.is_empty() {
-        "\n# No adapter detected (Cargo.toml, pyproject.toml, setup.py, requirements.txt).\n# Properties render Not checked (no adapter) until one is listed here.\n".to_string()
+        "\n# No adapter detected (Cargo.toml, pyproject.toml, setup.py, requirements.txt at the\n# repository root). For a project in a subdirectory, `proob init --project python:<dir>`\n# (or rust:<dir>) prints its block. Properties render Not checked (no adapter) until\n# one is listed here.\n".to_string()
     } else {
         adapters
     };
@@ -331,16 +442,23 @@ fn python_pins() -> String {
         .join(" ")
 }
 
-/// The setup steps one adapter needs, as workflow step lines (six-space indent).
-fn setup_steps(d: Detected) -> Vec<String> {
-    match d {
-        Detected::Rust { toolchain_file: true, .. } => vec![
-            "      - name: Install the Rust toolchain pinned in rust-toolchain.toml".into(),
+/// The setup steps one project's adapter needs, as workflow step lines
+/// (six-space indent). Steps run from the repository root, so a project
+/// below it is installed by its path.
+fn setup_steps(p: &Project) -> Vec<String> {
+    match p.detected {
+        Detected::Rust { toolchain_file: true, .. } => [
+            format!("      - name: Install the Rust toolchain pinned in {}", p.path("rust-toolchain.toml")),
             "        run: rustup toolchain install && rustup show active-toolchain".into(),
+        ]
+        .into_iter()
+        .chain((p.root != ".").then(|| format!("        working-directory: \"{}\"", p.root)))
+        .chain([
             format!("      - uses: {TAIKI_INSTALL_ACTION}"),
             "        with:".into(),
             "          tool: cargo-nextest@0.9.150,cargo-mutants@27.1.0".into(),
-        ],
+        ])
+        .collect(),
         Detected::Rust { toolchain_file: false, .. } => vec![
             format!("      - uses: {RUST_TOOLCHAIN_ACTION}"),
             "        with:".into(),
@@ -350,18 +468,24 @@ fn setup_steps(d: Detected) -> Vec<String> {
             "          tool: cargo-nextest@0.9.150,cargo-mutants@27.1.0".into(),
         ],
         Detected::Python { pyproject, requirements } => {
-            let install = match (pyproject, requirements) {
-                (true, true) => "python -m pip install -e . -r requirements.txt",
-                (true, false) => "python -m pip install -e .",
-                _ => "python -m pip install -r requirements.txt",
+            // Neither file (a named project without one): only the adapter's tools.
+            let project: Vec<String> = pyproject
+                .then(|| format!("-e {}", p.root))
+                .into_iter()
+                .chain(requirements.then(|| format!("-r {}", p.path("requirements.txt"))))
+                .collect();
+            let install = if project.is_empty() {
+                String::new()
+            } else {
+                format!("python -m pip install {} && ", project.join(" "))
             };
             vec![
                 format!("      - uses: {SETUP_PYTHON_ACTION}"),
                 "        with:".into(),
-                "          python-version: \"3.12\"".into(),
+                format!("          python-version: \"{}\"", proob_adapters::python::provision::GATE_PYTHON),
                 "      - name: Install the project and the Python adapter's pinned tools".into(),
                 "        # The pins are the adapter's (tools/python-tools.txt in the proob repository); mutmut must match exactly.".into(),
-                format!("        run: python -m pip install --upgrade pip && {install} && python -m pip install {}", python_pins()),
+                format!("        run: python -m pip install --upgrade pip && {install}python -m pip install {}", python_pins()),
             ]
         }
         Detected::TypeScript => vec![
@@ -406,14 +530,14 @@ pub fn tla_steps() -> Vec<String> {
     ]
 }
 
-fn all_setup_steps(detected: &[Detected], opts: Options) -> String {
+fn all_setup_steps(projects: &[Project], opts: Options) -> String {
     let tla = opts.tla.then(tla_steps).into_iter().flatten();
-    let lines: Vec<String> = if detected.is_empty() && !opts.tla {
+    let lines: Vec<String> = if projects.is_empty() && !opts.tla {
         vec!["      # No adapter detected: nothing to set up until proob/config.toml lists one.".into()]
     } else {
-        detected
+        projects
             .iter()
-            .flat_map(|d| setup_steps(*d))
+            .flat_map(setup_steps)
             .chain(opts.kani.into_iter().flat_map(|_| kani_steps()))
             .chain(tla)
             .collect()
@@ -422,9 +546,9 @@ fn all_setup_steps(detected: &[Detected], opts: Options) -> String {
 }
 
 /// A template with its placeholders filled; no placeholder survives.
-pub fn render_workflow(template: &str, default_branch: &str, detected: &[Detected], opts: Options) -> String {
+pub fn render_workflow(template: &str, default_branch: &str, projects: &[Project], opts: Options) -> String {
     template
-        .replace("@@SETUP_STEPS@@", &all_setup_steps(detected, opts))
+        .replace("@@SETUP_STEPS@@", &all_setup_steps(projects, opts))
         .replace("@@ACTION_PIN@@", ACTION_PIN)
         .replace("@@ACTION_PIN_COMMENT@@", ACTION_PIN_COMMENT)
         .replace("@@DEFAULT_BRANCH@@", default_branch)
@@ -524,12 +648,14 @@ fn gitignore(ws: &Workspace) -> Result<Change, CliError> {
     }
 }
 
-pub fn run(ws: &Workspace, default_branch: &str, opts: Options) -> Result<Outcome, CliError> {
+/// `named`: the projects below the root that the caller names (`--project`).
+pub fn run(ws: &Workspace, default_branch: &str, opts: Options, named: &[Project]) -> Result<Outcome, CliError> {
     let detected = detect(&ws.root);
     if opts.kani.is_some() && !detected.iter().any(|d| matches!(d, Detected::Rust { .. })) {
         return Err(CliError::Usage("--kani needs a Rust crate: there is no Cargo.toml at the repository root".into()));
     }
-    let config = config_text(&detected, opts);
+    let projects = with_named(&detected, named);
+    let config = config_text(&projects, opts);
     config::parse_config(&config)
         .map_err(|e| CliError::failed(format!("the rendered config does not parse: {e} (report this)")))?;
     let (settings, settings_change) = merged_settings(ws.read_optional(SETTINGS)?.as_deref())?;
@@ -539,15 +665,16 @@ pub fn run(ws: &Workspace, default_branch: &str, opts: Options) -> Result<Outcom
         None => Vec::new(),
     };
     let tla = if opts.tla { Some(TlaOutcome { to_add: tla_to_add(ws)? }) } else { None };
+    let projects_to_add = projects_to_add(ws, named)?;
     let files = vec![
         (CONFIG.to_string(), write_new(ws, CONFIG, &config)?),
         (
             GATE_WORKFLOW.to_string(),
-            write_new(ws, GATE_WORKFLOW, &render_workflow(GATE_TEMPLATE, default_branch, &detected, opts))?,
+            write_new(ws, GATE_WORKFLOW, &render_workflow(GATE_TEMPLATE, default_branch, &projects, opts))?,
         ),
         (
             EVIDENCE_WORKFLOW.to_string(),
-            write_new(ws, EVIDENCE_WORKFLOW, &render_workflow(EVIDENCE_TEMPLATE, default_branch, &detected, opts))?,
+            write_new(ws, EVIDENCE_WORKFLOW, &render_workflow(EVIDENCE_TEMPLATE, default_branch, &projects, opts))?,
         ),
         (SETTINGS.to_string(), write_settings(ws, &settings, settings_change)?),
         (GITIGNORE.to_string(), gitignore(ws)?),
@@ -558,12 +685,87 @@ pub fn run(ws: &Workspace, default_branch: &str, opts: Options) -> Result<Outcom
     };
     Ok(Outcome {
         detected,
+        projects: named.to_vec(),
+        projects_to_add,
         files,
         action_pin: format!("{ACTION_PIN} {ACTION_PIN_COMMENT}"),
         action_pinned_by_sha: ACTION_PIN_COMMENT.starts_with("# v"),
         kani,
         tla,
     })
+}
+
+/// The adapter block of each named project that the existing config has no
+/// adapter for; none when there is no config yet (it is about to be written
+/// with them).
+pub fn project_blocks(ws: &Workspace, named: &[Project]) -> Result<Vec<String>, CliError> {
+    let Some(text) = ws.read_optional(CONFIG)? else { return Ok(Vec::new()) };
+    let listed = config::parse_config(&text).map(|c| c.adapters).unwrap_or_default();
+    let named = with_named(&[], named);
+    Ok(named.iter().filter(|p| !listed.iter().any(|a| p.is_adapter(a))).map(adapter_block).collect())
+}
+
+/// The existing files that lack a named project, each with the exact text to
+/// add: its adapter block to a config without that adapter, its setup steps
+/// to a workflow without them.
+fn projects_to_add(ws: &Workspace, named: &[Project]) -> Result<Vec<(String, String)>, CliError> {
+    let steps: Vec<String> = with_named(&[], named).iter().map(|p| setup_steps(p).join("\n")).collect();
+    let mut out: Vec<(String, String)> =
+        project_blocks(ws, named)?.into_iter().map(|b| (CONFIG.to_string(), b)).collect();
+    for wf in [GATE_WORKFLOW, EVIDENCE_WORKFLOW] {
+        if let Some(text) = ws.read_optional(wf)? {
+            out.extend(steps.iter().filter(|s| !text.contains(s.as_str())).map(|s| (wf.to_string(), format!("{s}\n"))));
+        }
+    }
+    Ok(out)
+}
+
+/// Whether every line of `text` is a line of one of `rendered`: nothing in it
+/// is anyone's edit. The Action's pin is not compared: it differs by the
+/// build that wrote it, never by project.
+fn only_rendered(text: &str, rendered: &[String]) -> bool {
+    let known = |line: &str| rendered.iter().any(|r| r.lines().any(|l| l == line));
+    text.lines().filter(|l| !l.contains("proob-ai/proob@")).all(known)
+}
+
+/// For a workspace `init` has set up already (the shadow): each named project
+/// its config lacks is added. A file is written again, for every project the
+/// config then lists, only when it is `own` (`init` wrote it; the repository
+/// did not commit it) and nobody edited it since: the config reads exactly
+/// as `init` wrote it, and a workflow holds only lines `init` renders, for
+/// the projects before or after (so one written for fewer projects, another
+/// default branch, or by another build is still written again). Any other
+/// config gains the blocks, and any other workflow is kept: an edit made
+/// since is never lost. Nothing changes when the config lacks none.
+pub fn add_projects(
+    ws: &Workspace,
+    default_branch: &str,
+    opts: Options,
+    named: &[Project],
+    own: &dyn Fn(&str) -> bool,
+) -> Result<(), CliError> {
+    let blocks = project_blocks(ws, named)?;
+    let Some(text) = ws.read_optional(CONFIG)?.filter(|_| !blocks.is_empty()) else { return Ok(()) };
+    let adapters = config::parse_config(&text).map_err(|e| CliError::invalid(CONFIG, e))?.adapters;
+    let listed: Vec<Project> = adapters.iter().filter_map(|a| Project::listed(&ws.root, a)).collect();
+    let before = with_named(&detect(&ws.root), &listed);
+    let projects = with_named(&detect(&ws.root), &[listed, named.to_vec()].concat());
+    let unedited = |path: &str, template: &str| {
+        let rendered = [&before, &projects].map(|p| render_workflow(template, default_branch, p, opts));
+        own(path) && ws.read_optional(path).is_ok_and(|now| now.is_some_and(|now| only_rendered(&now, &rendered)))
+    };
+    let config = if own(CONFIG) && text == config_text(&before, opts) {
+        config_text(&projects, opts)
+    } else {
+        format!("{}\n\n{}", text.trim_end(), blocks.join("\n"))
+    };
+    config::parse_config(&config)
+        .map_err(|e| CliError::invalid(CONFIG, format!("with the named projects added it does not parse: {e}")))?;
+    write(ws, CONFIG, &config)?;
+    [(GATE_WORKFLOW, GATE_TEMPLATE), (EVIDENCE_WORKFLOW, EVIDENCE_TEMPLATE)]
+        .into_iter()
+        .filter(|(path, template)| unedited(path, template))
+        .try_for_each(|(path, template)| write(ws, path, &render_workflow(template, default_branch, &projects, opts)))
 }
 
 /// The existing files that lack TLA+, each with the exact text to add: the
@@ -631,19 +833,19 @@ fn write_settings(ws: &Workspace, text: &str, change: Change) -> Result<Change, 
 
 pub fn text(o: &Outcome) -> String {
     let mut out = String::new();
-    let detected: Vec<&str> = o
-        .detected
-        .iter()
-        .map(|d| match d {
-            Detected::Rust { .. } => "rust",
-            Detected::Python { .. } => "python",
-            Detected::TypeScript => "typescript (adapter after launch)",
-        })
-        .collect();
+    let word = |d: &Detected| match d {
+        Detected::Rust { .. } => "rust",
+        Detected::Python { .. } => "python",
+        Detected::TypeScript => "typescript (adapter after launch)",
+    };
+    let detected: Vec<&str> = o.detected.iter().map(word).collect();
     out.push_str(&format!(
         "detected adapters: {}\n",
         if detected.is_empty() { "none".to_string() } else { detected.join(", ") }
     ));
+    for p in &o.projects {
+        out.push_str(&format!("named project: {} at {}\n", word(&p.detected), p.root));
+    }
     for (path, change) in &o.files {
         let word = match change {
             Change::Written => "written",
@@ -652,6 +854,10 @@ pub fn text(o: &Outcome) -> String {
             Change::Unchanged => "unchanged",
         };
         out.push_str(&format!("{word:>14}  {path}\n"));
+    }
+    for (path, text) in &o.projects_to_add {
+        let what = if path == CONFIG { "this adapter block" } else { "these steps to its execute job" };
+        out.push_str(&format!("project: {path} exists and was kept; add {what}:\n\n{text}\n"));
     }
     out.push_str(&format!("action pin: {}\n", o.action_pin));
     if !o.action_pinned_by_sha {
@@ -722,7 +928,7 @@ mod tests {
 
     #[test]
     fn the_shadows_kani_block_samples_fewer_mutants() {
-        let rust = Detected::Rust { toolchain_file: false, needs_features: false };
+        let rust = Project::at_root(Detected::Rust { toolchain_file: false, needs_features: false });
         let opts = Options { kani: Some(KaniSetup { max_mutants: Some(10) }), tla: false };
         let parsed = config::parse_config(&config_text(&[rust], opts)).expect("parses");
         let kani = parsed.adapters.iter().find(|a| a.language == Language::Kani).expect("a kani adapter");
@@ -731,7 +937,7 @@ mod tests {
 
     #[test]
     fn the_kani_block_carries_the_features_hint_when_a_crate_needs_features() {
-        let rust = Detected::Rust { toolchain_file: false, needs_features: true };
+        let rust = Project::at_root(Detected::Rust { toolchain_file: false, needs_features: true });
         let text = config_text(&[rust], Options { kani: Some(KaniSetup::default()), tla: false });
         let kani = &text[text.find("language = \"kani\"").expect("a kani block")..];
         assert!(kani.contains(FEATURES_HINT), "{text}");
@@ -746,5 +952,24 @@ mod tests {
         let tla = parsed.adapters.iter().find(|a| a.language == Language::Tla).expect("a tla adapter");
         assert_eq!((tla.runner.as_str(), tla.mutation_tool.as_str()), ("tlc", "spec-mutants"));
         assert!(all_setup_steps(&[], Options { kani: None, tla: true }).contains("PROOB_TLA2TOOLS"));
+    }
+
+    #[test]
+    fn a_project_below_the_root_is_set_up_by_its_path() {
+        let at = |root: &str, detected| Project { root: root.to_string(), detected };
+        let python = |pyproject, requirements| Detected::Python { pyproject, requirements };
+        let steps = |p: &Project| setup_steps(p).join("\n");
+        assert!(steps(&at("svc", python(true, true))).contains("pip install -e svc -r svc/requirements.txt && "));
+        assert!(steps(&at(".", python(true, true))).contains("pip install -e . -r requirements.txt && "));
+        let bare = steps(&at("svc", python(false, false)));
+        assert!(bare.contains("--upgrade pip && python -m pip install \"") && !bare.contains("svc"), "{bare}");
+        let rust = steps(&at("core", Detected::Rust { toolchain_file: true, needs_features: false }));
+        assert!(rust.contains("core/rust-toolchain.toml") && rust.contains("working-directory: \"core\""), "{rust}");
+        assert_eq!(["./svc", "svc//", "a/./b/", "./", "."].map(normal), ["svc", "svc", "a/b", ".", "."]);
+        let named = [at(".", python(false, false)), at("svc", python(true, false)), at("svc", python(true, false))];
+        let all = with_named(&[python(false, true)], &named);
+        assert_eq!(all.iter().map(|p| p.root.as_str()).collect::<Vec<_>>(), [".", "svc"], "listed once each");
+        let parsed = config::parse_config(&config_text(&all, Options::default())).expect("parses");
+        assert!(all.iter().all(|p| parsed.adapters.iter().any(|a| p.is_adapter(a))), "each has its adapter");
     }
 }

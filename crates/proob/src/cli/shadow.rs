@@ -6,6 +6,11 @@
 //! the marker says so), and whatever proob or an agent adds there is kept as
 //! `overlay.patch`, which `open` carries over to the user's next commit.
 //!
+//! `open` looks for a project at the repository root only. Where the projects
+//! of a monorepo are is for the caller to say (`--project`, which the try
+//! skill fills in after reading the repository); the adapter, the runner, and
+//! the install then follow from what is at the named root.
+//!
 //! Invariant: nothing here writes to the user's repository except `adopt`,
 //! which adds one branch ref and the objects it needs, and never touches the
 //! checkout. Every read of the user's repository goes through git with
@@ -23,15 +28,21 @@ use clap::Subcommand;
 use git::{Step, line};
 use place::{MARKER, Place};
 use proob_adapters::kani::tools::Resolution;
+use proob_adapters::python::{provision, tools::OWN_ENV};
 use proob_effects::git::{Git, Repo};
-use proob_facts::paths::RESULTS_DIR;
+use proob_facts::config::Language;
+use proob_facts::paths::{CONFIG, EVIDENCE_WORKFLOW, GATE_WORKFLOW, RESULTS_DIR};
 use proob_facts::results::RESULTS_FILE;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 #[derive(Subcommand)]
 pub enum ShadowCmd {
     /// Create or refresh this repository's shadow, a private copy proob works in.
-    Open,
+    Open {
+        /// A project below the repository root to check, as rust:<dir> or python:<dir> (repeatable).
+        #[arg(long, value_name = "LANGUAGE:DIR")]
+        project: Vec<String>,
+    },
     /// What the shadow tried, and the steps to make it real.
     Report,
     /// Put the shadow's declaration, tests, and workflows on a new branch of your repository (your checkout stays as it is).
@@ -54,7 +65,7 @@ pub enum ShadowCmd {
 
 pub fn run(common: &Common, cmd: ShadowCmd) -> Result<Exit, CliError> {
     match cmd {
-        ShadowCmd::Open => open(common),
+        ShadowCmd::Open { project } => open(common, &project),
         ShadowCmd::Report => report_cmd(common),
         ShadowCmd::Adopt { ids, branch } => adopt::run(common, &ids, branch.as_deref()),
         ShadowCmd::Clean { all } => clean(common, all),
@@ -121,11 +132,13 @@ enum Opened {
     Current,
 }
 
-fn open(common: &Common) -> Result<Exit, CliError> {
+fn open(common: &Common, specs: &[String]) -> Result<Exit, CliError> {
     let place = place::locate(common.repo.as_deref())?;
     let user = user_repo(&place, common)?;
-    let opened = refresh(&place, &user)?;
+    let opened = refresh(&place, &user, specs)?;
+    add_projects(&place.work(), &user, specs)?;
     require_adapter(&place.work())?;
+    provide_python(&place.work())?;
     let n = property_count(&place.work());
     println!("{}", opened_line(&place, &user, opened, n));
     if user.dirty {
@@ -137,14 +150,63 @@ fn open(common: &Common) -> Result<Exit, CliError> {
 /// A try that could produce no test and no proof stops here, before any
 /// property is written: a finding is a check's result, never a reading.
 fn require_adapter(work: &Path) -> Result<(), CliError> {
-    match Workspace::open(Some(work))?.load_config()? {
-        ConfigSource::File(c) if !c.adapters.is_empty() => Ok(()),
-        _ => Err(CliError::Shadow(NOTHING_TO_CHECK.into())),
+    if has_adapter(work)? { Ok(()) } else { Err(CliError::Shadow(NOTHING_TO_CHECK.into())) }
+}
+
+fn has_adapter(work: &Path) -> Result<bool, CliError> {
+    Ok(matches!(Workspace::open(Some(work))?.load_config()?, ConfigSource::File(c) if !c.adapters.is_empty()))
+}
+
+/// proob's own Python environment in the shadow, made and filled here so
+/// nobody has to before a check can run. A failure is said and is not the
+/// open's: the check that needs the environment names what to do.
+fn provide_python(work: &Path) -> Result<(), CliError> {
+    let roots = python_roots(work)?;
+    if roots.is_empty() || !provision::stale(work, &roots) {
+        return Ok(());
     }
+    eprintln!(
+        "shadow: setting up proob's Python environment ({OWN_ENV}): the pinned tools and the project's requirements"
+    );
+    match provision::provide(work, &roots) {
+        Ok(()) => eprintln!("shadow: the Python environment is set up"),
+        Err(e) => {
+            eprintln!("shadow: the Python environment could not be set up ({e}); a check names the command to run")
+        }
+    }
+    Ok(())
+}
+
+fn python_roots(work: &Path) -> Result<Vec<PathBuf>, CliError> {
+    let ConfigSource::File(config) = Workspace::open(Some(work))?.load_config()? else { return Ok(Vec::new()) };
+    Ok(config.adapters.iter().filter(|a| a.language == Language::Python).map(|a| work.join(&a.root)).collect())
 }
 
 pub const NOTHING_TO_CHECK: &str = "proob cannot check this repository: it found no Python or Rust project at its root \
-     (pyproject.toml, setup.py, requirements.txt, or Cargo.toml), so it can write no test and no proof here; nothing was tried";
+     (pyproject.toml, setup.py, requirements.txt, or Cargo.toml); when the project is in a subdirectory, name it with \
+     proob shadow open --project python:<dir> (or rust:<dir>); nothing was tried";
+
+/// The named projects, read in the shadow (the user's last commit): the
+/// user's checkout is not read for them.
+fn projects(at: &Path, specs: &[String]) -> Result<Vec<init::Project>, CliError> {
+    specs.iter().map(|spec| init::Project::named(at, spec).map_err(|e| CliError::Shadow(e.to_string()))).collect()
+}
+
+/// A shadow opened before a project was named, or one whose repository
+/// committed a config, gains the project here: its adapter in the config and
+/// its setup in the workflows `init` wrote for the shadow. A file in the
+/// user's commit is the team's: a committed config gains only the block, and
+/// a committed workflow is kept as it is.
+fn add_projects(work: &Path, user: &UserRepo, specs: &[String]) -> Result<(), CliError> {
+    if specs.is_empty() {
+        return Ok(());
+    }
+    let committed =
+        line(&Step::new(work, &["ls-tree", "--name-only", "HEAD", "--", CONFIG, GATE_WORKFLOW, EVIDENCE_WORKFLOW]))?;
+    let own = |path: &str| !committed.lines().any(|l| l == path);
+    let named = projects(work, specs)?;
+    init::add_projects(&Workspace::open(Some(work))?, &user.default_branch, init_options(work), &named, &own)
+}
 
 fn property_count(work: &Path) -> usize {
     Workspace::open(Some(work)).and_then(|ws| ws.property_paths()).map_or(0, |p| p.len())
@@ -162,7 +224,7 @@ fn opened_line(place: &Place, user: &UserRepo, opened: Opened, n: usize) -> Stri
 
 /// Captures the overlay of an existing shadow; re-clones when the user's
 /// `HEAD` moved (or there is no shadow), carrying the overlay over.
-fn refresh(place: &Place, user: &UserRepo) -> Result<Opened, CliError> {
+fn refresh(place: &Place, user: &UserRepo, specs: &[String]) -> Result<Opened, CliError> {
     let existing = if place.exists() { Some(place.base()?) } else { None };
     if let Some(base) = &existing {
         overlay::capture(place, base)?;
@@ -170,7 +232,7 @@ fn refresh(place: &Place, user: &UserRepo) -> Result<Opened, CliError> {
             return Ok(Opened::Current);
         }
     }
-    build(place, user)?;
+    build(place, user, specs)?;
     Ok(if existing.is_some() { Opened::Refreshed } else { Opened::Created })
 }
 
@@ -192,12 +254,12 @@ pub fn clone_plan(repo: &Path, fresh: &Path, user: &UserRepo) -> Vec<Step> {
 
 /// A new `work/` at the user's `HEAD`, swapped in only once it is complete:
 /// on any failure the old one is left exactly as it was.
-fn build(place: &Place, user: &UserRepo) -> Result<(), CliError> {
+fn build(place: &Place, user: &UserRepo, specs: &[String]) -> Result<(), CliError> {
     let fresh = place.dir.join("work.new");
     remove_dir(&fresh)?;
     std::fs::create_dir_all(&place.dir)
         .map_err(|e| CliError::Shadow(format!("cannot create {}: {e}", place.dir.display())))?;
-    let made = git::run_all(&clone_plan(&place.repo, &fresh, user)).and_then(|()| prepare(place, &fresh, user));
+    let made = git::run_all(&clone_plan(&place.repo, &fresh, user)).and_then(|()| prepare(place, &fresh, user, specs));
     if let Err(e) = made {
         let _ = remove_dir(&fresh);
         return Err(e);
@@ -207,13 +269,14 @@ fn build(place: &Place, user: &UserRepo) -> Result<(), CliError> {
     overlay::capture(place, &user.head).map(drop)
 }
 
-fn prepare(place: &Place, fresh: &Path, user: &UserRepo) -> Result<(), CliError> {
+fn prepare(place: &Place, fresh: &Path, user: &UserRepo, specs: &[String]) -> Result<(), CliError> {
     let exclude = fresh.join(".git/info/exclude");
     let existing = std::fs::read_to_string(&exclude).unwrap_or_default();
     place::write(&exclude, format!("{existing}{EXCLUDE}").as_bytes())?;
     place::write(&fresh.join(MARKER), place::marker_text(&place.repo).as_bytes())?;
     carry_over(place, fresh)?;
-    init::run(&Workspace::open(Some(fresh))?, &user.default_branch, init_options(fresh)).map(drop)
+    let named = projects(fresh, specs)?;
+    init::run(&Workspace::open(Some(fresh))?, &user.default_branch, init_options(fresh), &named).map(drop)
 }
 
 /// Mutants a Kani score samples in the shadow: each is a full Kani run.
@@ -263,6 +326,10 @@ fn swap(place: &Place, fresh: &Path) -> Result<(), CliError> {
         rename(&work, &old)?;
     }
     rename(fresh, &work)?;
+    // proob's Python environment is at the same path again, so it still runs; `open` fills it again when stale.
+    if old.join(OWN_ENV).is_dir() && std::fs::create_dir_all(work.join("proob/.cache")).is_ok() {
+        let _ = std::fs::rename(old.join(OWN_ENV), work.join(OWN_ENV));
+    }
     remove_dir(&old)
 }
 

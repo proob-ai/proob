@@ -74,6 +74,13 @@ default=${default:-main}
 ```
 
 If `proob/config.toml` is missing, run `"$proob" init` and keep its output.
+`init` finds a project at the repository root by itself. For each Rust or
+Python project the picture lists below the root, add
+`--project <language>:<dir>` (`"$proob" init --project python:services/chatbot`):
+its adapter and its install steps are then written too. When the config or a
+workflow exists and lacks such a project, the same command prints the adapter
+block and the workflow steps to add; put them in the PR body for the team
+instead of editing those files.
 It writes `proob/config.toml` (the detected adapters and the gate policy),
 `.github/workflows/proob-gate.yml` (the pull-request check),
 `.github/workflows/proob-evidence.yml` (the default-branch and nightly runs

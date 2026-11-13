@@ -22,7 +22,7 @@ The first time a skill runs, the plugin downloads the `proob` binary for your pl
 Requirements:
 
 - **GitHub read access**, for a verified status: `gh auth login`, or `GITHUB_TOKEN` in the environment. Without it every status is marked `unverified` and nothing reads `Holds`.
-- **Python projects:** pytest 9.1.1, Hypothesis 6.169.4, and mutmut 3.8.0 ([`tools/python-tools.txt`](../tools/python-tools.txt)), with your project and its test dependencies. proob uses its own virtual environment, `proob/.cache/python` (gitignored), whenever it exists, so your Python and your `.venv` stay untouched; otherwise it uses `python3` from `PATH`. A missing tool's message gives the command that makes that environment.
+- **Python projects:** pytest 9.1.1, Hypothesis 6.169.4, and mutmut 3.8.0 ([`tools/python-tools.txt`](../tools/python-tools.txt)), with your project and its test dependencies. proob uses its own virtual environment, `proob/.cache/python` (gitignored), whenever it exists, so your Python and your `.venv` stay untouched; otherwise it uses `python3` from `PATH`. In a shadow, `proob shadow open` makes that environment and installs the pinned tools and your requirement files into it; elsewhere a missing tool's message gives the command that makes it.
 - **Rust projects:** cargo-nextest 0.9.150 and cargo-mutants 27.1.0. proob looks in its own `~/.proob/tools/rust/bin` before `PATH` (and uses `~/.proob/tools/kani` as `KANI_HOME` when you have not set one), so installing the pinned versions there leaves your own `~/.cargo/bin` and `~/.kani` as they are; a missing tool's message gives that command. For the proof route, the pinned Verus release, which [`tools/get-verus.sh`](../tools/get-verus.sh) fetches, or Kani at the version in [`tools/kani.toml`](../tools/kani.toml).
 - **TLA+ models:** Java 11 or later, and `tla2tools.jar` of the TLA+ release in [`tools/tla.toml`](../tools/tla.toml), named by `PROOB_TLA2TOOLS`.
 
@@ -58,7 +58,7 @@ Open your repository in Claude Code and run the skills in order:
 /proob:guard      show where the team stands and what is missing
 ```
 
-The first `/proob:declare` also runs `proob init`, so its pull request carries `proob/config.toml` and the two workflows that run the checks. Reviewers approve with GitHub alone:
+The first `/proob:declare` also runs `proob init`, so its pull request carries `proob/config.toml` and the two workflows that run the checks. `proob init` finds a Rust or Python project at the repository root. In a monorepo, name each project below the root with `--project python:<dir>` or `--project rust:<dir>` (repeatable; `proob shadow open` takes the same flag): the skills read the repository and pass it, and proob then picks the adapter, the runner, and the install steps from what is at that directory. A config or workflow that already exists is kept, and the adapter block and the workflow steps to add are printed. Reviewers approve with GitHub alone:
 
 1. Merging approves every file in this pull request as its current content. Only a review by someone other than the author counts as a team approval; a merge without one is self-signed, and proob says so.
 2. To change wording, use GitHub's "suggest" on the line and let the author commit the suggestion. You may push your own edit instead, knowing that a file you edited then needs someone else's approval.
