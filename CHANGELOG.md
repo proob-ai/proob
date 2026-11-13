@@ -8,6 +8,8 @@ version as a comment.
 
 ## Unreleased
 
+## v0.2.2 (2026-11-13)
+
 ### Added
 
 - Monorepos: `proob init` and `proob shadow open` take `--project

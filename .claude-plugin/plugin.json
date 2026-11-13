@@ -1,6 +1,6 @@
 {
   "name": "proob",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Team-approved, machine-checked, continuously guarded properties for your codebase.",
   "author": {
     "name": "proob-ai"

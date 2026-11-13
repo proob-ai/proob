@@ -14,7 +14,7 @@ body:
     attributes:
       label: proob version
       description: The output of `proob --version`.
-      placeholder: proob 0.2.1
+      placeholder: proob 0.2.2
     validations:
       required: true
   - type: input
