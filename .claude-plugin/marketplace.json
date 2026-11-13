@@ -5,14 +5,14 @@
   },
   "metadata": {
     "description": "The proob marketplace: the proob plugin, served from its own repository.",
-    "version": "0.2.1"
+    "version": "0.2.2"
   },
   "plugins": [
     {
       "name": "proob",
       "source": "./",
       "description": "Team-approved, machine-checked, continuously guarded properties for your codebase.",
-      "version": "0.2.1",
+      "version": "0.2.2",
       "license": "Apache-2.0"
     }
   ]
